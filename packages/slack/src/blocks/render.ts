@@ -84,7 +84,7 @@ export function renderSlackBlocks(event: TagsEvent): SlackBlock[] {
           type: "section",
           text: {
             type: "mrkdwn",
-            text: `📎 Artifact created: <${event.artifactId}|View artifact>`,
+            text: `📎 Artifact: <${event.artifactUrl}|${event.artifactTitle}>`,
           },
         },
       ];
@@ -110,6 +110,20 @@ export function renderSlackBlocks(event: TagsEvent): SlackBlock[] {
       return _exhaustive;
     }
   }
+}
+
+export function buildRunLinkBlock(appUrl: string, runId: string): SlackBlock[] {
+  return [
+    {
+      type: "context",
+      elements: [
+        {
+          type: "mrkdwn",
+          text: `<${appUrl}/runs/${runId}|View full run timeline>`,
+        },
+      ],
+    },
+  ];
 }
 
 export function buildWorkingMessage(text: string): SlackBlock[] {

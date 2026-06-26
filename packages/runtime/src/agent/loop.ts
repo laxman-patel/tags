@@ -32,6 +32,7 @@ export type AgentLoopArgs = {
   triggerText: string;
   actorUserId: string | null;
   spaceName: string;
+  appUrl: string;
   /** When set, the matching approval was granted and the gated tool may execute. */
   approvedRequestId?: string;
 };
@@ -86,6 +87,14 @@ export async function runAgentSegment(args: AgentLoopArgs): Promise<AgentSegment
     const usage = await result.usage;
 
     await stream.finalize(fullText || "Done.");
+    const { buildRunLinkBlock, updateMessage } = await import("@tags/slack");
+    await updateMessage(
+      args.slack,
+      args.channelId,
+      args.slackMessageTs,
+      fullText || "Done.",
+      [...buildRunLinkBlock(args.appUrl, args.runId)],
+    );
     await emit({ type: "run.finished" });
     await updateRunStatus(args.db, args.runId, "done", {
       tokenUsage: {

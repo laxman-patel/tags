@@ -7,7 +7,8 @@
     ".": "./src/index.ts",
     "./verify": "./src/verify.ts",
     "./blocks": "./src/blocks/render.ts",
-    "./stream": "./src/stream-adapter.ts"
+    "./stream": "./src/stream-adapter.ts",
+    "./sync-thread": "./src/sync-thread.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"

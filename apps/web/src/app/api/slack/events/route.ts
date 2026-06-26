@@ -1,8 +1,5 @@
-import { resolveSpaceByChannel } from "@tags/core/spaces";
-import { approvalHook, tagsRunWorkflow } from "@tags/runtime";
-import { start } from "workflow/api";
 import { getEnv } from "@/env";
-import { getDb } from "@/lib/db";
+import { startRunFromSlack } from "@/lib/slack-run";
 
 export const runtime = "nodejs";
 
@@ -11,6 +8,7 @@ type SlackEventPayload = {
   challenge?: string;
   event?: {
     type: string;
+    subtype?: string;
     user?: string;
     text?: string;
     channel: string;
@@ -41,9 +39,7 @@ export async function POST(request: Request) {
   }
 
   const event = payload.event;
-  if (!event || event.type !== "app_mention") {
-    return new Response("ok");
-  }
+  if (!event) return new Response("ok");
 
   const teamId = payload.team_id ?? "";
   const channelId = event.channel;
@@ -52,34 +48,31 @@ export async function POST(request: Request) {
   const rootTs = event.thread_ts ?? event.ts;
   const eventId = payload.event_id ?? event.event_ts ?? event.ts;
 
-  const db = getDb();
-  const resolved = await resolveSpaceByChannel(db, teamId, channelId);
-  if (!resolved) {
-    console.warn(`No space mapped for team=${teamId} channel=${channelId}`);
+  if (event.subtype && event.subtype !== "thread_broadcast") {
     return new Response("ok");
   }
 
-  const idempotencyKey = `slack:${teamId}:${channelId}:${eventId}`;
+  const isMention = event.type === "app_mention";
+  const isThreadReply =
+    event.type === "message" &&
+    event.thread_ts &&
+    (text.toLowerCase().includes("@tags") || text.toLowerCase().startsWith("tags "));
 
-  await start(tagsRunWorkflow, [
-    {
-      databaseUrl: env.DATABASE_URL,
-      gatewayApiKey: env.AI_GATEWAY_API_KEY,
-      slackBotToken: env.SLACK_BOT_TOKEN,
-      organizationId: resolved.space.organizationId,
-      spaceId: resolved.space.id,
-      spaceName: resolved.space.name,
-      channelId,
-      teamId,
-      threadTs,
-      rootMessageTs: rootTs,
-      triggerText: text || "Hello Tags",
-      triggerMessageTs: event.ts,
-      actorSlackUserId: event.user ?? "unknown",
-      idempotencyKey,
-      appUrl: env.NEXT_PUBLIC_APP_URL,
-    },
-  ]);
+  if (!isMention && !isThreadReply) {
+    return new Response("ok");
+  }
+
+  await startRunFromSlack(env, {
+    teamId,
+    channelId,
+    threadTs,
+    rootTs,
+    text: text || "Hello Tags",
+    messageTs: event.ts,
+    actorSlackUserId: event.user ?? "unknown",
+    eventId,
+    trigger: isMention ? "mention" : "reply",
+  });
 
   return new Response("ok");
 }

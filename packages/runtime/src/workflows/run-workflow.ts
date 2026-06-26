@@ -71,6 +71,7 @@ export async function tagsRunWorkflow(input: TagsWorkflowInput) {
         channelId: input.channelId,
         slackMessageTs: setup.slackMessageTs,
         summaryText: `Approved and executed ${segment.toolName}: ${JSON.stringify(toolOutput)}`,
+        appUrl: input.appUrl,
       });
       break;
     }
@@ -89,6 +90,7 @@ export async function tagsRunWorkflow(input: TagsWorkflowInput) {
       channelId: input.channelId,
       slackMessageTs: setup.slackMessageTs,
       summaryText: `Rejected ${segment.toolName}.`,
+      appUrl: input.appUrl,
     });
     break;
   }
@@ -122,6 +124,15 @@ async function ingestStep(input: TagsWorkflowInput) {
     authorType: "human",
     authorId: input.actorSlackUserId,
     text: input.triggerText,
+  });
+
+  const { syncSlackThreadToDb } = await import("@tags/slack/sync-thread");
+  await syncSlackThreadToDb(slack, db, {
+    organizationId: input.organizationId,
+    spaceId: input.spaceId,
+    threadId: thread.id,
+    channelId: input.channelId,
+    threadTs: input.threadTs,
   });
 
   const run =
@@ -191,6 +202,7 @@ async function agentSegmentStep(
     triggerText: args.triggerText,
     actorUserId: args.actorSlackUserId,
     spaceName: args.spaceName,
+    appUrl: args.appUrl,
   };
 
   return runAgentSegment(loopArgs);
@@ -235,19 +247,23 @@ async function finalizeRunStep(args: {
   channelId: string;
   slackMessageTs: string;
   summaryText: string;
+  appUrl?: string;
 }) {
   "use step";
 
   const db = createDb(args.databaseUrl);
-  const { SlackStreamAdapter } = await import("@tags/slack");
+  const { SlackStreamAdapter, buildRunLinkBlock, updateMessage } = await import("@tags/slack");
   const { appendRunEvent, updateRunStatus } = await import("@tags/core/runs");
 
-  const stream = new SlackStreamAdapter(
-    createSlackClient(args.slackBotToken),
-    args.channelId,
-    args.slackMessageTs,
-  );
+  const slack = createSlackClient(args.slackBotToken);
+  const stream = new SlackStreamAdapter(slack, args.channelId, args.slackMessageTs);
   await stream.finalize(args.summaryText);
+
+  if (args.appUrl) {
+    const blocks = buildRunLinkBlock(args.appUrl, args.runId);
+    await updateMessage(slack, args.channelId, args.slackMessageTs, args.summaryText, blocks);
+  }
+
   await appendRunEvent(db, args.runId, { type: "run.finished" });
   await updateRunStatus(db, args.runId, "done", { finishedAt: new Date() });
 }

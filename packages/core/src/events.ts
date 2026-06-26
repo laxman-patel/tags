@@ -5,6 +5,6 @@ export type TagsEvent =
   | { type: "tool.finished"; toolName: string; outputPreview: unknown }
   | { type: "approval.requested"; approvalId: string; requestId: string }
   | { type: "question.requested"; questionId: string; requestId: string }
-  | { type: "artifact.created"; artifactId: string }
+  | { type: "artifact.created"; artifactId: string; artifactUrl: string; artifactTitle: string }
   | { type: "run.finished" }
   | { type: "run.failed"; error: string };
