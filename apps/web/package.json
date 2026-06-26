@@ -1,0 +1,30 @@
+{
+  "name": "@tags/web",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev --turbopack",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@tags/core": "workspace:*",
+    "@tags/db": "workspace:*",
+    "@tags/runtime": "workspace:*",
+    "@tags/slack": "workspace:*",
+    "next": "^15.3.3",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "workflow": "^4.5.0",
+    "zod": "^3.25.51"
+  },
+  "devDependencies": {
+    "@types/react": "^19.1.6",
+    "@types/react-dom": "^19.1.5",
+    "eslint": "^9.28.0",
+    "eslint-config-next": "^15.3.3",
+    "typescript": "^5.8.3"
+  }
+}

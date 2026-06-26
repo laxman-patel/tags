@@ -1,0 +1,19 @@
+{
+  "name": "@tags/slack",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./verify": "./src/verify.ts",
+    "./blocks": "./src/blocks/render.ts",
+    "./stream": "./src/stream-adapter.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@slack/web-api": "^7.9.2",
+    "@tags/core": "workspace:*"
+  }
+}

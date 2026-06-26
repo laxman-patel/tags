@@ -1,0 +1,21 @@
+{
+  "name": "tags",
+  "private": true,
+  "scripts": {
+    "dev": "pnpm --filter @tags/web dev",
+    "build": "pnpm -r build",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "db:generate": "pnpm --filter @tags/db generate",
+    "db:migrate": "pnpm --filter @tags/db migrate",
+    "db:seed": "pnpm --filter @tags/db seed",
+    "lint": "pnpm -r lint",
+    "typecheck": "pnpm -r typecheck"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.29",
+    "typescript": "^5.8.3",
+    "vitest": "^3.2.4"
+  },
+  "packageManager": "pnpm@9.15.0"
+}

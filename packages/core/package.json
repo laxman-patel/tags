@@ -1,0 +1,20 @@
+{
+  "name": "@tags/core",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./spaces": "./src/spaces.ts",
+    "./threads": "./src/threads.ts",
+    "./runs": "./src/runs.ts",
+    "./events": "./src/events.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@tags/db": "workspace:*",
+    "drizzle-orm": "^0.44.2"
+  }
+}

@@ -1,0 +1,332 @@
+import { createGateway } from "@ai-sdk/gateway";
+import { tool, stepCountIs, streamText } from "ai";
+import type { TagsEvent } from "@tags/core/events";
+import {
+  appendRunEvent,
+  createApprovalRequest,
+  createToolInvocation,
+  completeToolInvocation,
+  updateRunStatus,
+} from "@tags/core/runs";
+import { loadActiveSpaceConfig } from "@tags/core/spaces";
+import type { Db } from "@tags/db";
+import { newId } from "@tags/db";
+import { SlackStreamAdapter } from "@tags/slack";
+import { ApprovalPauseError, type AgentSegmentResult } from "./types";
+import { buildSystemPrompt, reasoningFor } from "./prompt";
+import { buildThreadContext } from "../context/builder";
+import { resolveTools } from "../tools/registry";
+import { toolIdempotencyKey, type TagsTool, type ToolContext } from "../tools/types";
+
+export type AgentLoopArgs = {
+  db: Db;
+  slack: import("@slack/web-api").WebClient;
+  gatewayApiKey: string;
+  runId: string;
+  spaceId: string;
+  threadId: string;
+  organizationId: string;
+  channelId: string;
+  threadTs: string;
+  slackMessageTs: string;
+  triggerText: string;
+  actorUserId: string | null;
+  spaceName: string;
+  /** When set, the matching approval was granted and the gated tool may execute. */
+  approvedRequestId?: string;
+};
+
+export async function runAgentSegment(args: AgentLoopArgs): Promise<AgentSegmentResult> {
+  const config = await loadActiveSpaceConfig(args.db, args.spaceId);
+  if (!config) {
+    throw new Error(`No active space config for space ${args.spaceId}`);
+  }
+
+  const gateway = createGateway({ apiKey: args.gatewayApiKey });
+  const stream = new SlackStreamAdapter(
+    args.slack,
+    args.channelId,
+    args.slackMessageTs,
+  );
+
+  const emit = async (event: TagsEvent) => {
+    await appendRunEvent(args.db, args.runId, event);
+    await stream.pushEvent(event);
+  };
+
+  await updateRunStatus(args.db, args.runId, "streaming");
+  await emit({ type: "status", label: "Reading thread context" });
+
+  const messages = await buildThreadContext(args.db, args.threadId, args.triggerText);
+  const tagsTools = resolveTools(args.db, config.enabledTools);
+  const aiTools = buildAiTools(tagsTools, args, emit) as Parameters<typeof streamText>[0]["tools"];
+
+  const system = buildSystemPrompt(config.instructions, args.spaceName);
+
+  try {
+    const result = streamText({
+      model: gateway(config.modelId),
+      system,
+      messages,
+      tools: aiTools,
+      stopWhen: stepCountIs(config.maxSteps),
+      providerOptions: reasoningFor(config.reasoning) as never,
+      onChunk: async ({ chunk }) => {
+        if (chunk.type === "text-delta") {
+          await emit({ type: "text.delta", text: chunk.text });
+        }
+      },
+    });
+
+    let fullText = "";
+    for await (const part of result.textStream) {
+      fullText += part;
+    }
+
+    const usage = await result.usage;
+
+    await stream.finalize(fullText || "Done.");
+    await emit({ type: "run.finished" });
+    await updateRunStatus(args.db, args.runId, "done", {
+      tokenUsage: {
+        prompt: usage?.inputTokens ?? 0,
+        completion: usage?.outputTokens ?? 0,
+        total: (usage?.inputTokens ?? 0) + (usage?.outputTokens ?? 0),
+      },
+      finishedAt: new Date(),
+    });
+
+    return { kind: "complete", text: fullText };
+  } catch (error) {
+    if (error instanceof ApprovalPauseError) {
+      await updateRunStatus(args.db, args.runId, "waiting");
+      return {
+        kind: "approval_required",
+        ...error.payload,
+      };
+    }
+
+    const message = error instanceof Error ? error.message : "Unknown error";
+    await emit({ type: "run.failed", error: message });
+    await updateRunStatus(args.db, args.runId, "failed", {
+      error: { code: "agent_error", message },
+      finishedAt: new Date(),
+    });
+    throw error;
+  }
+}
+
+export async function executeApprovedTool(
+  db: Db,
+  args: {
+    runId: string;
+    organizationId: string;
+    spaceId: string;
+    threadId: string;
+    actorUserId: string | null;
+    toolName: string;
+    toolInput: unknown;
+    invocationId: string;
+    emit: (event: TagsEvent) => Promise<void>;
+  },
+): Promise<unknown> {
+  const tagsTool = resolveTools(db, [args.toolName])[0];
+  if (!tagsTool) {
+    throw new Error(`Tool not found: ${args.toolName}`);
+  }
+
+  const toolCtx: ToolContext = {
+    organizationId: args.organizationId,
+    spaceId: args.spaceId,
+    threadId: args.threadId,
+    runId: args.runId,
+    actorUserId: args.actorUserId,
+    emit: args.emit,
+  };
+
+  const toolResult = await tagsTool.execute(args.toolInput, toolCtx);
+
+  await completeToolInvocation(db, args.invocationId, {
+    status: "succeeded",
+    result: toolResult.modelOutput,
+    externalResourceKind: toolResult.externalResource?.kind,
+    externalResourceId: toolResult.externalResource?.id,
+  });
+
+  await args.emit({
+    type: "tool.finished",
+    toolName: args.toolName,
+    outputPreview: toolResult.modelOutput,
+  });
+
+  return toolResult.modelOutput;
+}
+
+export async function rejectPendingTool(
+  db: Db,
+  invocationId: string,
+  toolName: string,
+  emit: (event: TagsEvent) => Promise<void>,
+): Promise<void> {
+  const rejected = { rejected: true };
+  await completeToolInvocation(db, invocationId, {
+    status: "failed",
+    result: rejected,
+  });
+  await emit({
+    type: "tool.finished",
+    toolName,
+    outputPreview: rejected,
+  });
+}
+
+function buildAiTools(
+  tools: TagsTool[],
+  args: AgentLoopArgs,
+  emit: (event: TagsEvent) => Promise<void>,
+): Record<string, ReturnType<typeof tool>> {
+  const record: Record<string, ReturnType<typeof tool>> = {};
+
+  for (const tagsTool of tools) {
+    const aiTool = tool({
+      description: tagsTool.description,
+      inputSchema: tagsTool.inputSchema,
+      execute: async (input: unknown) => {
+        await emit({
+          type: "tool.started",
+          toolName: tagsTool.name,
+          inputPreview: input,
+        });
+
+        if (
+          tagsTool.sideEffecting &&
+          needsApproval(tagsTool.approval, input) &&
+          !args.approvedRequestId
+        ) {
+          const idempotencyKey = toolIdempotencyKey(args.runId, tagsTool.name, input);
+          const invocation = await createToolInvocation(args.db, {
+            runId: args.runId,
+            organizationId: args.organizationId,
+            spaceId: args.spaceId,
+            toolName: tagsTool.name,
+            toolInput: input,
+            idempotencyKey,
+          });
+
+          if (invocation.status === "succeeded" && invocation.result) {
+            return invocation.result;
+          }
+
+          const requestId = newId();
+          const approval = await createApprovalRequest(args.db, {
+            organizationId: args.organizationId,
+            spaceId: args.spaceId,
+            runId: args.runId,
+            threadId: args.threadId,
+            toolInvocationId: invocation.id,
+            requestId,
+            toolName: tagsTool.name,
+            toolInput: input,
+            riskLevel: tagsTool.risk,
+            requestText: `Approve ${tagsTool.name}?`,
+            expiresAt: new Date(Date.now() + 60 * 60 * 1000),
+          });
+
+          await emit({
+            type: "approval.requested",
+            approvalId: approval.id,
+            requestId,
+          });
+
+          throw new ApprovalPauseError({
+            requestId,
+            approvalId: approval.id,
+            toolName: tagsTool.name,
+            toolInput: input,
+            invocationId: invocation.id,
+          });
+        }
+
+        if (args.approvedRequestId && tagsTool.sideEffecting) {
+          const invocation = await createToolInvocation(args.db, {
+            runId: args.runId,
+            organizationId: args.organizationId,
+            spaceId: args.spaceId,
+            toolName: tagsTool.name,
+            toolInput: input,
+            idempotencyKey: toolIdempotencyKey(args.runId, tagsTool.name, input),
+          });
+          return executeApprovedTool(args.db, {
+            runId: args.runId,
+            organizationId: args.organizationId,
+            spaceId: args.spaceId,
+            threadId: args.threadId,
+            actorUserId: args.actorUserId,
+            toolName: tagsTool.name,
+            toolInput: input,
+            invocationId: invocation.id,
+            emit,
+          });
+        }
+
+        const toolCtx: ToolContext = {
+          organizationId: args.organizationId,
+          spaceId: args.spaceId,
+          threadId: args.threadId,
+          runId: args.runId,
+          actorUserId: args.actorUserId,
+          emit,
+        };
+
+        const toolResult = await tagsTool.execute(input, toolCtx);
+        const idempotencyKey = toolIdempotencyKey(args.runId, tagsTool.name, input);
+        const invocation = await createToolInvocation(args.db, {
+          runId: args.runId,
+          organizationId: args.organizationId,
+          spaceId: args.spaceId,
+          toolName: tagsTool.name,
+          toolInput: input,
+          idempotencyKey,
+        });
+
+        await completeToolInvocation(args.db, invocation.id, {
+          status: "succeeded",
+          result: toolResult.modelOutput,
+          externalResourceKind: toolResult.externalResource?.kind,
+          externalResourceId: toolResult.externalResource?.id,
+        });
+
+        await emit({
+          type: "tool.finished",
+          toolName: tagsTool.name,
+          outputPreview: toolResult.modelOutput,
+        });
+
+        return toolResult.modelOutput;
+      },
+    });
+    record[tagsTool.name] = aiTool as unknown as ReturnType<typeof tool>;
+  }
+
+  return record;
+}
+
+function needsApproval(
+  policy: TagsTool["approval"],
+  input: unknown,
+): boolean {
+  switch (policy.kind) {
+    case "never":
+      return false;
+    case "always":
+      return true;
+    case "once":
+      return true;
+    case "predicate":
+      return policy.needsApproval(input);
+    default: {
+      const _exhaustive: never = policy;
+      return _exhaustive;
+    }
+  }
+}

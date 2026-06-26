@@ -1,0 +1,24 @@
+{
+  "name": "@tags/runtime",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./workflows/run": "./src/workflows/run-workflow.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@ai-sdk/gateway": "^1.0.15",
+    "@tags/core": "workspace:*",
+    "@tags/db": "workspace:*",
+    "@tags/slack": "workspace:*",
+    "@slack/web-api": "^7.9.2",
+    "ai": "^5.0.28",
+    "drizzle-orm": "^0.44.2",
+    "workflow": "^4.5.0",
+    "zod": "^3.25.51"
+  }
+}
