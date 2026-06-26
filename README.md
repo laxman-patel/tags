@@ -10,6 +10,21 @@ Channel-native agent system for teams — Phase 0 walking skeleton.
 - Slack app with Events API + Interactivity
 - Vercel AI Gateway API key
 
+## Phases implemented
+
+| Phase | Status |
+| --- | --- |
+| 0 | Walking skeleton (Slack + Workflow + approval) |
+| 1 | Space admin API + config versioning |
+| 2 | Slack thread sync, rate limits, run links |
+| 3 | Web admin, artifacts, approval inbox, UI package |
+| 4 | Memory tools, context packing, memory browser |
+| 5 | Approval authorization + audit events |
+| 6 | Run timeline / tool trace depth |
+| 7 | Usage records + spend dashboard |
+| 8 | Schedules + cron trigger |
+| 9 | Audit UI, export, redaction helpers |
+
 ## Quick start
 
 ```bash
