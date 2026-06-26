@@ -1,17 +1,17 @@
 import { listThreadMessages } from "@tags/core/threads";
 import { searchMemories } from "@tags/core/memory";
 import type { Db } from "@tags/db";
-import type { CoreMessage } from "ai";
+import type { ModelMessage } from "ai";
 
 export async function buildThreadContext(
   db: Db,
   threadId: string,
   spaceId: string,
   triggerText: string,
-): Promise<CoreMessage[]> {
+): Promise<ModelMessage[]> {
   const stored = await listThreadMessages(db, threadId);
 
-  const history: CoreMessage[] = stored.map((m) => ({
+  const history: ModelMessage[] = stored.map((m) => ({
     role: m.authorType === "human" ? "user" : "assistant",
     content: m.text,
   }));

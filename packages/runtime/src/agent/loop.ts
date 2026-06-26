@@ -1,5 +1,5 @@
 import { createGateway } from "@ai-sdk/gateway";
-import { tool, stepCountIs, streamText } from "ai";
+import { tool, isStepCount, streamText } from "ai";
 import type { TagsEvent } from "@tags/core/events";
 import { checkSpaceBudget } from "@tags/core/policies";
 import {
@@ -15,7 +15,7 @@ import type { Db } from "@tags/db";
 import { newId } from "@tags/db";
 import { SlackStreamAdapter } from "@tags/slack";
 import { ApprovalPauseError, type AgentSegmentResult } from "./types";
-import { buildSystemPrompt, reasoningFor } from "./prompt";
+import { buildSystemPrompt, reasoningEffortFor } from "./prompt";
 import { buildThreadContext } from "../context/builder";
 import { createRuntimeProviders, type RuntimeProviderConfig } from "../providers";
 import { resolveTools, type ToolRegistryOptions } from "../tools/registry";
@@ -82,16 +82,16 @@ export async function runAgentSegment(args: AgentLoopArgs): Promise<AgentSegment
   const tagsTools = resolveTools(args.db, config.enabledTools, toolOptions);
   const aiTools = buildAiTools(tagsTools, args, toolOptions, emit) as Parameters<typeof streamText>[0]["tools"];
 
-  const system = buildSystemPrompt(config.instructions, args.spaceName);
+  const instructions = buildSystemPrompt(config.instructions, args.spaceName);
 
   try {
     const result = streamText({
       model: gateway(config.modelId),
-      system,
+      instructions,
       messages,
       tools: aiTools,
-      stopWhen: stepCountIs(config.maxSteps),
-      providerOptions: reasoningFor(config.reasoning) as never,
+      stopWhen: isStepCount(config.maxSteps),
+      reasoning: reasoningEffortFor(config.reasoning),
       onChunk: async ({ chunk }) => {
         if (chunk.type === "text-delta") {
           await emit({ type: "text.delta", text: chunk.text });

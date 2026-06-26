@@ -11,16 +11,27 @@ export function buildSystemPrompt(
 - Current time: ${new Date().toISOString()}`;
 }
 
-export function reasoningFor(
-  reasoning: string,
-): Record<string, unknown> | undefined {
-  if (reasoning === "provider-default" || reasoning === "none") {
-    return undefined;
-  }
-  return {
-    openai: { reasoningEffort: reasoning },
-    anthropic: { thinking: { type: "enabled", budgetTokens: 8000 } },
-  };
+export const REASONING_EFFORTS = [
+  "provider-default",
+  "none",
+  "minimal",
+  "low",
+  "medium",
+  "high",
+  "xhigh",
+] as const;
+
+export type ReasoningEffort = (typeof REASONING_EFFORTS)[number];
+
+/**
+ * Maps a Space's stored reasoning setting onto AI SDK 7's provider-agnostic
+ * top-level `reasoning` effort option. Unknown values fall back to the
+ * provider default rather than throwing.
+ */
+export function reasoningEffortFor(reasoning: string): ReasoningEffort {
+  return (REASONING_EFFORTS as readonly string[]).includes(reasoning)
+    ? (reasoning as ReasoningEffort)
+    : "provider-default";
 }
 
 export type RunConfig = ActiveSpaceConfig & { spaceName: string };
