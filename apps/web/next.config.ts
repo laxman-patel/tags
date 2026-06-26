@@ -7,6 +7,7 @@ const nextConfig: NextConfig = {
     "@tags/db",
     "@tags/runtime",
     "@tags/slack",
+    "@tags/ui",
   ],
 };
 
