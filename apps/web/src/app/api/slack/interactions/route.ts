@@ -1,4 +1,6 @@
 import { resolveApprovalByRequestId } from "@tags/core/runs";
+import { canApprove } from "@tags/core/policies";
+import { recordAuditEvent } from "@tags/core/audit";
 import { approvalHook } from "@tags/runtime";
 import { getEnv } from "@/env";
 import { getDb } from "@/lib/db";
@@ -45,16 +47,50 @@ export async function POST(request: Request) {
   }
 
   const decision = actionId.includes(":approve:") ? "approved" : "rejected";
-
   const db = getDb();
-  const approval = await resolveApprovalByRequestId(db, requestId, decision);
+
+  const { approvalRequests } = await import("@tags/db");
+  const { eq } = await import("drizzle-orm");
+  const pending = await db
+    .select()
+    .from(approvalRequests)
+    .where(eq(approvalRequests.requestId, requestId))
+    .limit(1);
+  const approval = pending[0];
 
   if (!approval) {
+    return Response.json({ response_type: "ephemeral", text: "Approval not found." });
+  }
+
+  const allowed = await canApprove(db, {
+    spaceId: approval.spaceId,
+    organizationId: approval.organizationId,
+    slackUserId: payload.user.id,
+  });
+
+  if (!allowed) {
+    return Response.json({
+      response_type: "ephemeral",
+      text: "You are not authorized to approve this action.",
+    });
+  }
+
+  const resolved = await resolveApprovalByRequestId(db, requestId, decision);
+
+  if (!resolved) {
     return Response.json({
       response_type: "ephemeral",
       text: "This approval was already resolved.",
     });
   }
+
+  await recordAuditEvent(db, {
+    organizationId: approval.organizationId,
+    spaceId: approval.spaceId,
+    actorType: "human",
+    eventType: "approval.resolved",
+    payload: { approvalId: approval.id, decision, slackUserId: payload.user.id },
+  });
 
   await approvalHook.resume(requestId, { decision });
 
