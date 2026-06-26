@@ -22,6 +22,7 @@
   },
   "dependencies": {
     "@tags/db": "workspace:*",
+    "@tags/storage": "workspace:*",
     "drizzle-orm": "^0.44.2"
   }
 }

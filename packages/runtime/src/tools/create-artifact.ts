@@ -1,8 +1,7 @@
 import { z } from "zod";
-import { eq } from "drizzle-orm";
 import { createArtifact } from "@tags/core/artifacts";
 import type { Db } from "@tags/db";
-import { artifacts } from "@tags/db";
+import { newId } from "@tags/db";
 import type { TagsTool, ToolContext } from "./types";
 
 const inputSchema = z.object({
@@ -21,21 +20,19 @@ export function createCreateArtifactTool(db: Db, appUrl: string): TagsTool {
     sideEffecting: true,
     async execute(input: unknown, ctx: ToolContext) {
       const parsed = inputSchema.parse(input);
-      const artifact = await createArtifact(db, {
-        organizationId: ctx.organizationId,
-        spaceId: ctx.spaceId,
-        threadId: ctx.threadId,
-        runId: ctx.runId,
-        kind: parsed.kind,
-        title: parsed.title,
-        url: `${appUrl}/artifacts/placeholder`,
-        contentType:
-          parsed.kind === "html" ? "text/html" : parsed.kind === "json" ? "application/json" : "text/markdown",
-      });
-      if (!artifact) throw new Error("Failed to create artifact");
+      const id = newId();
+      const finalUrl = `${appUrl}/artifacts/${id}`;
+      const contentType =
+        parsed.kind === "html"
+          ? "text/html"
+          : parsed.kind === "json"
+            ? "application/json"
+            : "text/markdown";
+      const sizeBytes = Buffer.byteLength(parsed.body, "utf8");
 
       const { uploadArtifactBody, artifactObjectKey } = await import("@tags/storage");
-      const contentRef = artifactObjectKey(ctx.organizationId, artifact.id);
+      const contentRef = artifactObjectKey(ctx.organizationId, id);
+
       let bodyStoredInDb: string | undefined;
 
       if (ctx.r2) {
@@ -44,28 +41,26 @@ export function createCreateArtifactTool(db: Db, appUrl: string): TagsTool {
           ctx.r2.config,
           contentRef,
           parsed.body,
-          artifact.contentType ?? "text/markdown",
+          contentType,
         );
-        await db
-          .update(artifacts)
-          .set({
-            contentRef,
-            sizeBytes: Buffer.byteLength(parsed.body, "utf8"),
-          })
-          .where(eq(artifacts.id, artifact.id));
       } else {
         bodyStoredInDb = parsed.body;
-        await db
-          .update(artifacts)
-          .set({
-            body: parsed.body,
-            sizeBytes: Buffer.byteLength(parsed.body, "utf8"),
-          })
-          .where(eq(artifacts.id, artifact.id));
       }
 
-      const finalUrl = `${appUrl}/artifacts/${artifact.id}`;
-      await db.update(artifacts).set({ url: finalUrl }).where(eq(artifacts.id, artifact.id));
+      const artifact = await createArtifact(db, {
+        id,
+        organizationId: ctx.organizationId,
+        spaceId: ctx.spaceId,
+        threadId: ctx.threadId,
+        runId: ctx.runId,
+        kind: parsed.kind,
+        title: parsed.title,
+        url: finalUrl,
+        contentType,
+        sizeBytes,
+        ...(ctx.r2 ? { contentRef } : { body: parsed.body }),
+      });
+      if (!artifact) throw new Error("Failed to create artifact");
 
       await ctx.emit({
         type: "artifact.created",

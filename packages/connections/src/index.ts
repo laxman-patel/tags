@@ -6,26 +6,47 @@ export type CredentialProviderConfig = {
   connectorMap?: Record<string, string>;
   directSecrets?: Record<string, string>;
   vercelToken?: string;
+  oidcToken?: string;
 };
 
 export function createCredentialProvider(config: CredentialProviderConfig): CredentialProvider {
-  const hasConnect =
-    config.connectorMap &&
-    Object.keys(config.connectorMap).length > 0 &&
-    (process.env.VERCEL_OIDC_TOKEN || config.vercelToken);
+  const connectorMap = config.connectorMap ?? {};
+  const directSecrets = config.directSecrets ?? {};
+  const connectAuthAvailable = Boolean(config.oidcToken || config.vercelToken);
 
-  if (hasConnect) {
-    return createConnectCredentialProvider({
-      connectorMap: config.connectorMap!,
-      vercelToken: config.vercelToken,
-    });
-  }
+  const connectProvider =
+    Object.keys(connectorMap).length > 0 && connectAuthAvailable
+      ? createConnectCredentialProvider({
+          connectorMap,
+          vercelToken: config.vercelToken,
+          oidcToken: config.oidcToken,
+        })
+      : null;
 
-  if (config.directSecrets && Object.keys(config.directSecrets).length > 0) {
-    return createDirectCredentialProvider(config.directSecrets);
-  }
+  const directProvider = createDirectCredentialProvider(directSecrets);
 
-  return createDirectCredentialProvider({});
+  return {
+    async getToken(args) {
+      const connector = connectorMap[args.connectionId];
+      const directSecret = directSecrets[args.connectionId];
+
+      if (connector && connectProvider) {
+        return connectProvider.getToken(args);
+      }
+
+      if (directSecret) {
+        return directProvider.getToken(args);
+      }
+
+      if (connector && !connectAuthAvailable) {
+        throw new Error(
+          `Connect connector configured for ${args.connectionId} but no OIDC or Vercel token supplied`,
+        );
+      }
+
+      throw new Error(`No credential configured for ${args.connectionId}`);
+    },
+  };
 }
 
 export { createConnectCredentialProvider } from "./connect-provider";

@@ -2,26 +2,38 @@ import { and, count, desc, eq, gte, sum } from "drizzle-orm";
 import type { Db } from "@tags/db";
 import { newId, usageRecords } from "@tags/db";
 
+/**
+ * Micro-USD per 1M tokens. Keys must match AI Gateway model ids used by spaces.
+ * Unknown models fall back to DEFAULT_COST_RATES with a warning — budget enforcement
+ * then uses that estimate rather than silently pretending the rate is known.
+ */
+const MODEL_COST_RATES: Record<string, { input: number; output: number }> = {
+  "openai/gpt-4o-mini": { input: 150_000, output: 600_000 },
+  "openai/gpt-4o": { input: 2_500_000, output: 10_000_000 },
+};
+
+const DEFAULT_COST_RATES = { input: 500_000, output: 1_500_000 };
+
 function estimateCostMicroUsd(
   modelId: string,
   promptTokens: number,
   completionTokens: number,
 ): number {
-  const rates: Record<string, { input: number; output: number }> = {
-    "openai/gpt-4o-mini": { input: 150_000, output: 600_000 },
-    "openai/gpt-4o": { input: 2_500_000, output: 10_000_000 },
-  };
-  const rate = rates[modelId] ?? { input: 500_000, output: 1_500_000 };
+  const knownRate = MODEL_COST_RATES[modelId];
+  if (!knownRate) {
+    console.warn(
+      `[usage] Unknown model "${modelId}" — using estimated cost rates (input=${DEFAULT_COST_RATES.input}, output=${DEFAULT_COST_RATES.output} micro-USD per 1M tokens). Add an entry to MODEL_COST_RATES for accurate budget tracking.`,
+    );
+  }
+  const rate = knownRate ?? DEFAULT_COST_RATES;
   return Math.round(
     (promptTokens * rate.input + completionTokens * rate.output) / 1_000_000,
   );
 }
 
 export function startOfCurrentMonth(): Date {
-  const date = new Date();
-  date.setDate(1);
-  date.setHours(0, 0, 0, 0);
-  return date;
+  const now = new Date();
+  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
 }
 
 export async function getMonthlySpendMicroUsd(db: Db, spaceId: string): Promise<number> {

@@ -1,10 +1,12 @@
 import { eq } from "drizzle-orm";
 import type { Db } from "@tags/db";
-import { artifacts, newId } from "@tags/db";
+import { artifacts } from "@tags/db";
+import type { ArtifactBodyReadResult } from "@tags/storage";
 
 export async function createArtifact(
   db: Db,
   args: {
+    id: string;
     organizationId: string;
     spaceId: string;
     threadId: string;
@@ -15,14 +17,14 @@ export async function createArtifact(
     body?: string;
     contentRef?: string;
     contentType?: string;
+    sizeBytes?: number;
     metadata?: Record<string, unknown>;
   },
 ) {
-  const id = newId();
   const [row] = await db
     .insert(artifacts)
     .values({
-      id,
+      id: args.id,
       organizationId: args.organizationId,
       spaceId: args.spaceId,
       threadId: args.threadId,
@@ -33,7 +35,9 @@ export async function createArtifact(
       body: args.body,
       contentRef: args.contentRef,
       contentType: args.contentType ?? "text/markdown",
-      sizeBytes: args.body ? Buffer.byteLength(args.body, "utf8") : 0,
+      sizeBytes:
+        args.sizeBytes ??
+        (args.body ? Buffer.byteLength(args.body, "utf8") : 0),
       metadata: args.metadata,
     })
     .returning();
@@ -49,13 +53,32 @@ export async function listArtifactsForRun(db: Db, runId: string) {
   return db.select().from(artifacts).where(eq(artifacts.runId, runId));
 }
 
+export type ResolvedArtifactBody = {
+  body: string | null;
+  /** True when content was expected (e.g. contentRef) but could not be loaded. */
+  unavailable: boolean;
+};
+
 export async function resolveArtifactBody(
   artifact: NonNullable<Awaited<ReturnType<typeof getArtifactById>>>,
-  fetchFromR2?: (contentRef: string) => Promise<string | null>,
-): Promise<string | null> {
-  if (artifact.body) return artifact.body;
-  if (artifact.contentRef && fetchFromR2) {
-    return await fetchFromR2(artifact.contentRef);
+  fetchFromR2?: (contentRef: string) => Promise<ArtifactBodyReadResult>,
+): Promise<ResolvedArtifactBody> {
+  if (artifact.body != null) {
+    return { body: artifact.body, unavailable: false };
   }
-  return null;
+  if (artifact.contentRef && fetchFromR2) {
+    const result = await fetchFromR2(artifact.contentRef);
+    switch (result.status) {
+      case "found":
+        return { body: result.body, unavailable: false };
+      case "not_found":
+      case "error":
+        return { body: null, unavailable: true };
+      default: {
+        const _exhaustive: never = result;
+        return _exhaustive;
+      }
+    }
+  }
+  return { body: null, unavailable: false };
 }

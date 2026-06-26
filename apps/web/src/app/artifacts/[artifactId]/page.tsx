@@ -21,7 +21,7 @@ export default async function ArtifactPage({
   }
 
   const env = getEnv();
-  const body = await resolveArtifactBody(artifact, async (contentRef) => {
+  const { body, unavailable } = await resolveArtifactBody(artifact, async (contentRef) => {
     return await fetchArtifactBodyFromR2(env, contentRef);
   });
 
@@ -34,8 +34,11 @@ export default async function ArtifactPage({
         url={artifact.url}
         preview={body ?? undefined}
       />
-      {body && (
+      {body != null && (
         <article style={{ marginTop: 24, whiteSpace: "pre-wrap" }}>{body}</article>
+      )}
+      {unavailable && (
+        <p style={{ marginTop: 24, color: "#666" }}>Body unavailable</p>
       )}
     </main>
   );

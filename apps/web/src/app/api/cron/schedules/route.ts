@@ -10,9 +10,9 @@ export const runtime = "nodejs";
 
 /** Vercel Cron: fire enabled schedules (daily digest primitive). */
 export async function GET(request: Request) {
-  const auth = request.headers.get("authorization");
   const cronSecret = process.env.CRON_SECRET;
-  if (cronSecret && auth !== `Bearer ${cronSecret}`) {
+  const authHeader = request.headers.get("authorization");
+  if (!cronSecret || authHeader !== `Bearer ${cronSecret}`) {
     return new Response("Unauthorized", { status: 401 });
   }
 

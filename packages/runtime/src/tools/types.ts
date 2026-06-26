@@ -1,8 +1,5 @@
 import { createHash } from "node:crypto";
-import type { S3Client } from "@aws-sdk/client-s3";
-import type { CredentialProvider } from "@tags/connections";
-import type { SandboxProvider } from "@tags/sandbox";
-import type { R2Config } from "@tags/storage";
+import type { RuntimeProviders } from "../providers";
 import { z } from "zod";
 
 export type ToolRiskLevel = "none" | "low" | "medium" | "high";
@@ -13,7 +10,7 @@ export type ApprovalPolicy =
   | { kind: "always" }
   | { kind: "predicate"; needsApproval: (input: unknown) => boolean };
 
-export interface ToolContext {
+export interface ToolContext extends RuntimeProviders {
   organizationId: string;
   workspaceId: string;
   spaceId: string;
@@ -21,12 +18,6 @@ export interface ToolContext {
   runId: string;
   actorUserId: string | null;
   appUrl: string;
-  credentials: CredentialProvider;
-  sandbox: SandboxProvider;
-  r2?: {
-    client: S3Client;
-    config: R2Config;
-  };
   emit: (event: import("@tags/core/events").TagsEvent) => Promise<void>;
 }
 

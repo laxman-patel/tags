@@ -1,6 +1,7 @@
 import { and, eq } from "drizzle-orm";
 import type { Db } from "@tags/db";
-import { approvalPolicies, budgetPolicies, memoryPolicies, newId } from "@tags/db";
+import { approvalPolicies, budgetPolicies, memoryPolicies, newId, spaces } from "@tags/db";
+import { getMonthlySpendMicroUsd } from "./usage";
 
 export async function getApprovalPolicyForSpace(db: Db, spaceId: string) {
   const { spaces } = await import("@tags/db");
@@ -112,9 +113,6 @@ export type SpaceBudgetStatus = {
 };
 
 export async function checkSpaceBudget(db: Db, spaceId: string): Promise<SpaceBudgetStatus> {
-  const { spaces } = await import("@tags/db");
-  const { getMonthlySpendMicroUsd } = await import("./usage");
-
   const spaceRows = await db.select().from(spaces).where(eq(spaces.id, spaceId)).limit(1);
   const space = spaceRows[0];
   if (!space) {

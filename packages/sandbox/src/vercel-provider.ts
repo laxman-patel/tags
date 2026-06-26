@@ -1,6 +1,6 @@
 import type { SandboxProvider, SandboxSession } from "./types";
 
-export type VercelSandboxProviderConfig = {
+export type SandboxProviderConfig = {
   teamId?: string;
   projectId?: string;
   token?: string;
@@ -33,8 +33,8 @@ function wrapSandbox(sandbox: VercelSandbox): SandboxSession {
   };
 }
 
-export function createVercelSandboxProvider(
-  config: VercelSandboxProviderConfig = {},
+export function createSandboxProvider(
+  config: SandboxProviderConfig = {},
 ): SandboxProvider {
   const runtime = config.defaultRuntime ?? "node24";
 

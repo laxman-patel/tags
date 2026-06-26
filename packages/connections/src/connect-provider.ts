@@ -3,6 +3,7 @@ import type { CredentialProvider, ScopedToken } from "./types";
 export type ConnectCredentialProviderConfig = {
   connectorMap: Record<string, string>;
   vercelToken?: string;
+  oidcToken?: string;
 };
 
 export function createConnectCredentialProvider(
@@ -15,6 +16,7 @@ export function createConnectCredentialProvider(
         throw new Error(`No Connect connector configured for ${args.connectionId}`);
       }
 
+      const authToken = config.oidcToken ?? config.vercelToken;
       const { getTokenResponse } = await import("@vercel/connect");
       const response = await getTokenResponse(
         connector,
@@ -23,7 +25,7 @@ export function createConnectCredentialProvider(
           installationId: args.installationId,
           scopes: args.scopes,
         },
-        config.vercelToken ? { vercelToken: config.vercelToken } : undefined,
+        authToken ? { vercelToken: authToken } : undefined,
       );
 
       return {

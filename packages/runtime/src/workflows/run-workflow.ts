@@ -11,14 +11,16 @@ import {
   runAgentSegment,
   type AgentLoopArgs,
 } from "../agent/loop";
-import type { RuntimeProviderConfig } from "../providers";
+import { createRuntimeProviders } from "../providers";
+import {
+  buildRuntimeProviderConfig,
+  loadRuntimeSecrets,
+  type RuntimeProviderSelectors,
+} from "../secrets";
 
 export const approvalHook = defineHook<{ decision: "approved" | "rejected" }>();
 
 export type TagsWorkflowInput = {
-  databaseUrl: string;
-  gatewayApiKey: string;
-  slackBotToken: string;
   organizationId: string;
   workspaceId: string;
   spaceId: string;
@@ -32,18 +34,20 @@ export type TagsWorkflowInput = {
   actorSlackUserId: string;
   idempotencyKey: string;
   appUrl: string;
-  vercelToken?: string;
   vercelTeamId?: string;
   vercelProjectId?: string;
   connectorLinear?: string;
   connectorSlack?: string;
-  linearApiKey?: string;
-  r2AccountId?: string;
-  r2AccessKeyId?: string;
-  r2SecretAccessKey?: string;
-  r2BucketName?: string;
-  r2PublicBaseUrl?: string;
 };
+
+function providerSelectors(input: TagsWorkflowInput): RuntimeProviderSelectors {
+  return {
+    vercelTeamId: input.vercelTeamId,
+    vercelProjectId: input.vercelProjectId,
+    connectorLinear: input.connectorLinear,
+    connectorSlack: input.connectorSlack,
+  };
+}
 
 export async function tagsRunWorkflow(input: TagsWorkflowInput) {
   "use workflow";
@@ -77,8 +81,6 @@ export async function tagsRunWorkflow(input: TagsWorkflowInput) {
         segment,
       });
       await finalizeRunStep({
-        databaseUrl: input.databaseUrl,
-        slackBotToken: input.slackBotToken,
         runId: setup.runId,
         threadId: setup.threadId,
         channelId: input.channelId,
@@ -90,14 +92,11 @@ export async function tagsRunWorkflow(input: TagsWorkflowInput) {
     }
 
     await rejectToolStep({
-      databaseUrl: input.databaseUrl,
       runId: setup.runId,
       invocationId: segment.invocationId,
       toolName: segment.toolName,
     });
     await finalizeRunStep({
-      databaseUrl: input.databaseUrl,
-      slackBotToken: input.slackBotToken,
       runId: setup.runId,
       threadId: setup.threadId,
       channelId: input.channelId,
@@ -108,14 +107,15 @@ export async function tagsRunWorkflow(input: TagsWorkflowInput) {
     break;
   }
 
-  await releaseThreadStep(input.databaseUrl, setup.threadId);
+  await releaseThreadStep(setup.threadId);
 }
 
 async function ingestStep(input: TagsWorkflowInput) {
   "use step";
 
-  const db = createDb(input.databaseUrl);
-  const slack = createSlackClient(input.slackBotToken);
+  const secrets = loadRuntimeSecrets();
+  const db = createDb(secrets.databaseUrl);
+  const slack = createSlackClient(secrets.slackBotToken);
   const config = await loadActiveSpaceConfig(db, input.spaceId);
 
   if (!config) {
@@ -212,13 +212,14 @@ async function agentSegmentStep(
 ) {
   "use step";
 
-  const db = createDb(args.databaseUrl);
-  const slack = createSlackClient(args.slackBotToken);
+  const secrets = loadRuntimeSecrets();
+  const db = createDb(secrets.databaseUrl);
+  const slack = createSlackClient(secrets.slackBotToken);
 
   const loopArgs: AgentLoopArgs = {
     db,
     slack,
-    gatewayApiKey: args.gatewayApiKey,
+    gatewayApiKey: secrets.gatewayApiKey,
     runId: args.runId,
     spaceId: args.spaceId,
     workspaceId: args.workspaceId,
@@ -231,39 +232,10 @@ async function agentSegmentStep(
     actorUserId: args.actorSlackUserId,
     spaceName: args.spaceName,
     appUrl: args.appUrl,
-    providerConfig: buildProviderConfig(args),
+    providerConfig: buildRuntimeProviderConfig(secrets, providerSelectors(args)),
   };
 
   return runAgentSegment(loopArgs);
-}
-
-function buildProviderConfig(args: TagsWorkflowInput): RuntimeProviderConfig {
-  const config: RuntimeProviderConfig = {
-    slackBotToken: args.slackBotToken,
-    vercelToken: args.vercelToken,
-    vercelTeamId: args.vercelTeamId,
-    vercelProjectId: args.vercelProjectId,
-    connectorLinear: args.connectorLinear,
-    connectorSlack: args.connectorSlack,
-    linearApiKey: args.linearApiKey,
-  };
-
-  if (
-    args.r2AccountId &&
-    args.r2AccessKeyId &&
-    args.r2SecretAccessKey &&
-    args.r2BucketName
-  ) {
-    config.r2 = {
-      accountId: args.r2AccountId,
-      accessKeyId: args.r2AccessKeyId,
-      secretAccessKey: args.r2SecretAccessKey,
-      bucketName: args.r2BucketName,
-      publicBaseUrl: args.r2PublicBaseUrl,
-    };
-  }
-
-  return config;
 }
 
 async function executeApprovedToolStep(
@@ -279,10 +251,16 @@ async function executeApprovedToolStep(
 ) {
   "use step";
 
-  const db = createDb(args.databaseUrl);
+  const secrets = loadRuntimeSecrets();
+  const db = createDb(secrets.databaseUrl);
   const emit = async (event: import("@tags/core/events").TagsEvent) => {
     await appendRunEvent(db, args.runId, event);
   };
+
+  const providers = await createRuntimeProviders(
+    buildRuntimeProviderConfig(secrets, providerSelectors(args)),
+  );
+  const toolOptions = { appUrl: args.appUrl, ...providers };
 
   return executeApprovedTool(db, {
     runId: args.runId,
@@ -292,7 +270,7 @@ async function executeApprovedToolStep(
     threadId: args.threadId,
     actorUserId: args.actorSlackUserId,
     appUrl: args.appUrl,
-    providerConfig: buildProviderConfig(args),
+    toolOptions,
     toolName: args.segment.toolName,
     toolInput: args.segment.toolInput,
     invocationId: args.segment.invocationId,
@@ -301,8 +279,6 @@ async function executeApprovedToolStep(
 }
 
 async function finalizeRunStep(args: {
-  databaseUrl: string;
-  slackBotToken: string;
   runId: string;
   threadId: string;
   channelId: string;
@@ -312,11 +288,12 @@ async function finalizeRunStep(args: {
 }) {
   "use step";
 
-  const db = createDb(args.databaseUrl);
+  const secrets = loadRuntimeSecrets();
+  const db = createDb(secrets.databaseUrl);
   const { SlackStreamAdapter, buildRunLinkBlock, updateMessage } = await import("@tags/slack");
   const { appendRunEvent, updateRunStatus } = await import("@tags/core/runs");
 
-  const slack = createSlackClient(args.slackBotToken);
+  const slack = createSlackClient(secrets.slackBotToken);
   const stream = new SlackStreamAdapter(slack, args.channelId, args.slackMessageTs);
   await stream.finalize(args.summaryText);
 
@@ -330,24 +307,25 @@ async function finalizeRunStep(args: {
 }
 
 async function rejectToolStep(args: {
-  databaseUrl: string;
   runId: string;
   invocationId: string;
   toolName: string;
 }) {
   "use step";
 
-  const db = createDb(args.databaseUrl);
+  const secrets = loadRuntimeSecrets();
+  const db = createDb(secrets.databaseUrl);
   const emit = async (event: import("@tags/core/events").TagsEvent) => {
     await appendRunEvent(db, args.runId, event);
   };
   await rejectPendingTool(db, args.invocationId, args.toolName, emit);
 }
 
-async function releaseThreadStep(databaseUrl: string, threadId: string) {
+async function releaseThreadStep(threadId: string) {
   "use step";
 
-  const db = createDb(databaseUrl);
+  const secrets = loadRuntimeSecrets();
+  const db = createDb(secrets.databaseUrl);
   await db
     .update(threads)
     .set({ activeRunId: null, status: "done", updatedAt: new Date() })

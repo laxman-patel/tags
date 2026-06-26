@@ -48,14 +48,6 @@ export async function runAgentSegment(args: AgentLoopArgs): Promise<AgentSegment
     throw new Error(`No active space config for space ${args.spaceId}`);
   }
 
-  const providers = await createRuntimeProviders(args.providerConfig);
-  const toolOptions: ToolRegistryOptions = {
-    appUrl: args.appUrl,
-    credentials: providers.credentials,
-    sandbox: providers.sandbox,
-    r2: providers.r2,
-  };
-
   const gateway = createGateway({ apiKey: args.gatewayApiKey });
   const stream = new SlackStreamAdapter(
     args.slack,
@@ -69,7 +61,7 @@ export async function runAgentSegment(args: AgentLoopArgs): Promise<AgentSegment
   };
 
   const budget = await checkSpaceBudget(args.db, args.spaceId);
-  if (budget.exceeded && budget.hardLimit) {
+  if (!budget.allowed) {
     const message = `Monthly budget limit reached ($${(budget.spentMicroUsd / 1_000_000).toFixed(2)} of $${(budget.budgetMicroUsd / 1_000_000).toFixed(2)}).`;
     await emit({ type: "run.failed", error: message });
     await updateRunStatus(args.db, args.runId, "failed", {
@@ -79,6 +71,9 @@ export async function runAgentSegment(args: AgentLoopArgs): Promise<AgentSegment
     await stream.finalize(message);
     return { kind: "complete", text: message };
   }
+
+  const providers = await createRuntimeProviders(args.providerConfig);
+  const toolOptions: ToolRegistryOptions = { appUrl: args.appUrl, ...providers };
 
   await updateRunStatus(args.db, args.runId, "streaming");
   await emit({ type: "status", label: "Reading thread context" });
@@ -169,27 +164,19 @@ export async function executeApprovedTool(
     threadId: string;
     actorUserId: string | null;
     appUrl: string;
-    providerConfig: RuntimeProviderConfig;
+    toolOptions: ToolRegistryOptions;
     toolName: string;
     toolInput: unknown;
     invocationId: string;
     emit: (event: TagsEvent) => Promise<void>;
   },
 ): Promise<unknown> {
-  const providers = await createRuntimeProviders(args.providerConfig);
-  const toolOptions: ToolRegistryOptions = {
-    appUrl: args.appUrl,
-    credentials: providers.credentials,
-    sandbox: providers.sandbox,
-    r2: providers.r2,
-  };
-
-  const tagsTool = resolveTools(db, [args.toolName], toolOptions)[0];
+  const tagsTool = resolveTools(db, [args.toolName], args.toolOptions)[0];
   if (!tagsTool) {
     throw new Error(`Tool not found: ${args.toolName}`);
   }
 
-  const toolCtx = buildToolContext(args, toolOptions, args.emit);
+  const toolCtx = buildToolContext(args, args.toolOptions, args.emit);
 
   const toolResult = await tagsTool.execute(args.toolInput, toolCtx);
 
@@ -240,7 +227,9 @@ function buildToolContext(
   toolOptions: ToolRegistryOptions,
   emit: (event: TagsEvent) => Promise<void>,
 ): ToolContext {
+  const { appUrl: _appUrl, ...providers } = toolOptions;
   return {
+    ...providers,
     organizationId: args.organizationId,
     workspaceId: args.workspaceId,
     spaceId: args.spaceId,
@@ -248,9 +237,6 @@ function buildToolContext(
     runId: args.runId,
     actorUserId: args.actorUserId,
     appUrl: args.appUrl,
-    credentials: toolOptions.credentials,
-    sandbox: toolOptions.sandbox,
-    r2: toolOptions.r2,
     emit,
   };
 }
@@ -340,7 +326,7 @@ function buildAiTools(
             threadId: args.threadId,
             actorUserId: args.actorUserId,
             appUrl: args.appUrl,
-            providerConfig: args.providerConfig,
+            toolOptions,
             toolName: tagsTool.name,
             toolInput: input,
             invocationId: invocation.id,

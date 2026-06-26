@@ -11,11 +11,11 @@ export function createRunSandboxCommandTool(): TagsTool {
   return {
     name: "run_sandbox_command",
     description:
-      "Run a read-only shell command in an isolated Vercel Sandbox (for code inspection and safe execution).",
+      "Run a shell command in an isolated Vercel Sandbox. Side effecting: spins up a sandbox, may incur cost and network egress; requires approval.",
     inputSchema,
-    risk: "medium",
-    approval: { kind: "never" },
-    sideEffecting: false,
+    risk: "high",
+    approval: { kind: "always" },
+    sideEffecting: true,
     async execute(input, ctx) {
       const parsed = inputSchema.parse(input);
       const session = await ctx.sandbox.create({ runtime: parsed.runtime });

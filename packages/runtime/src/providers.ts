@@ -6,6 +6,7 @@ import type { R2Config } from "@tags/storage";
 export type RuntimeProviderConfig = {
   slackBotToken?: string;
   vercelToken?: string;
+  oidcToken?: string;
   vercelTeamId?: string;
   vercelProjectId?: string;
   connectorLinear?: string;
@@ -41,6 +42,7 @@ export async function createRuntimeProviders(
     connectorMap,
     directSecrets,
     vercelToken: config.vercelToken,
+    oidcToken: config.oidcToken ?? process.env.VERCEL_OIDC_TOKEN,
   });
 
   const sandbox = createSandboxProvider({

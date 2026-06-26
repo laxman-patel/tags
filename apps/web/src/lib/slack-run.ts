@@ -27,9 +27,6 @@ export async function startRunFromSlack(env: Env, trigger: SlackTrigger) {
 
   await start(tagsRunWorkflow, [
     {
-      databaseUrl: env.DATABASE_URL,
-      gatewayApiKey: env.AI_GATEWAY_API_KEY,
-      slackBotToken: env.SLACK_BOT_TOKEN,
       organizationId: resolved.space.organizationId,
       workspaceId: resolved.workspace.id,
       spaceId: resolved.space.id,

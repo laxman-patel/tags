@@ -44,11 +44,23 @@ export async function uploadArtifactBody(
   );
 }
 
+export type ArtifactBodyReadResult =
+  | { status: "found"; body: string }
+  | { status: "not_found" }
+  | { status: "error"; message: string };
+
+function isR2NotFoundError(error: unknown): boolean {
+  return (
+    error instanceof Error &&
+    (error.name === "NoSuchKey" || error.name === "NotFound")
+  );
+}
+
 export async function getArtifactBody(
   client: S3Client,
   config: R2Config,
   key: string,
-): Promise<string | null> {
+): Promise<ArtifactBodyReadResult> {
   try {
     const response = await client.send(
       new GetObjectCommand({
@@ -56,10 +68,18 @@ export async function getArtifactBody(
         Key: key,
       }),
     );
-    if (!response.Body) return null;
-    return await response.Body.transformToString();
-  } catch {
-    return null;
+    if (!response.Body) {
+      return { status: "not_found" };
+    }
+    const body = await response.Body.transformToString();
+    return { status: "found", body };
+  } catch (error) {
+    if (isR2NotFoundError(error)) {
+      return { status: "not_found" };
+    }
+    const message = error instanceof Error ? error.message : String(error);
+    console.error(`R2 getArtifactBody failed for key "${key}":`, error);
+    return { status: "error", message };
   }
 }
 
