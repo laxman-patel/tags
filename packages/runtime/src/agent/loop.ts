@@ -9,6 +9,7 @@ import {
   updateRunStatus,
 } from "@tags/core/runs";
 import { loadActiveSpaceConfig } from "@tags/core/spaces";
+import { recordUsage } from "@tags/core/usage";
 import type { Db } from "@tags/db";
 import { newId } from "@tags/db";
 import { SlackStreamAdapter } from "@tags/slack";
@@ -58,8 +59,8 @@ export async function runAgentSegment(args: AgentLoopArgs): Promise<AgentSegment
   await updateRunStatus(args.db, args.runId, "streaming");
   await emit({ type: "status", label: "Reading thread context" });
 
-  const messages = await buildThreadContext(args.db, args.threadId, args.triggerText);
-  const tagsTools = resolveTools(args.db, config.enabledTools);
+  const messages = await buildThreadContext(args.db, args.threadId, args.spaceId, args.triggerText);
+  const tagsTools = resolveTools(args.db, config.enabledTools, args.appUrl);
   const aiTools = buildAiTools(tagsTools, args, emit) as Parameters<typeof streamText>[0]["tools"];
 
   const system = buildSystemPrompt(config.instructions, args.spaceName);
@@ -103,6 +104,15 @@ export async function runAgentSegment(args: AgentLoopArgs): Promise<AgentSegment
         total: (usage?.inputTokens ?? 0) + (usage?.outputTokens ?? 0),
       },
       finishedAt: new Date(),
+    });
+
+    await recordUsage(args.db, {
+      organizationId: args.organizationId,
+      spaceId: args.spaceId,
+      runId: args.runId,
+      modelId: config.modelId,
+      promptTokens: usage?.inputTokens ?? 0,
+      completionTokens: usage?.outputTokens ?? 0,
     });
 
     return { kind: "complete", text: fullText };
