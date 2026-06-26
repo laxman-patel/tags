@@ -59,7 +59,7 @@ async function seed() {
       'provider-default',
       ${defaultInstructions(channelName)},
       '[]'::jsonb,
-      ${JSON.stringify(["search_thread", "create_linear_issue"])}::jsonb,
+      ${JSON.stringify(["search_thread", "search_memory", "save_memory", "create_artifact", "create_linear_issue"])}::jsonb,
       '[]'::jsonb,
       12,
       true

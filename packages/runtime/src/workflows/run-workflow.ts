@@ -116,6 +116,20 @@ async function ingestStep(input: TagsWorkflowInput) {
     rootMessageId: input.rootMessageTs,
   });
 
+  const { parseRememberCommand } = await import("../context/builder");
+  const remember = parseRememberCommand(input.triggerText);
+  if (remember) {
+    const { saveMemory } = await import("@tags/core/memory");
+    await saveMemory(db, {
+      organizationId: input.organizationId,
+      spaceId: input.spaceId,
+      kind: "fact",
+      content: remember,
+      createdBy: "human",
+      sourceThreadId: thread.id,
+    });
+  }
+
   await upsertMessage(db, {
     organizationId: input.organizationId,
     spaceId: input.spaceId,

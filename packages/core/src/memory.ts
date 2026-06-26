@@ -20,8 +20,8 @@ export async function searchMemories(db: Db, spaceId: string, query: string, lim
         eq(memories.spaceId, spaceId),
         isNull(memories.deletedAt),
         sql`(
-          ${memories.searchTsv} @@ plainto_tsquery('english', ${query})
-          OR ${memories.searchText} % ${query}
+          ${memories.searchText} % ${query}
+          OR ${memories.content} ILIKE ${`%${query}%`}
         )`,
       ),
     )
