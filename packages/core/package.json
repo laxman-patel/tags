@@ -6,6 +6,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./spaces": "./src/spaces.ts",
+    "./spaces-admin": "./src/spaces-admin.ts",
     "./threads": "./src/threads.ts",
     "./runs": "./src/runs.ts",
     "./events": "./src/events.ts"

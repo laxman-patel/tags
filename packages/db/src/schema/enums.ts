@@ -61,3 +61,21 @@ export const reasoningEffortEnum = pgEnum("reasoning_effort", [
 ]);
 
 export const sourceEnum = pgEnum("source", ["human", "agent", "system"]);
+
+export const memoryKindEnum = pgEnum("memory_kind", [
+  "fact",
+  "summary",
+  "preference",
+  "decision",
+  "artifact",
+]);
+
+export const artifactKindEnum = pgEnum("artifact_kind", [
+  "markdown",
+  "html",
+  "diff",
+  "image",
+  "table",
+  "json",
+  "link",
+]);

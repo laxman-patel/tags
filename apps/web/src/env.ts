@@ -8,6 +8,7 @@ const envSchema = z.object({
   SLACK_SIGNING_SECRET: z.string().min(1),
   SLACK_BOT_TOKEN: z.string().min(1),
   NEXT_PUBLIC_APP_URL: z.string().url().default("http://localhost:3000"),
+  TAGS_ADMIN_KEY: z.string().default("dev-admin-key"),
   SENTRY_DSN: z.string().optional(),
 });
 
