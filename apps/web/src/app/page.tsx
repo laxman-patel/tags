@@ -24,7 +24,10 @@ export default function HomePage() {
         <li>Read-only <code>search_thread</code> tool</li>
       </ul>
       <p>
-        <Link href="/api/slack/events">Slack events endpoint</Link>
+        <Link href="/admin/login">Admin</Link> ·
+        <Link href="/admin/spaces">Spaces</Link> ·
+        <Link href="/admin/approvals">Approvals</Link> ·
+        <Link href="/admin/audit">Audit</Link>
       </p>
     </main>
   );

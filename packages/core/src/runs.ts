@@ -1,4 +1,4 @@
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, desc, eq } from "drizzle-orm";
 import type { Db } from "@tags/db";
 import { approvalRequests, newId, runEvents, runs, toolInvocations } from "@tags/db";
 
@@ -246,4 +246,14 @@ export async function resolveApprovalByRequestId(
     .returning();
 
   return row ?? null;
+}
+
+export async function listPendingApprovals(db: Db, organizationId: string) {
+  return db
+    .select()
+    .from(approvalRequests)
+    .where(
+      and(eq(approvalRequests.organizationId, organizationId), eq(approvalRequests.status, "pending")),
+    )
+    .orderBy(desc(approvalRequests.createdAt));
 }

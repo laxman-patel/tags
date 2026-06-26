@@ -9,7 +9,13 @@
     "./spaces-admin": "./src/spaces-admin.ts",
     "./threads": "./src/threads.ts",
     "./runs": "./src/runs.ts",
-    "./events": "./src/events.ts"
+    "./events": "./src/events.ts",
+    "./memory": "./src/memory.ts",
+    "./audit": "./src/audit.ts",
+    "./artifacts": "./src/artifacts.ts",
+    "./usage": "./src/usage.ts",
+    "./policies": "./src/policies.ts",
+    "./schedules": "./src/schedules.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"

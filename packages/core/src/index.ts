@@ -9,3 +9,4 @@ export * from "./artifacts";
 export * from "./usage";
 export * from "./policies";
 export * from "./users";
+export * from "./schedules";
