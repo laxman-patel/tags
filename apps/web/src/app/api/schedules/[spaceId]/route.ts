@@ -8,7 +8,7 @@ export async function GET(
   request: Request,
   { params }: { params: Promise<{ spaceId: string }> },
 ) {
-  if (!(await isAdminAuthorized(request))) return adminUnauthorizedResponse();
+  if (!(await isAdminAuthorized())) return adminUnauthorizedResponse();
   const { spaceId } = await params;
   const db = getDb();
   const schedules = await listSchedules(db, spaceId);
@@ -19,7 +19,7 @@ export async function POST(
   request: Request,
   { params }: { params: Promise<{ spaceId: string }> },
 ) {
-  if (!(await isAdminAuthorized(request))) return adminUnauthorizedResponse();
+  if (!(await isAdminAuthorized())) return adminUnauthorizedResponse();
   const { spaceId } = await params;
   const body = (await request.json()) as {
     organizationId: string;

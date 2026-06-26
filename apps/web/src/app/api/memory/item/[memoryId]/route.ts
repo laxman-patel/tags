@@ -8,7 +8,7 @@ export async function DELETE(
   request: Request,
   { params }: { params: Promise<{ memoryId: string }> },
 ) {
-  if (!(await isAdminAuthorized(request))) return adminUnauthorizedResponse();
+  if (!(await isAdminAuthorized())) return adminUnauthorizedResponse();
   const { memoryId } = await params;
   const db = getDb();
   await softDeleteMemory(db, memoryId);

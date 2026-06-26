@@ -102,3 +102,50 @@ export async function getBudgetPolicy(db: Db, organizationId: string, policyId?:
     .limit(1);
   return rows[0];
 }
+
+export type SpaceBudgetStatus = {
+  allowed: boolean;
+  exceeded: boolean;
+  hardLimit: boolean;
+  spentMicroUsd: number;
+  budgetMicroUsd: number;
+};
+
+export async function checkSpaceBudget(db: Db, spaceId: string): Promise<SpaceBudgetStatus> {
+  const { spaces } = await import("@tags/db");
+  const { getMonthlySpendMicroUsd } = await import("./usage");
+
+  const spaceRows = await db.select().from(spaces).where(eq(spaces.id, spaceId)).limit(1);
+  const space = spaceRows[0];
+  if (!space) {
+    return {
+      allowed: true,
+      exceeded: false,
+      hardLimit: false,
+      spentMicroUsd: 0,
+      budgetMicroUsd: 0,
+    };
+  }
+
+  const policy = await getBudgetPolicy(db, space.organizationId, space.budgetPolicyId);
+  if (!policy) {
+    return {
+      allowed: true,
+      exceeded: false,
+      hardLimit: false,
+      spentMicroUsd: 0,
+      budgetMicroUsd: 0,
+    };
+  }
+
+  const spentMicroUsd = await getMonthlySpendMicroUsd(db, spaceId);
+  const exceeded = spentMicroUsd >= policy.monthlyBudgetMicroUsd;
+
+  return {
+    allowed: !exceeded || !policy.hardLimit,
+    exceeded,
+    hardLimit: policy.hardLimit,
+    spentMicroUsd,
+    budgetMicroUsd: policy.monthlyBudgetMicroUsd,
+  };
+}

@@ -11,6 +11,7 @@ import {
   runAgentSegment,
   type AgentLoopArgs,
 } from "../agent/loop";
+import type { RuntimeProviderConfig } from "../providers";
 
 export const approvalHook = defineHook<{ decision: "approved" | "rejected" }>();
 
@@ -19,6 +20,7 @@ export type TagsWorkflowInput = {
   gatewayApiKey: string;
   slackBotToken: string;
   organizationId: string;
+  workspaceId: string;
   spaceId: string;
   spaceName: string;
   channelId: string;
@@ -30,6 +32,17 @@ export type TagsWorkflowInput = {
   actorSlackUserId: string;
   idempotencyKey: string;
   appUrl: string;
+  vercelToken?: string;
+  vercelTeamId?: string;
+  vercelProjectId?: string;
+  connectorLinear?: string;
+  connectorSlack?: string;
+  linearApiKey?: string;
+  r2AccountId?: string;
+  r2AccessKeyId?: string;
+  r2SecretAccessKey?: string;
+  r2BucketName?: string;
+  r2PublicBaseUrl?: string;
 };
 
 export async function tagsRunWorkflow(input: TagsWorkflowInput) {
@@ -208,6 +221,7 @@ async function agentSegmentStep(
     gatewayApiKey: args.gatewayApiKey,
     runId: args.runId,
     spaceId: args.spaceId,
+    workspaceId: args.workspaceId,
     threadId: args.threadId,
     organizationId: args.organizationId,
     channelId: args.channelId,
@@ -217,9 +231,39 @@ async function agentSegmentStep(
     actorUserId: args.actorSlackUserId,
     spaceName: args.spaceName,
     appUrl: args.appUrl,
+    providerConfig: buildProviderConfig(args),
   };
 
   return runAgentSegment(loopArgs);
+}
+
+function buildProviderConfig(args: TagsWorkflowInput): RuntimeProviderConfig {
+  const config: RuntimeProviderConfig = {
+    slackBotToken: args.slackBotToken,
+    vercelToken: args.vercelToken,
+    vercelTeamId: args.vercelTeamId,
+    vercelProjectId: args.vercelProjectId,
+    connectorLinear: args.connectorLinear,
+    connectorSlack: args.connectorSlack,
+    linearApiKey: args.linearApiKey,
+  };
+
+  if (
+    args.r2AccountId &&
+    args.r2AccessKeyId &&
+    args.r2SecretAccessKey &&
+    args.r2BucketName
+  ) {
+    config.r2 = {
+      accountId: args.r2AccountId,
+      accessKeyId: args.r2AccessKeyId,
+      secretAccessKey: args.r2SecretAccessKey,
+      bucketName: args.r2BucketName,
+      publicBaseUrl: args.r2PublicBaseUrl,
+    };
+  }
+
+  return config;
 }
 
 async function executeApprovedToolStep(
@@ -243,9 +287,12 @@ async function executeApprovedToolStep(
   return executeApprovedTool(db, {
     runId: args.runId,
     organizationId: args.organizationId,
+    workspaceId: args.workspaceId,
     spaceId: args.spaceId,
     threadId: args.threadId,
     actorUserId: args.actorSlackUserId,
+    appUrl: args.appUrl,
+    providerConfig: buildProviderConfig(args),
     toolName: args.segment.toolName,
     toolInput: args.segment.toolInput,
     invocationId: args.segment.invocationId,

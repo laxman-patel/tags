@@ -10,7 +10,7 @@ export default function SpaceUsagePage() {
 
   useEffect(() => {
     if (!spaceId) return;
-    fetch(`/api/usage/${spaceId}`, { headers: { "x-tags-admin-key": getKey() } })
+    fetch(`/api/usage/${spaceId}`)
       .then((r) => r.json())
       .then(setUsage);
   }, [spaceId]);
@@ -24,9 +24,4 @@ export default function SpaceUsagePage() {
       </pre>
     </main>
   );
-}
-
-function getKey(): string {
-  const match = document.cookie.match(/tags_admin=([^;]+)/);
-  return match?.[1] ?? "";
 }

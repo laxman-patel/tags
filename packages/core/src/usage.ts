@@ -1,6 +1,39 @@
-import { count, desc, eq, sum } from "drizzle-orm";
+import { and, count, desc, eq, gte, sum } from "drizzle-orm";
 import type { Db } from "@tags/db";
 import { newId, usageRecords } from "@tags/db";
+
+function estimateCostMicroUsd(
+  modelId: string,
+  promptTokens: number,
+  completionTokens: number,
+): number {
+  const rates: Record<string, { input: number; output: number }> = {
+    "openai/gpt-4o-mini": { input: 150_000, output: 600_000 },
+    "openai/gpt-4o": { input: 2_500_000, output: 10_000_000 },
+  };
+  const rate = rates[modelId] ?? { input: 500_000, output: 1_500_000 };
+  return Math.round(
+    (promptTokens * rate.input + completionTokens * rate.output) / 1_000_000,
+  );
+}
+
+export function startOfCurrentMonth(): Date {
+  const date = new Date();
+  date.setDate(1);
+  date.setHours(0, 0, 0, 0);
+  return date;
+}
+
+export async function getMonthlySpendMicroUsd(db: Db, spaceId: string): Promise<number> {
+  const agg = await db
+    .select({ total: sum(usageRecords.costMicroUsd) })
+    .from(usageRecords)
+    .where(
+      and(eq(usageRecords.spaceId, spaceId), gte(usageRecords.createdAt, startOfCurrentMonth())),
+    );
+
+  return Number(agg[0]?.total ?? 0);
+}
 
 export async function recordUsage(
   db: Db,
@@ -27,7 +60,9 @@ export async function recordUsage(
     promptTokens: args.promptTokens,
     completionTokens: args.completionTokens,
     totalTokens: total,
-    costMicroUsd: args.costMicroUsd ?? 0,
+    costMicroUsd:
+      args.costMicroUsd ??
+      estimateCostMicroUsd(args.modelId, args.promptTokens, args.completionTokens),
   });
 }
 

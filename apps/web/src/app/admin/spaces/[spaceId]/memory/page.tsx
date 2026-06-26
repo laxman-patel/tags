@@ -10,7 +10,7 @@ export default function SpaceMemoryPage() {
 
   useEffect(() => {
     if (!spaceId) return;
-    fetch(`/api/memory/${spaceId}`, { headers: { "x-tags-admin-key": getKey() } })
+    fetch(`/api/memory/${spaceId}`)
       .then((r) => r.json())
       .then((d) => setMemories(d.memories ?? []));
   }, [spaceId]);
@@ -18,7 +18,6 @@ export default function SpaceMemoryPage() {
   async function forget(id: string) {
     await fetch(`/api/memory/item/${id}`, {
       method: "DELETE",
-      headers: { "x-tags-admin-key": getKey() },
     });
     setMemories((prev) => prev.filter((m) => m.id !== id));
   }
@@ -37,9 +36,4 @@ export default function SpaceMemoryPage() {
       </ul>
     </main>
   );
-}
-
-function getKey(): string {
-  const match = document.cookie.match(/tags_admin=([^;]+)/);
-  return match?.[1] ?? "";
 }

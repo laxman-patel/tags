@@ -1,3 +1,6 @@
+import { ClerkProvider } from "@clerk/nextjs";
+import { AuthHeader } from "@/components/auth-header";
+
 export const metadata = {
   title: "Tags",
   description: "Channel-native agent for teams",
@@ -6,7 +9,12 @@ export const metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body>
+        <ClerkProvider>
+          <AuthHeader />
+          {children}
+        </ClerkProvider>
+      </body>
     </html>
   );
 }

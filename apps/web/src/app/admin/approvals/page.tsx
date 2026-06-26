@@ -8,7 +8,7 @@ export default function ApprovalsPage() {
   const [approvals, setApprovals] = useState<Array<Record<string, unknown>>>([]);
 
   useEffect(() => {
-    fetch("/api/approvals", { headers: { "x-tags-admin-key": getKey() } })
+    fetch("/api/approvals")
       .then((r) => r.json())
       .then((d) => setApprovals(d.approvals ?? []));
   }, []);
@@ -16,7 +16,7 @@ export default function ApprovalsPage() {
   async function respond(id: string, decision: "approved" | "rejected") {
     await fetch(`/api/approvals/${id}/respond`, {
       method: "POST",
-      headers: { "content-type": "application/json", "x-tags-admin-key": getKey() },
+      headers: { "content-type": "application/json" },
       body: JSON.stringify({ decision }),
     });
     setApprovals((prev) => prev.filter((a) => a.id !== id));
@@ -42,7 +42,3 @@ export default function ApprovalsPage() {
   );
 }
 
-function getKey(): string {
-  const match = document.cookie.match(/tags_admin=([^;]+)/);
-  return match?.[1] ?? "";
-}

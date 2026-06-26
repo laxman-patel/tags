@@ -17,6 +17,24 @@ async function seed() {
   const workspaceId = newId();
   const spaceId = newId();
   const configId = newId();
+  const approvalPolicyId = newId();
+  const budgetPolicyId = newId();
+  const memoryPolicyId = newId();
+
+  await sql`
+    insert into approval_policies (id, organization_id, name, require_admin_role, approver_allowlist, allow_self_approve, default_expiry_minutes)
+    values (${approvalPolicyId}, ${orgId}, 'Default approval policy', false, '[]'::jsonb, false, 60)
+  `;
+
+  await sql`
+    insert into budget_policies (id, organization_id, name, monthly_budget_micro_usd, hard_limit)
+    values (${budgetPolicyId}, ${orgId}, 'Default budget', 50000000, true)
+  `;
+
+  await sql`
+    insert into memory_policies (id, organization_id, name, allow_agent_proposed, require_approval_for_sensitive)
+    values (${memoryPolicyId}, ${orgId}, 'Default memory policy', true, true)
+  `;
 
   await sql`
     insert into organizations (id, name)
@@ -31,7 +49,10 @@ async function seed() {
   `;
 
   if (existingSpace.length > 0) {
-    console.log(`Space already exists: ${existingSpace[0].id}`);
+    const existing = existingSpace[0];
+    if (existing) {
+      console.log(`Space already exists: ${existing.id}`);
+    }
     await sql.end();
     return;
   }
@@ -42,8 +63,14 @@ async function seed() {
   `;
 
   await sql`
-    insert into spaces (id, organization_id, workspace_id, provider, external_space_id, name, slug)
-    values (${spaceId}, ${orgId}, ${workspaceId}, 'slack', ${slackChannelId}, ${channelName}, 'dev')
+    insert into spaces (
+      id, organization_id, workspace_id, provider, external_space_id, name, slug,
+      approval_policy_id, budget_policy_id, memory_policy_id
+    )
+    values (
+      ${spaceId}, ${orgId}, ${workspaceId}, 'slack', ${slackChannelId}, ${channelName}, 'dev',
+      ${approvalPolicyId}, ${budgetPolicyId}, ${memoryPolicyId}
+    )
   `;
 
   await sql`
@@ -59,7 +86,14 @@ async function seed() {
       'provider-default',
       ${defaultInstructions(channelName)},
       '[]'::jsonb,
-      ${JSON.stringify(["search_thread", "search_memory", "save_memory", "create_artifact", "create_linear_issue"])}::jsonb,
+      ${JSON.stringify([
+        "search_thread",
+        "search_memory",
+        "save_memory",
+        "create_artifact",
+        "create_linear_issue",
+        "run_sandbox_command",
+      ])}::jsonb,
       '[]'::jsonb,
       12,
       true

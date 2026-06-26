@@ -7,7 +7,7 @@ export default function AuditPage() {
   const [events, setEvents] = useState<Array<Record<string, unknown>>>([]);
 
   useEffect(() => {
-    fetch("/api/audit", { headers: { "x-tags-admin-key": getKey() } })
+    fetch("/api/audit")
       .then((r) => r.json())
       .then((d) => setEvents(d.events ?? []));
   }, []);
@@ -28,7 +28,3 @@ export default function AuditPage() {
   );
 }
 
-function getKey(): string {
-  const match = document.cookie.match(/tags_admin=([^;]+)/);
-  return match?.[1] ?? "";
-}

@@ -8,7 +8,7 @@ export async function GET(
   request: Request,
   { params }: { params: Promise<{ spaceId: string }> },
 ) {
-  if (!(await isAdminAuthorized(request))) return adminUnauthorizedResponse();
+  if (!(await isAdminAuthorized())) return adminUnauthorizedResponse();
   const { spaceId } = await params;
   const db = getDb();
   const memories = await listMemoriesForSpace(db, spaceId);

@@ -13,6 +13,7 @@ export async function createArtifact(
     title: string;
     url: string;
     body?: string;
+    contentRef?: string;
     contentType?: string;
     metadata?: Record<string, unknown>;
   },
@@ -30,6 +31,7 @@ export async function createArtifact(
       title: args.title,
       url: args.url,
       body: args.body,
+      contentRef: args.contentRef,
       contentType: args.contentType ?? "text/markdown",
       sizeBytes: args.body ? Buffer.byteLength(args.body, "utf8") : 0,
       metadata: args.metadata,
@@ -45,4 +47,15 @@ export async function getArtifactById(db: Db, artifactId: string) {
 
 export async function listArtifactsForRun(db: Db, runId: string) {
   return db.select().from(artifacts).where(eq(artifacts.runId, runId));
+}
+
+export async function resolveArtifactBody(
+  artifact: NonNullable<Awaited<ReturnType<typeof getArtifactById>>>,
+  fetchFromR2?: (contentRef: string) => Promise<string | null>,
+): Promise<string | null> {
+  if (artifact.body) return artifact.body;
+  if (artifact.contentRef && fetchFromR2) {
+    return await fetchFromR2(artifact.contentRef);
+  }
+  return null;
 }

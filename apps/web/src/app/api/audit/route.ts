@@ -6,7 +6,7 @@ import { getDb } from "@/lib/db";
 export const runtime = "nodejs";
 
 export async function GET(request: Request) {
-  if (!(await isAdminAuthorized(request))) return adminUnauthorizedResponse();
+  if (!(await isAdminAuthorized())) return adminUnauthorizedResponse();
   const db = getDb();
   const orgHeader = request.headers.get("x-tags-org-id");
   let orgId = orgHeader ?? "";

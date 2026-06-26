@@ -7,7 +7,7 @@ import { getDb } from "@/lib/db";
 export const runtime = "nodejs";
 
 export async function GET(request: Request) {
-  if (!(await isAdminAuthorized(request))) return adminUnauthorizedResponse();
+  if (!(await isAdminAuthorized())) return adminUnauthorizedResponse();
 
   const db = getDb();
   const orgId = request.headers.get("x-tags-org-id") ?? await getDefaultOrgId(db);
@@ -23,7 +23,7 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  if (!(await isAdminAuthorized(request))) return adminUnauthorizedResponse();
+  if (!(await isAdminAuthorized())) return adminUnauthorizedResponse();
 
   const body = (await request.json()) as {
     organizationId?: string;

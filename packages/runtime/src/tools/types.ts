@@ -1,4 +1,8 @@
 import { createHash } from "node:crypto";
+import type { S3Client } from "@aws-sdk/client-s3";
+import type { CredentialProvider } from "@tags/connections";
+import type { SandboxProvider } from "@tags/sandbox";
+import type { R2Config } from "@tags/storage";
 import { z } from "zod";
 
 export type ToolRiskLevel = "none" | "low" | "medium" | "high";
@@ -11,10 +15,18 @@ export type ApprovalPolicy =
 
 export interface ToolContext {
   organizationId: string;
+  workspaceId: string;
   spaceId: string;
   threadId: string;
   runId: string;
   actorUserId: string | null;
+  appUrl: string;
+  credentials: CredentialProvider;
+  sandbox: SandboxProvider;
+  r2?: {
+    client: S3Client;
+    config: R2Config;
+  };
   emit: (event: import("@tags/core/events").TagsEvent) => Promise<void>;
 }
 

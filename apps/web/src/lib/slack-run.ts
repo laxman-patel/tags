@@ -2,6 +2,7 @@ import { resolveSpaceByChannel } from "@tags/core/spaces";
 import { tagsRunWorkflow } from "@tags/runtime";
 import { start } from "workflow/api";
 import type { Env } from "@/env";
+import { getWorkflowEnvExtras } from "@/env";
 import { getDb } from "@/lib/db";
 
 export type SlackTrigger = {
@@ -22,6 +23,7 @@ export async function startRunFromSlack(env: Env, trigger: SlackTrigger) {
   if (!resolved) return { ok: false as const, reason: "no_space" };
 
   const idempotencyKey = `slack:${trigger.teamId}:${trigger.channelId}:${trigger.eventId}`;
+  const extras = getWorkflowEnvExtras(env);
 
   await start(tagsRunWorkflow, [
     {
@@ -29,6 +31,7 @@ export async function startRunFromSlack(env: Env, trigger: SlackTrigger) {
       gatewayApiKey: env.AI_GATEWAY_API_KEY,
       slackBotToken: env.SLACK_BOT_TOKEN,
       organizationId: resolved.space.organizationId,
+      workspaceId: resolved.workspace.id,
       spaceId: resolved.space.id,
       spaceName: resolved.space.name,
       channelId: trigger.channelId,
@@ -40,6 +43,7 @@ export async function startRunFromSlack(env: Env, trigger: SlackTrigger) {
       actorSlackUserId: trigger.actorSlackUserId,
       idempotencyKey,
       appUrl: env.NEXT_PUBLIC_APP_URL,
+      ...extras,
     },
   ]);
 

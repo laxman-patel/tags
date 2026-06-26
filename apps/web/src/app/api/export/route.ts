@@ -7,7 +7,7 @@ import { getDb } from "@/lib/db";
 export const runtime = "nodejs";
 
 export async function GET(request: Request) {
-  if (!(await isAdminAuthorized(request))) return adminUnauthorizedResponse();
+  if (!(await isAdminAuthorized())) return adminUnauthorizedResponse();
   const db = getDb();
   const rows = await db.select().from(organizations).limit(1);
   const orgId = rows[0]?.id;

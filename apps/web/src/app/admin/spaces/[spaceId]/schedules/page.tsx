@@ -12,7 +12,7 @@ export default function SpaceSchedulesPage() {
 
   useEffect(() => {
     if (!spaceId) return;
-    fetch(`/api/schedules/${spaceId}`, { headers: { "x-tags-admin-key": getKey() } })
+    fetch(`/api/schedules/${spaceId}`)
       .then((r) => r.json())
       .then((d) => setSchedules(d.schedules ?? []));
   }, [spaceId]);
@@ -20,7 +20,7 @@ export default function SpaceSchedulesPage() {
   async function create() {
     await fetch(`/api/schedules/${spaceId}`, {
       method: "POST",
-      headers: { "content-type": "application/json", "x-tags-admin-key": getKey() },
+      headers: { "content-type": "application/json" },
       body: JSON.stringify({
         organizationId: "",
         cron,
@@ -47,9 +47,4 @@ export default function SpaceSchedulesPage() {
       </div>
     </main>
   );
-}
-
-function getKey(): string {
-  const match = document.cookie.match(/tags_admin=([^;]+)/);
-  return match?.[1] ?? "";
 }

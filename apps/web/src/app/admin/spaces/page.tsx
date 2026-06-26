@@ -17,7 +17,7 @@ export default function AdminSpacesPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch("/api/spaces", { headers: { "x-tags-admin-key": getKeyFromCookie() } })
+    fetch("/api/spaces")
       .then((r) => r.json())
       .then((data) => {
         if (data.spaces) setSpaces(data.spaces);
@@ -28,7 +28,7 @@ export default function AdminSpacesPage() {
 
   return (
     <main style={{ padding: 24, maxWidth: 960, margin: "0 auto", fontFamily: "system-ui" }}>
-      <p><Link href="/">← Home</Link> · <Link href="/admin/login">Login</Link></p>
+      <p><Link href="/">← Home</Link></p>
       <h1>Spaces</h1>
       {error && <p style={{ color: "crimson" }}>{error}</p>}
       <p><Link href="/admin/spaces/new">Create space</Link></p>
@@ -56,8 +56,3 @@ export default function AdminSpacesPage() {
   );
 }
 
-function getKeyFromCookie(): string {
-  if (typeof document === "undefined") return "";
-  const match = document.cookie.match(/tags_admin=([^;]+)/);
-  return match?.[1] ?? "";
-}

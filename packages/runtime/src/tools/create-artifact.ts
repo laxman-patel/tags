@@ -29,9 +29,40 @@ export function createCreateArtifactTool(db: Db, appUrl: string): TagsTool {
         kind: parsed.kind,
         title: parsed.title,
         url: `${appUrl}/artifacts/placeholder`,
-        body: parsed.body,
+        contentType:
+          parsed.kind === "html" ? "text/html" : parsed.kind === "json" ? "application/json" : "text/markdown",
       });
       if (!artifact) throw new Error("Failed to create artifact");
+
+      const { uploadArtifactBody, artifactObjectKey } = await import("@tags/storage");
+      const contentRef = artifactObjectKey(ctx.organizationId, artifact.id);
+      let bodyStoredInDb: string | undefined;
+
+      if (ctx.r2) {
+        await uploadArtifactBody(
+          ctx.r2.client,
+          ctx.r2.config,
+          contentRef,
+          parsed.body,
+          artifact.contentType ?? "text/markdown",
+        );
+        await db
+          .update(artifacts)
+          .set({
+            contentRef,
+            sizeBytes: Buffer.byteLength(parsed.body, "utf8"),
+          })
+          .where(eq(artifacts.id, artifact.id));
+      } else {
+        bodyStoredInDb = parsed.body;
+        await db
+          .update(artifacts)
+          .set({
+            body: parsed.body,
+            sizeBytes: Buffer.byteLength(parsed.body, "utf8"),
+          })
+          .where(eq(artifacts.id, artifact.id));
+      }
 
       const finalUrl = `${appUrl}/artifacts/${artifact.id}`;
       await db.update(artifacts).set({ url: finalUrl }).where(eq(artifacts.id, artifact.id));
@@ -44,7 +75,13 @@ export function createCreateArtifactTool(db: Db, appUrl: string): TagsTool {
       });
 
       return {
-        modelOutput: { artifactId: artifact.id, url: finalUrl, title: parsed.title },
+        modelOutput: {
+          artifactId: artifact.id,
+          url: finalUrl,
+          title: parsed.title,
+          contentRef: ctx.r2 ? contentRef : undefined,
+          storedInDb: bodyStoredInDb !== undefined,
+        },
       };
     },
   };

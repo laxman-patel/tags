@@ -13,7 +13,6 @@ export default function NewSpacePage() {
       method: "POST",
       headers: {
         "content-type": "application/json",
-        "x-tags-admin-key": getKeyFromCookie(),
       },
       body: JSON.stringify({
         name: form.get("name"),
@@ -21,7 +20,14 @@ export default function NewSpacePage() {
         externalSpaceId: form.get("channelId"),
         modelId: form.get("modelId"),
         instructions: form.get("instructions"),
-        enabledTools: ["search_thread", "search_memory", "save_memory", "create_artifact", "create_linear_issue"],
+        enabledTools: [
+          "search_thread",
+          "search_memory",
+          "save_memory",
+          "create_artifact",
+          "create_linear_issue",
+          "run_sandbox_command",
+        ],
       }),
     });
     const data = await res.json();
@@ -45,7 +51,3 @@ export default function NewSpacePage() {
   );
 }
 
-function getKeyFromCookie(): string {
-  const match = document.cookie.match(/tags_admin=([^;]+)/);
-  return match?.[1] ?? "";
-}

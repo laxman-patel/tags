@@ -16,15 +16,11 @@ export default function HomePage() {
         channel to start a run. Open run detail pages from Slack links or{" "}
         <code>/runs/&lt;run-id&gt;</code>.
       </p>
-      <h2>Phase 0</h2>
-      <ul>
-        <li>Slack mention → durable workflow → AI Gateway model</li>
-        <li>Throttled Slack streaming via message edits</li>
-        <li>Approval-gated <code>create_linear_issue</code> tool</li>
-        <li>Read-only <code>search_thread</code> tool</li>
-      </ul>
+      <h2>Admin</h2>
+      <p style={{ color: "#555", lineHeight: 1.6 }}>
+        Sign in with Clerk to manage spaces, approvals, usage, and audit logs.
+      </p>
       <p>
-        <Link href="/admin/login">Admin</Link> ·
         <Link href="/admin/spaces">Spaces</Link> ·
         <Link href="/admin/approvals">Approvals</Link> ·
         <Link href="/admin/audit">Audit</Link>

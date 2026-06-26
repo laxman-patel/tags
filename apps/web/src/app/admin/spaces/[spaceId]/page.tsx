@@ -15,7 +15,7 @@ export default function SpaceDetailPage() {
 
   useEffect(() => {
     if (!spaceId) return;
-    fetch(`/api/spaces/${spaceId}`, { headers: { "x-tags-admin-key": getKey() } })
+    fetch(`/api/spaces/${spaceId}`)
       .then((r) => r.json())
       .then((data) => {
         setSpace(data.space);
@@ -30,7 +30,6 @@ export default function SpaceDetailPage() {
       method: "PATCH",
       headers: {
         "content-type": "application/json",
-        "x-tags-admin-key": getKey(),
       },
       body: JSON.stringify({
         modelId,
@@ -65,7 +64,3 @@ export default function SpaceDetailPage() {
   );
 }
 
-function getKey(): string {
-  const match = document.cookie.match(/tags_admin=([^;]+)/);
-  return match?.[1] ?? "";
-}

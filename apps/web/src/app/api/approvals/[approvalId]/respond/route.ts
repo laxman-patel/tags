@@ -10,7 +10,7 @@ export async function POST(
   request: Request,
   { params }: { params: Promise<{ approvalId: string }> },
 ) {
-  if (!(await isAdminAuthorized(request))) return adminUnauthorizedResponse();
+  if (!(await isAdminAuthorized())) return adminUnauthorizedResponse();
   const { approvalId } = await params;
   const body = (await request.json()) as { decision: "approved" | "rejected" };
   const db = getDb();
