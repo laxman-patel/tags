@@ -83,7 +83,7 @@ importers:
     dependencies:
       '@vercel/connect':
         specifier: ^0.2.9
-        version: 0.2.9(ai@7.0.2(zod@4.3.6))
+        version: 0.2.9(@ai-sdk/mcp@2.0.0(zod@4.3.6))(ai@7.0.2(zod@4.3.6))
 
   packages/core:
     dependencies:
@@ -118,9 +118,15 @@ importers:
       '@ai-sdk/gateway':
         specifier: ^4.0.2
         version: 4.0.2(zod@3.25.76)
+      '@ai-sdk/mcp':
+        specifier: ^2.0.0
+        version: 2.0.0(zod@3.25.76)
       '@aws-sdk/client-s3':
         specifier: ^3.826.0
         version: 3.1075.0
+      '@composio/core':
+        specifier: ^0.13.0
+        version: 0.13.0(@aws-sdk/credential-provider-node@3.972.58)(@smithy/signature-v4@5.5.2)(zod@3.25.76)
       '@slack/web-api':
         specifier: ^7.9.2
         version: 7.17.0
@@ -144,7 +150,7 @@ importers:
         version: link:../storage
       '@vercel/connect':
         specifier: ^0.2.9
-        version: 0.2.9(ai@7.0.2(zod@3.25.76))
+        version: 0.2.9(@ai-sdk/mcp@2.0.0(zod@3.25.76))(ai@7.0.2(zod@3.25.76))
       '@vercel/sandbox':
         specifier: ^2.2.1
         version: 2.2.1
@@ -199,6 +205,12 @@ packages:
 
   '@ai-sdk/gateway@4.0.2':
     resolution: {integrity: sha512-Jz1BiiTSvhDsCBJrkFRSqLHDRMVjFtYk9GdbSi3UOqY+/epza+oIESMDzfN4m+YHT/1IYmNEmxaMfjXOvxKDjQ==}
+    engines: {node: '>=22'}
+    peerDependencies:
+      zod: ^3.25.76 || ^4.1.8
+
+  '@ai-sdk/mcp@2.0.0':
+    resolution: {integrity: sha512-+N6gJ1AbcDk3+6asoEsdIojVmgEReKNcvWIT716pDL3AepGI6j7RJVdaRyhQLltwzTj0arwpwU4BBzvhOiCd/g==}
     engines: {node: '>=22'}
     peerDependencies:
       zod: ^3.25.76 || ^4.1.8
@@ -383,6 +395,19 @@ packages:
         optional: true
       react-dom:
         optional: true
+
+  '@composio/client@0.1.0-alpha.74':
+    resolution: {integrity: sha512-/EHJsFxCpWfRxNvXURRrGVZfJSltSpN4Gkd9M9Cl5gPOirG+NpbXf2B8d4B72H87m7cnOguMKjOH42ogQ84/Ww==}
+
+  '@composio/core@0.13.0':
+    resolution: {integrity: sha512-qtVzko6XTwVW+XoLxNzcIAYHF4RgM1QDx5FgbLGr/0b0bRs8jPXgWhHS8KGPCmb5pGAofa92tWhDq7Knnh798A==}
+    peerDependencies:
+      zod: ^3.25 || ^4
+
+  '@composio/json-schema-to-zod@0.2.0':
+    resolution: {integrity: sha512-P7ym7+1NCN2cDVlSOGTINY6KjZ/d162uc+0LChYcy3d5RAAacgHiGU7ZJF+5pUJHbIivsfAC/4PdjVdsfmHdeA==}
+    peerDependencies:
+      zod: '>=3.25.76 <5'
 
   '@drizzle-team/brocli@0.10.2':
     resolution: {integrity: sha512-z33Il7l5dKjUgGULTqBsQBQwckHh5AbIuxhdsIxDDiZAzBOrZO6q9ogcWC65kU382AfynTfgNumVcNIjuIua6w==}
@@ -3737,6 +3762,26 @@ packages:
     resolution: {integrity: sha512-XgFPPM+B28FtCCgSb9I+s9szOC1vZRSwgWsRUA5ylIxRTgKozqjOCrVOqGsYABPYK5qnfqClxZTFBa8PKt2v6Q==}
     engines: {node: '>=12'}
 
+  openai@6.45.0:
+    resolution: {integrity: sha512-5DQVNErssk0afNpTTHUm/qZPU4iKR9OYdNid8Ib4puq4gHNNvGWZht2zY4h9a8JMF949Ik6m8gQutllVPbjdnw==}
+    peerDependencies:
+      '@aws-sdk/credential-provider-node': '>=3.972.0 <4'
+      '@smithy/hash-node': '>=4.3.0 <5'
+      '@smithy/signature-v4': '>=5.4.0 <6'
+      ws: ^8.18.0
+      zod: ^3.25 || ^4.0
+    peerDependenciesMeta:
+      '@aws-sdk/credential-provider-node':
+        optional: true
+      '@smithy/hash-node':
+        optional: true
+      '@smithy/signature-v4':
+        optional: true
+      ws:
+        optional: true
+      zod:
+        optional: true
+
   optionator@0.9.4:
     resolution: {integrity: sha512-6IpQ7mKUxRcZNLIObR0hz7lxsapSSIYNZJwXPGeF0mTVqGKFIXj1DQcMoT22S3ROcLyY/rz0PWaWZ9ayWmad9g==}
     engines: {node: '>= 0.8.0'}
@@ -3858,6 +3903,10 @@ packages:
   piscina@4.9.3:
     resolution: {integrity: sha512-3e3ka9QCE8RJ5I9uszdAADZnkcYi21cqmF3gxox3u884N72qpFHCsIVhHt8cEQ9t3Auq/NqoiCEuhxlxxQuDWA==}
 
+  pkce-challenge@5.0.1:
+    resolution: {integrity: sha512-wQ0b/W4Fr01qtpHlqSqspcj3EhBvimsdh0KlHhH8HRZnMsEa0ea2fTULOXOS9ccQr3om+GcGRk4e+isrZWV8qQ==}
+    engines: {node: '>=16.20.0'}
+
   pkg-types@1.3.1:
     resolution: {integrity: sha512-/Jm5M4RvtBFVkKWRu2BLUTNP8/M2a+UwuAX+ae4770q1qVGtfjG+WTCupoZixokjmHiry8uI+dlY8KXYV5HVVQ==}
 
@@ -3902,6 +3951,9 @@ packages:
   punycode@2.3.1:
     resolution: {integrity: sha512-vYt7UD1U9Wg6138shLtLOvdAu+8DsC/ilFtEVHcH+wydcSpNE20AfSOduf6MkRFahL5FY7X1oU7nKVZFtfq8Fg==}
     engines: {node: '>=6'}
+
+  pusher-js@8.5.0:
+    resolution: {integrity: sha512-V7uzGi9bqOOOyM/6IkJdpFyjGZj7llz1v0oWnYkZKcYLvbz6VcHVLmzKqkvegjuMumpfIEKGLmWHwFb39XFCpw==}
 
   qs@6.15.3:
     resolution: {integrity: sha512-O9gl3zCl5h5blw1KGUzQKhA5oUXSl8rwUIM5o0S3nCXMliSvy5Dzx7/DJcI+SwgICv+IneSZwhBh1oSyEHA71A==}
@@ -4356,6 +4408,9 @@ packages:
     engines: {node: '>=18.0.0'}
     hasBin: true
 
+  tweetnacl@1.0.3:
+    resolution: {integrity: sha512-6rt+RN7aOi1nGMyC4Xa5DdYiukl2UWCbcJft7YhxReBGQD7OAM8Pbxw6YMo4r2diNEA8FEmu32YOn9rhaiE5yw==}
+
   type-check@0.4.0:
     resolution: {integrity: sha512-XleUoc9uwGXqjWwXaUTZAmzMcFZ5858QA2vvx1Ur5xIcixXIP+8LnFDgRplU30us6teqdlskFfu+ae4K79Ooew==}
     engines: {node: '>= 0.8.0'}
@@ -4642,6 +4697,11 @@ packages:
     resolution: {integrity: sha512-CzhO+pFNo8ajLM2d2IW/R93ipy99LWjtwblvC1RsoSUMZgyLbYFr221TnSNT7GjGdYui6P459mw9JH/g/zW2ug==}
     engines: {node: '>=18'}
 
+  zod-to-json-schema@3.25.2:
+    resolution: {integrity: sha512-O/PgfnpT1xKSDeQYSCfRI5Gy3hPf91mKVDuYLUHZJMiDFptvP41MSnWofm8dnCm0256ZNfZIM7DSzuSMAFnjHA==}
+    peerDependencies:
+      zod: ^3.25.28 || ^4
+
   zod@3.25.76:
     resolution: {integrity: sha512-gzUt/qt81nXsFGKIFcC3YnfEAx5NkunCfnDlvuBSSFS02bcXu4Lmea0AFIUwbLWxWPx3d9p8S5QoaujKcNQxcQ==}
 
@@ -4665,6 +4725,21 @@ snapshots:
       '@ai-sdk/provider': 4.0.0
       '@ai-sdk/provider-utils': 5.0.0(zod@4.3.6)
       '@vercel/oidc': 3.2.0
+      zod: 4.3.6
+    optional: true
+
+  '@ai-sdk/mcp@2.0.0(zod@3.25.76)':
+    dependencies:
+      '@ai-sdk/provider': 4.0.0
+      '@ai-sdk/provider-utils': 5.0.0(zod@3.25.76)
+      pkce-challenge: 5.0.1
+      zod: 3.25.76
+
+  '@ai-sdk/mcp@2.0.0(zod@4.3.6)':
+    dependencies:
+      '@ai-sdk/provider': 4.0.0
+      '@ai-sdk/provider-utils': 5.0.0(zod@4.3.6)
+      pkce-challenge: 5.0.1
       zod: 4.3.6
     optional: true
 
@@ -4983,6 +5058,29 @@ snapshots:
     optionalDependencies:
       react: 19.2.7
       react-dom: 19.2.7(react@19.2.7)
+
+  '@composio/client@0.1.0-alpha.74': {}
+
+  '@composio/core@0.13.0(@aws-sdk/credential-provider-node@3.972.58)(@smithy/signature-v4@5.5.2)(zod@3.25.76)':
+    dependencies:
+      '@composio/client': 0.1.0-alpha.74
+      '@composio/json-schema-to-zod': 0.2.0(zod@3.25.76)
+      '@types/json-schema': 7.0.15
+      openai: 6.45.0(@aws-sdk/credential-provider-node@3.972.58)(@smithy/signature-v4@5.5.2)(zod@3.25.76)
+      picocolors: 1.1.1
+      pusher-js: 8.5.0
+      semver: 7.8.5
+      zod: 3.25.76
+      zod-to-json-schema: 3.25.2(zod@3.25.76)
+    transitivePeerDependencies:
+      - '@aws-sdk/credential-provider-node'
+      - '@smithy/hash-node'
+      - '@smithy/signature-v4'
+      - ws
+
+  '@composio/json-schema-to-zod@0.2.0(zod@3.25.76)':
+    dependencies:
+      zod: 3.25.76
 
   '@drizzle-team/brocli@0.10.2': {}
 
@@ -6082,16 +6180,18 @@ snapshots:
     dependencies:
       execa: 5.1.1
 
-  '@vercel/connect@0.2.9(ai@7.0.2(zod@3.25.76))':
+  '@vercel/connect@0.2.9(@ai-sdk/mcp@2.0.0(zod@3.25.76))(ai@7.0.2(zod@3.25.76))':
     dependencies:
       '@vercel/oidc': 3.7.0
     optionalDependencies:
+      '@ai-sdk/mcp': 2.0.0(zod@3.25.76)
       ai: 7.0.2(zod@3.25.76)
 
-  '@vercel/connect@0.2.9(ai@7.0.2(zod@4.3.6))':
+  '@vercel/connect@0.2.9(@ai-sdk/mcp@2.0.0(zod@4.3.6))(ai@7.0.2(zod@4.3.6))':
     dependencies:
       '@vercel/oidc': 3.7.0
     optionalDependencies:
+      '@ai-sdk/mcp': 2.0.0(zod@4.3.6)
       ai: 7.0.2(zod@4.3.6)
 
   '@vercel/functions@3.7.3(@aws-sdk/credential-provider-web-identity@3.972.49)':
@@ -8367,6 +8467,12 @@ snapshots:
       is-docker: 2.2.1
       is-wsl: 2.2.0
 
+  openai@6.45.0(@aws-sdk/credential-provider-node@3.972.58)(@smithy/signature-v4@5.5.2)(zod@3.25.76):
+    optionalDependencies:
+      '@aws-sdk/credential-provider-node': 3.972.58
+      '@smithy/signature-v4': 5.5.2
+      zod: 3.25.76
+
   optionator@0.9.4:
     dependencies:
       deep-is: 0.1.4
@@ -8474,6 +8580,8 @@ snapshots:
     optionalDependencies:
       '@napi-rs/nice': 1.1.1
 
+  pkce-challenge@5.0.1: {}
+
   pkg-types@1.3.1:
     dependencies:
       confbox: 0.1.8
@@ -8522,6 +8630,10 @@ snapshots:
   proxy-from-env@2.1.0: {}
 
   punycode@2.3.1: {}
+
+  pusher-js@8.5.0:
+    dependencies:
+      tweetnacl: 1.0.3
 
   qs@6.15.3:
     dependencies:
@@ -9074,6 +9186,8 @@ snapshots:
     optionalDependencies:
       fsevents: 2.3.3
 
+  tweetnacl@1.0.3: {}
+
   type-check@0.4.0:
     dependencies:
       prelude-ls: 1.2.1
@@ -9435,6 +9549,10 @@ snapshots:
   yocto-queue@1.2.2: {}
 
   yoctocolors@2.1.2: {}
+
+  zod-to-json-schema@3.25.2(zod@3.25.76):
+    dependencies:
+      zod: 3.25.76
 
   zod@3.25.76: {}
 

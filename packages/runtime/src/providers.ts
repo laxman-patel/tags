@@ -12,6 +12,7 @@ export type RuntimeProviderConfig = {
   connectorLinear?: string;
   connectorSlack?: string;
   linearApiKey?: string;
+  composioApiKey?: string;
   r2?: R2Config;
 };
 

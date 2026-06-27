@@ -18,6 +18,7 @@ import { ApprovalPauseError, type AgentSegmentResult } from "./types";
 import { buildSystemPrompt, reasoningEffortFor } from "./prompt";
 import { buildThreadContext } from "../context/builder";
 import { createRuntimeProviders, type RuntimeProviderConfig } from "../providers";
+import { loadComposioTools, type ComposioToolsHandle } from "../tools/composio";
 import { resolveTools, type ToolRegistryOptions } from "../tools/registry";
 import { toolIdempotencyKey, type TagsTool, type ToolContext } from "../tools/types";
 
@@ -80,7 +81,30 @@ export async function runAgentSegment(args: AgentLoopArgs): Promise<AgentSegment
 
   const messages = await buildThreadContext(args.db, args.threadId, args.spaceId, args.triggerText);
   const tagsTools = resolveTools(args.db, config.enabledTools, toolOptions);
-  const aiTools = buildAiTools(tagsTools, args, toolOptions, emit) as Parameters<typeof streamText>[0]["tools"];
+  const aiTools = buildAiTools(tagsTools, args, toolOptions, emit);
+
+  let composio: ComposioToolsHandle | null = null;
+  if (args.providerConfig.composioApiKey && config.enabledConnections.length > 0) {
+    try {
+      composio = await loadComposioTools({
+        apiKey: args.providerConfig.composioApiKey,
+        entityId: args.spaceId,
+        toolkits: config.enabledConnections,
+      });
+    } catch (composioError) {
+      await emit({
+        type: "status",
+        label: "Composio tools unavailable",
+        detail:
+          composioError instanceof Error ? composioError.message : "Failed to load Composio tools",
+      });
+    }
+  }
+
+  const tools = {
+    ...aiTools,
+    ...(composio?.tools ?? {}),
+  } as Parameters<typeof streamText>[0]["tools"];
 
   const instructions = buildSystemPrompt(config.instructions, args.spaceName);
 
@@ -89,7 +113,7 @@ export async function runAgentSegment(args: AgentLoopArgs): Promise<AgentSegment
       model: gateway(config.modelId),
       instructions,
       messages,
-      tools: aiTools,
+      tools,
       stopWhen: isStepCount(config.maxSteps),
       reasoning: reasoningEffortFor(config.reasoning),
       onChunk: async ({ chunk }) => {
@@ -151,6 +175,10 @@ export async function runAgentSegment(args: AgentLoopArgs): Promise<AgentSegment
       finishedAt: new Date(),
     });
     throw error;
+  } finally {
+    if (composio) {
+      await composio.close();
+    }
   }
 }
 

@@ -9,6 +9,7 @@ const runtimeSecretsSchema = z.object({
   SLACK_BOT_TOKEN: z.string().min(1),
   VERCEL_TOKEN: z.string().optional(),
   LINEAR_API_KEY: z.string().optional(),
+  COMPOSIO_API_KEY: z.string().optional(),
 });
 
 export type RuntimeSecrets = {
@@ -17,6 +18,7 @@ export type RuntimeSecrets = {
   slackBotToken: string;
   vercelToken?: string;
   linearApiKey?: string;
+  composioApiKey?: string;
   r2?: R2Config;
 };
 
@@ -45,6 +47,7 @@ export function loadRuntimeSecrets(): RuntimeSecrets {
     slackBotToken: env.SLACK_BOT_TOKEN,
     vercelToken: env.VERCEL_TOKEN,
     linearApiKey: env.LINEAR_API_KEY,
+    composioApiKey: env.COMPOSIO_API_KEY,
     ...(r2 ? { r2 } : {}),
   };
 }
@@ -61,6 +64,7 @@ export function buildRuntimeProviderConfig(
     connectorLinear: selectors.connectorLinear,
     connectorSlack: selectors.connectorSlack,
     linearApiKey: secrets.linearApiKey,
+    composioApiKey: secrets.composioApiKey,
   };
 
   if (secrets.r2) {

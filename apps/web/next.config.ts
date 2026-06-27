@@ -8,6 +8,9 @@ const nextConfig: NextConfig = {
     "@vercel/sandbox",
     "@aws-sdk/client-s3",
     "@opentelemetry/api",
+    "@composio/core",
+    "@ai-sdk/mcp",
+    "semver",
   ],
   transpilePackages: [
     "@tags/core",

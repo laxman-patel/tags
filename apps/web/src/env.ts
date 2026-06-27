@@ -23,6 +23,7 @@ const envSchema = z.object({
   CONNECTOR_LINEAR: z.string().optional(),
   CONNECTOR_SLACK: z.string().optional(),
   LINEAR_API_KEY: z.string().optional(),
+  COMPOSIO_API_KEY: z.string().optional(),
   R2_ACCOUNT_ID: z.string().optional(),
   R2_ACCESS_KEY_ID: z.string().optional(),
   R2_SECRET_ACCESS_KEY: z.string().optional(),
