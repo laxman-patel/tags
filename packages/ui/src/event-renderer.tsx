@@ -62,6 +62,12 @@ function UiCardView(props: { card: UICard }) {
           <strong>Coding agent</strong>
           <p style={muted}>Exit code: {ui.exitCode}</p>
           <pre style={{ whiteSpace: "pre-wrap", fontSize: 13 }}>{ui.outputPreview}</pre>
+          {ui.gitDiffPreview ? (
+            <>
+              <p style={muted}>Git diff</p>
+              <pre style={{ whiteSpace: "pre-wrap", fontSize: 13 }}>{ui.gitDiffPreview}</pre>
+            </>
+          ) : null}
         </div>
       );
     case "generic":

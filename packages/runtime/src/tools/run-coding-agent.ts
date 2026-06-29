@@ -21,6 +21,9 @@ export function createRunCodingAgentTool(): TagsTool {
       const result = await ctx.sandbox.runCodingAgent({
         prompt: parsed.prompt,
         repoUrl: parsed.repoUrl,
+        onOutput: async (chunk) => {
+          await ctx.emit({ type: "text.delta", text: chunk });
+        },
       });
 
       await ctx.emit({
@@ -39,6 +42,7 @@ export function createRunCodingAgentTool(): TagsTool {
           kind: "coding-agent",
           exitCode: result.exitCode,
           outputPreview: truncateForPreview(result.output, 600),
+          ...(result.gitDiff ? { gitDiffPreview: truncateForPreview(result.gitDiff, 800) } : {}),
         },
       };
     },

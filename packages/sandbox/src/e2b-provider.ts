@@ -1,43 +1,29 @@
 import { Sandbox } from "e2b";
 import type { CodingAgentRequest, CodingAgentResult, SandboxProvider } from "./types";
 
+/** E2B pre-built template with opencode installed (see e2b.dev/docs/agents/opencode). */
+export const DEFAULT_OPENCODE_TEMPLATE = "opencode";
+
+const REPO_PATH = "/home/user/repo";
+const WORKDIR = "/home/user/workspace";
+
 export type SandboxProviderConfig = {
   /** E2B API key. */
   apiKey?: string;
   /**
-   * E2B template to launch. Defaults to E2B's `base` image; opencode is then
-   * installed at runtime. Use a custom template with opencode preinstalled to
-   * avoid the per-run install cost.
+   * E2B sandbox template. Defaults to the pre-built `opencode` template.
+   * Build a custom template with `Template().fromTemplate('opencode')` for faster cold starts.
    */
   template?: string;
-  /** Fireworks API key opencode uses for inference inside the sandbox. */
+  /** Fireworks API key — passed as `FIREWORKS_API_KEY` for opencode (see opencode.ai/docs/config). */
   modelApiKey?: string;
-  /** opencode model string, e.g. "fireworks/accounts/fireworks/models/...". */
+  /** Optional GitHub token for private `repoUrl` clones (`x-access-token`). */
+  githubToken?: string;
+  /** opencode `--model` string, e.g. `accounts/fireworks/models/kimi-k2-instruct`. */
   model?: string;
   /** Max sandbox lifetime in ms. */
   timeoutMs?: number;
 };
-
-const WORKDIR = "/home/user/workspace";
-
-/**
- * opencode reads provider config from the `OPENCODE_CONFIG_CONTENT` env var.
- * We register Fireworks as an OpenAI-compatible provider so opencode can use it.
- * The exact model slug/provider wiring may need tuning against a live run.
- */
-function opencodeConfigContent(modelApiKey: string): string {
-  return JSON.stringify({
-    provider: {
-      fireworks: {
-        npm: "@ai-sdk/openai-compatible",
-        options: {
-          baseURL: "https://api.fireworks.ai/inference/v1",
-          apiKey: modelApiKey,
-        },
-      },
-    },
-  });
-}
 
 function shellQuote(value: string): string {
   return `'${value.replace(/'/g, "'\\''")}'`;
@@ -50,61 +36,88 @@ function combineOutput(result: CommandLike): string {
 }
 
 export function createSandboxProvider(config: SandboxProviderConfig = {}): SandboxProvider {
-  const model =
-    config.model ?? "fireworks/accounts/fireworks/models/kimi-k2-instruct";
+  const template = config.template ?? DEFAULT_OPENCODE_TEMPLATE;
+  const model = config.model ?? "accounts/fireworks/models/kimi-k2-instruct";
 
   return {
     async runCodingAgent(request: CodingAgentRequest): Promise<CodingAgentResult> {
       const envs: Record<string, string> = {};
       if (config.modelApiKey) {
         envs.FIREWORKS_API_KEY = config.modelApiKey;
-        envs.OPENCODE_CONFIG_CONTENT = opencodeConfigContent(config.modelApiKey);
       }
 
-      const sandbox = await Sandbox.create({
+      const sandbox = await Sandbox.create(template, {
         apiKey: config.apiKey,
-        template: config.template,
         timeoutMs: config.timeoutMs ?? 10 * 60_000,
         envs,
       });
 
-      try {
-        await sandbox.commands.run(`mkdir -p ${WORKDIR}`);
+      let streamed = "";
 
+      try {
         if (request.repoUrl) {
-          await sandbox.commands.run(
-            `git clone --depth 1 ${shellQuote(request.repoUrl)} ${WORKDIR}/repo`,
-            { timeoutMs: 5 * 60_000 },
-          );
+          await sandbox.git.clone(request.repoUrl, {
+            path: REPO_PATH,
+            depth: 1,
+            ...(config.githubToken
+              ? { username: "x-access-token", password: config.githubToken }
+              : {}),
+          });
+        } else {
+          await sandbox.commands.run(`mkdir -p ${WORKDIR}`);
         }
 
-        // No-op when the template already ships opencode.
-        await sandbox.commands.run("command -v opencode || npm install -g opencode-ai", {
-          timeoutMs: 5 * 60_000,
-        });
-
-        const cwd = request.repoUrl ? `${WORKDIR}/repo` : WORKDIR;
+        const cwd = request.repoUrl ? REPO_PATH : WORKDIR;
         const command = `opencode run --model ${shellQuote(model)} ${shellQuote(request.prompt)}`;
 
+        const appendStream = async (chunk: string) => {
+          streamed += chunk;
+          if (request.onOutput) {
+            await request.onOutput(chunk);
+          }
+        };
+
+        let exitCode = 0;
+        let output = "";
+
         try {
-          const result = await sandbox.commands.run(command, { cwd, timeoutMs: 8 * 60_000 });
-          return {
-            sandboxId: sandbox.sandboxId,
-            exitCode: result.exitCode,
-            output: combineOutput(result),
-          };
+          const result = await sandbox.commands.run(command, {
+            cwd,
+            timeoutMs: 8 * 60_000,
+            onStdout: (data) => appendStream(data),
+            onStderr: (data) => appendStream(data),
+          });
+          exitCode = result.exitCode;
+          output = combineOutput(result) || streamed;
         } catch (error) {
-          // E2B rejects on a non-zero exit; surface the captured output instead of throwing.
           const e = error as CommandLike;
           if (e && (e.stdout !== undefined || e.stderr !== undefined || e.exitCode !== undefined)) {
-            return {
-              sandboxId: sandbox.sandboxId,
-              exitCode: e.exitCode ?? 1,
-              output: combineOutput(e),
-            };
+            exitCode = e.exitCode ?? 1;
+            output = combineOutput(e) || streamed;
+          } else {
+            throw error;
           }
-          throw error;
         }
+
+        let gitDiff: string | undefined;
+        if (request.repoUrl) {
+          try {
+            const diffResult = await sandbox.commands.run("git diff", { cwd: REPO_PATH });
+            gitDiff = combineOutput(diffResult);
+            if (gitDiff) {
+              output = `${output}\n\n--- git diff ---\n${gitDiff}`;
+            }
+          } catch {
+            // Non-fatal: opencode output is still useful without diff.
+          }
+        }
+
+        return {
+          sandboxId: sandbox.sandboxId,
+          exitCode,
+          output,
+          gitDiff,
+        };
       } finally {
         await sandbox.kill();
       }

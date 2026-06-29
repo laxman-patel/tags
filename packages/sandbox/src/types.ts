@@ -3,6 +3,8 @@ export interface CodingAgentRequest {
   prompt: string;
   /** Optional git repository to clone into the sandbox before running. */
   repoUrl?: string;
+  /** Live opencode CLI output (E2B `onStdout` / `onStderr`). */
+  onOutput?: (chunk: string) => void | Promise<void>;
 }
 
 export interface CodingAgentResult {
@@ -10,6 +12,8 @@ export interface CodingAgentResult {
   exitCode: number;
   /** Combined stdout/stderr from the opencode run. */
   output: string;
+  /** `git diff` after the run when `repoUrl` was provided. */
+  gitDiff?: string;
 }
 
 export interface SandboxProvider {

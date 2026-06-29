@@ -26,6 +26,7 @@ export type UICard =
       kind: "coding-agent";
       exitCode: number;
       outputPreview: string;
+      gitDiffPreview?: string;
     }
   | {
       kind: "generic";
@@ -59,7 +60,9 @@ export function formatUiCardPreview(card: UICard): string {
     case "thread-search":
       return card.preview;
     case "coding-agent":
-      return card.outputPreview;
+      return card.gitDiffPreview
+        ? `${card.outputPreview}\n\n--- git diff ---\n${card.gitDiffPreview}`
+        : card.outputPreview;
     case "generic":
       return card.body;
     default: {

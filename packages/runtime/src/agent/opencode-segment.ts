@@ -89,12 +89,18 @@ export async function runOpencodeSegment(
   });
 
   try {
-    const result = await providers.sandbox.runCodingAgent({ prompt });
+    const result = await providers.sandbox.runCodingAgent({
+      prompt,
+      onOutput: async (chunk) => {
+        await emit({ type: "text.delta", text: chunk });
+      },
+    });
 
     const uiCard = {
       kind: "coding-agent" as const,
       exitCode: result.exitCode,
       outputPreview: truncateForPreview(result.output, 600),
+      ...(result.gitDiff ? { gitDiffPreview: truncateForPreview(result.gitDiff, 800) } : {}),
     };
 
     await emit({

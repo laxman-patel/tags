@@ -8,6 +8,8 @@ const runtimeSecretsSchema = z.object({
   FIREWORKS_API_KEY: z.string().min(1),
   SLACK_BOT_TOKEN: z.string().min(1),
   E2B_API_KEY: z.string().optional(),
+  E2B_OPENCODE_TEMPLATE: z.string().optional(),
+  GITHUB_TOKEN: z.string().optional(),
   COMPOSIO_API_KEY: z.string().optional(),
   OPENCODE_MODEL: z.string().optional(),
 });
@@ -17,6 +19,8 @@ export type RuntimeSecrets = {
   fireworksApiKey: string;
   slackBotToken: string;
   e2bApiKey?: string;
+  e2bOpencodeTemplate?: string;
+  githubToken?: string;
   composioApiKey?: string;
   opencodeModel?: string;
   r2?: R2Config;
@@ -39,6 +43,8 @@ export function loadRuntimeSecrets(): RuntimeSecrets {
     fireworksApiKey: env.FIREWORKS_API_KEY,
     slackBotToken: env.SLACK_BOT_TOKEN,
     e2bApiKey: env.E2B_API_KEY,
+    e2bOpencodeTemplate: env.E2B_OPENCODE_TEMPLATE,
+    githubToken: env.GITHUB_TOKEN,
     composioApiKey: env.COMPOSIO_API_KEY,
     opencodeModel: env.OPENCODE_MODEL,
     ...(r2 ? { r2 } : {}),
@@ -50,6 +56,8 @@ export function buildRuntimeProviderConfig(secrets: RuntimeSecrets): RuntimeProv
     slackBotToken: secrets.slackBotToken,
     composioApiKey: secrets.composioApiKey,
     e2bApiKey: secrets.e2bApiKey,
+    e2bOpencodeTemplate: secrets.e2bOpencodeTemplate,
+    githubToken: secrets.githubToken,
     fireworksApiKey: secrets.fireworksApiKey,
     opencodeModel: secrets.opencodeModel,
   };

@@ -7,10 +7,14 @@ export type RuntimeProviderConfig = {
   slackBotToken?: string;
   composioApiKey?: string;
   e2bApiKey?: string;
-  /** Fireworks key opencode uses for inference inside the sandbox. */
+  /** Fireworks key — passed to opencode as `FIREWORKS_API_KEY` inside the E2B `opencode` template. */
   fireworksApiKey?: string;
-  /** opencode model string for the sandbox coding agent. */
+  /** opencode `--model` string for the sandbox coding agent. */
   opencodeModel?: string;
+  /** E2B template name (default: pre-built `opencode` template). */
+  e2bOpencodeTemplate?: string;
+  /** Optional GitHub token for private repo clones in the sandbox. */
+  githubToken?: string;
   r2?: R2Config;
 };
 
@@ -36,8 +40,10 @@ export async function createRuntimeProviders(
 
   const sandbox = createSandboxProvider({
     apiKey: config.e2bApiKey,
+    template: config.e2bOpencodeTemplate,
     modelApiKey: config.fireworksApiKey,
     model: config.opencodeModel,
+    githubToken: config.githubToken,
   });
 
   let r2: RuntimeProviders["r2"];

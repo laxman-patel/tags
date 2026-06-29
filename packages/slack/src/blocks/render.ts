@@ -62,12 +62,16 @@ function renderUiCardBlocks(card: UICard): SlackBlock[] {
         },
       ];
     case "coding-agent":
+      const diffBlock =
+        card.gitDiffPreview
+          ? `\n*Git diff*\n\`\`\`${card.gitDiffPreview.slice(0, 500)}\`\`\``
+          : "";
       return [
         {
           type: "section",
           text: {
             type: "mrkdwn",
-            text: `*Coding agent* — exit \`${card.exitCode}\`\n\`\`\`${card.outputPreview.slice(0, 500)}\`\`\``,
+            text: `*Coding agent* — exit \`${card.exitCode}\`\n\`\`\`${card.outputPreview.slice(0, 500)}\`\`\`${diffBlock}`,
           },
         },
       ];
