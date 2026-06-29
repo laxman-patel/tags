@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { truncateForPreview } from "@tags/core/ui-cards";
 import type { TagsTool } from "./types";
 
 const inputSchema = z.object({
@@ -33,6 +34,11 @@ export function createRunCodingAgentTool(): TagsTool {
           sandboxId: result.sandboxId,
           exitCode: result.exitCode,
           output: result.output.slice(0, 12_000),
+        },
+        uiCard: {
+          kind: "coding-agent",
+          exitCode: result.exitCode,
+          outputPreview: truncateForPreview(result.output, 600),
         },
       };
     },

@@ -1,4 +1,4 @@
-import { and, asc, desc, eq } from "drizzle-orm";
+import { and, asc, desc, eq, gt } from "drizzle-orm";
 import type { Db } from "@tags/db";
 import { approvalRequests, newId, runEvents, runs, toolInvocations } from "@tags/db";
 
@@ -101,6 +101,14 @@ export async function listRunEvents(db: Db, runId: string) {
     .select()
     .from(runEvents)
     .where(eq(runEvents.runId, runId))
+    .orderBy(asc(runEvents.seq));
+}
+
+export async function listRunEventsAfter(db: Db, runId: string, afterSeq: number) {
+  return db
+    .select()
+    .from(runEvents)
+    .where(and(eq(runEvents.runId, runId), gt(runEvents.seq, afterSeq)))
     .orderBy(asc(runEvents.seq));
 }
 

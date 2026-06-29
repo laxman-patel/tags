@@ -90,6 +90,15 @@ export async function upsertMessage(
   return row ?? null;
 }
 
+export async function getThreadById(db: Db, threadId: string) {
+  const rows = await db
+    .select()
+    .from(threads)
+    .where(eq(threads.id, threadId))
+    .limit(1);
+  return rows[0];
+}
+
 export async function listThreadMessages(
   db: Db,
   threadId: string,

@@ -1,4 +1,4 @@
-import { listEnabledSchedules } from "@tags/core/schedules";
+import { listEnabledSchedules, markScheduleFired, shouldFireSchedule } from "@tags/core/schedules";
 import { getSpaceById } from "@tags/core/spaces-admin";
 import { workspaces } from "@tags/db";
 import { eq } from "drizzle-orm";
@@ -8,7 +8,7 @@ import { getDb } from "@/lib/db";
 
 export const runtime = "nodejs";
 
-/** Vercel Cron: fire enabled schedules (daily digest primitive). */
+/** Cron route: evaluate enabled schedules and fire only when cron matches. */
 export async function GET(request: Request) {
   const cronSecret = process.env.CRON_SECRET;
   const authHeader = request.headers.get("authorization");
@@ -18,10 +18,17 @@ export async function GET(request: Request) {
 
   const env = getEnv();
   const db = getDb();
-  const schedules = await listEnabledSchedules(db);
+  const now = new Date();
+  const allSchedules = await listEnabledSchedules(db);
   const fired: string[] = [];
+  const skipped: string[] = [];
 
-  for (const schedule of schedules) {
+  for (const schedule of allSchedules) {
+    if (!shouldFireSchedule(schedule, now)) {
+      skipped.push(schedule.id);
+      continue;
+    }
+
     const space = await getSpaceById(db, schedule.spaceId);
     if (!space) continue;
 
@@ -41,11 +48,12 @@ export async function GET(request: Request) {
       text: schedule.prompt,
       messageTs: scheduleThreadTs,
       actorSlackUserId: "schedule",
-      eventId: `schedule:${schedule.id}:${Date.now()}`,
-      trigger: "mention",
+      eventId: `schedule:${schedule.id}:${now.toISOString()}`,
+      trigger: "schedule",
     });
+    await markScheduleFired(db, schedule.id, now);
     fired.push(schedule.id);
   }
 
-  return Response.json({ fired });
+  return Response.json({ fired, skipped: skipped.length });
 }

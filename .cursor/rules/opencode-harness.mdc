@@ -1,0 +1,17 @@
+---
+description: Tags uses opencode as the agent harness with Fireworks inference
+alwaysApply: true
+---
+
+# opencode harness
+
+Tags is a better open-source Claude Tag built on **opencode** as the agent harness (open source, multi-model capable).
+
+- **Harness:** opencode — not a generic "any harness" platform
+- **Inference (current):** Fireworks only; additional providers via opencode later, not Tags multi-provider routing yet
+- **Target architecture:** thin Slack + Inngest shell (governance, streaming, HITL, persistence) around opencode in E2B for coding-heavy Spaces
+- **Primitives unchanged:** Space = channel boundary; thread = task isolation; Postgres is product truth
+
+Must-not-drop features: generative UI, streaming replies, HITL approvals, full thread context.
+
+Use `tags-vision-aligner` for alignment reviews against `anthropic-claude-tag.md` and the Karpathy transcript.

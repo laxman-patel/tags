@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { truncateForPreview } from "@tags/core/ui-cards";
 import { createArtifact } from "@tags/core/artifacts";
 import type { Db } from "@tags/db";
 import { newId } from "@tags/db";
@@ -76,6 +77,13 @@ export function createCreateArtifactTool(db: Db, appUrl: string): TagsTool {
           title: parsed.title,
           contentRef: ctx.r2 ? contentRef : undefined,
           storedInDb: bodyStoredInDb !== undefined,
+        },
+        uiCard: {
+          kind: "artifact",
+          title: parsed.title,
+          artifactKind: parsed.kind,
+          url: finalUrl,
+          preview: truncateForPreview(parsed.body),
         },
       };
     },

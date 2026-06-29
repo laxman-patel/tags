@@ -1,8 +1,11 @@
 import { getRunById, listRunEvents } from "@tags/core/runs";
 import { listArtifactsForRun } from "@tags/core/artifacts";
-import { TaskStatusCard, ToolTraceCard, RunTimeline, ArtifactCard } from "@tags/ui";
+import { TaskStatusCard, ToolTraceCard, ArtifactCard } from "@tags/ui";
+import { formatToolResultForUser } from "@tags/core/ui-cards";
+import type { UICard } from "@tags/core/ui-cards";
 import Link from "next/link";
 import { getDb } from "@/lib/db";
+import { RunTimelineLive } from "./run-timeline-live";
 
 export const runtime = "nodejs";
 
@@ -28,11 +31,19 @@ export default async function RunDetailPage({
 
   const toolEvents = events
     .filter((e) => e.eventType.startsWith("tool."))
-    .map((e) => ({
-      toolName: String((e.payload as { toolName?: string }).toolName ?? e.eventType),
-      status: e.eventType,
-      preview: JSON.stringify(e.payload).slice(0, 200),
-    }));
+    .map((e) => {
+      const payload = e.payload as {
+        toolName?: string;
+        uiCard?: UICard;
+        outputPreview?: unknown;
+      };
+      const preview = formatToolResultForUser(payload.outputPreview, payload.uiCard);
+      return {
+        toolName: String(payload.toolName ?? e.eventType),
+        status: e.eventType,
+        preview,
+      };
+    });
 
   return (
     <main style={{ padding: 24, maxWidth: 900, margin: "0 auto", fontFamily: "system-ui" }}>
@@ -62,8 +73,10 @@ export default async function RunDetailPage({
       )}
       <div style={{ marginTop: 24 }}>
         <h2>Events</h2>
-        <RunTimeline
-          events={events.map((e) => ({
+        <RunTimelineLive
+          runId={runId}
+          initialStatus={run.status}
+          initialEvents={events.map((e) => ({
             seq: Number(e.seq),
             eventType: e.eventType,
             payload: e.payload,

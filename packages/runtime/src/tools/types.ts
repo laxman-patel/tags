@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import type { RuntimeProviders } from "../providers";
 import { z } from "zod";
+import type { UICard } from "@tags/core/ui-cards";
 
 export type ToolRiskLevel = "none" | "low" | "medium" | "high";
 
@@ -23,6 +24,7 @@ export interface ToolContext extends RuntimeProviders {
 
 export interface ToolResult {
   modelOutput: unknown;
+  uiCard?: UICard;
   artifact?: { kind: string; title: string; contentRef?: string; metadata?: unknown };
   externalResource?: { kind: string; id: string };
 }

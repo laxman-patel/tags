@@ -3,7 +3,7 @@ import {
   getSpaceById,
   listSpaceConfigVersions,
 } from "@tags/core/spaces-admin";
-import { loadActiveSpaceConfig } from "@tags/core/spaces";
+import { loadActiveSpaceConfig, parseRuntimeMode } from "@tags/core/spaces";
 import { recordAuditEvent } from "@tags/core/audit";
 import { adminUnauthorizedResponse, isAdminAuthorized } from "@/lib/admin-auth";
 import { getDb } from "@/lib/db";
@@ -40,6 +40,7 @@ export async function PATCH(
     enabledTools: string[];
     reasoning?: string;
     maxSteps?: number;
+    runtimeMode?: string;
   };
 
   const db = getDb();
@@ -54,6 +55,7 @@ export async function PATCH(
     enabledTools: body.enabledTools,
     reasoning: body.reasoning,
     maxSteps: body.maxSteps,
+    runtimeMode: parseRuntimeMode(body.runtimeMode),
   });
 
   await recordAuditEvent(db, {
@@ -61,7 +63,7 @@ export async function PATCH(
     spaceId,
     actorType: "human",
     eventType: "config.activated",
-    payload: { version: result.version, modelId: body.modelId },
+    payload: { version: result.version, modelId: body.modelId, runtimeMode: body.runtimeMode },
   });
 
   return Response.json(result);

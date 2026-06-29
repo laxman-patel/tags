@@ -76,7 +76,7 @@ async function seed() {
   await sql`
     insert into space_configs (
       id, organization_id, space_id, version, model_id, reasoning, instructions,
-      enabled_skills, enabled_tools, enabled_connections, max_steps, is_active
+      enabled_skills, enabled_tools, enabled_connections, max_steps, runtime_mode, is_active
     ) values (
       ${configId},
       ${orgId},
@@ -86,15 +86,10 @@ async function seed() {
       'provider-default',
       ${defaultInstructions(channelName)},
       '[]'::jsonb,
-      ${JSON.stringify([
-        "search_thread",
-        "search_memory",
-        "save_memory",
-        "create_artifact",
-        "run_coding_agent",
-      ])}::jsonb,
+      ${JSON.stringify(["search_thread", "create_artifact"])}::jsonb,
       '[]'::jsonb,
       12,
+      'opencode',
       true
     )
   `;

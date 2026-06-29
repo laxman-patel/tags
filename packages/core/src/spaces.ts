@@ -2,6 +2,9 @@ import { and, eq } from "drizzle-orm";
 import type { Db } from "@tags/db";
 import { spaceConfigs, spaces, workspaces } from "@tags/db";
 
+export const RUNTIME_MODES = ["opencode", "orchestrator"] as const;
+export type RuntimeMode = (typeof RUNTIME_MODES)[number];
+
 export type ActiveSpaceConfig = {
   id: string;
   organizationId: string;
@@ -14,7 +17,14 @@ export type ActiveSpaceConfig = {
   enabledTools: string[];
   enabledConnections: string[];
   maxSteps: number;
+  /** opencode = E2B harness (default); orchestrator = AI SDK outer loop + Composio. */
+  runtimeMode: RuntimeMode;
 };
+
+export function parseRuntimeMode(value: string | null | undefined): RuntimeMode {
+  if (value === "orchestrator") return "orchestrator";
+  return "opencode";
+}
 
 export async function resolveSpaceByChannel(
   db: Db,
@@ -67,5 +77,6 @@ export async function loadActiveSpaceConfig(
     enabledTools: row.enabledTools,
     enabledConnections: row.enabledConnections,
     maxSteps: row.maxSteps,
+    runtimeMode: parseRuntimeMode(row.runtimeMode),
   };
 }

@@ -1,5 +1,6 @@
 import { eq } from "drizzle-orm";
 import { listSpaces, createSpaceWithConfig } from "@tags/core/spaces-admin";
+import { parseRuntimeMode } from "@tags/core/spaces";
 import { organizations, workspaces } from "@tags/db";
 import { adminUnauthorizedResponse, isAdminAuthorized } from "@/lib/admin-auth";
 import { getDb } from "@/lib/db";
@@ -34,6 +35,7 @@ export async function POST(request: Request) {
     modelId: string;
     instructions: string;
     enabledTools?: string[];
+    runtimeMode?: string;
   };
 
   const db = getDb();
@@ -57,6 +59,7 @@ export async function POST(request: Request) {
     modelId: body.modelId,
     instructions: body.instructions,
     enabledTools: body.enabledTools,
+    runtimeMode: parseRuntimeMode(body.runtimeMode),
   });
 
   return Response.json(result, { status: 201 });

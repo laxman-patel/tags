@@ -1,6 +1,7 @@
 import { desc, eq, max } from "drizzle-orm";
 import type { Db } from "@tags/db";
 import { newId, spaceConfigs, spaces, workspaces } from "@tags/db";
+import { parseRuntimeMode, loadActiveSpaceConfig, type RuntimeMode } from "./spaces";
 
 export type CreateSpaceInput = {
   organizationId: string;
@@ -11,6 +12,7 @@ export type CreateSpaceInput = {
   modelId: string;
   instructions: string;
   enabledTools?: string[];
+  runtimeMode?: RuntimeMode;
 };
 
 export async function listSpaces(db: Db, organizationId: string) {
@@ -52,6 +54,7 @@ export async function createSpaceWithConfig(db: Db, input: CreateSpaceInput) {
     modelId: input.modelId,
     instructions: input.instructions,
     enabledTools: input.enabledTools ?? ["search_thread", "create_artifact"],
+    runtimeMode: input.runtimeMode ?? "opencode",
     isActive: true,
   });
 
@@ -66,6 +69,7 @@ export type UpdateSpaceConfigInput = {
   instructions: string;
   enabledTools: string[];
   maxSteps?: number;
+  runtimeMode?: RuntimeMode;
 };
 
 export async function createSpaceConfigVersion(db: Db, input: UpdateSpaceConfigInput) {
@@ -82,16 +86,21 @@ export async function createSpaceConfigVersion(db: Db, input: UpdateSpaceConfigI
     .set({ isActive: false })
     .where(eq(spaceConfigs.spaceId, input.spaceId));
 
+  const active = await loadActiveSpaceConfig(db, input.spaceId);
+
   await db.insert(spaceConfigs).values({
     id: configId,
     organizationId: input.organizationId,
     spaceId: input.spaceId,
     version: nextVersion,
     modelId: input.modelId,
-    reasoning: input.reasoning ?? "provider-default",
+    reasoning: input.reasoning ?? active?.reasoning ?? "provider-default",
     instructions: input.instructions,
+    enabledSkills: active?.enabledSkills ?? [],
     enabledTools: input.enabledTools,
-    maxSteps: input.maxSteps ?? 12,
+    enabledConnections: active?.enabledConnections ?? [],
+    maxSteps: input.maxSteps ?? active?.maxSteps ?? 12,
+    runtimeMode: input.runtimeMode ?? active?.runtimeMode ?? "opencode",
     isActive: true,
   });
 

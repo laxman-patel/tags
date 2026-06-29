@@ -18,8 +18,14 @@ export function createSearchMemoryTool(db: Db): TagsTool {
     async execute(input: unknown, ctx: ToolContext) {
       const parsed = inputSchema.parse(input);
       const rows = await searchMemories(db, ctx.spaceId, parsed.query);
+      const items = rows.map((r) => ({ kind: r.kind, content: r.content }));
       return {
         modelOutput: rows.map((r) => ({ kind: r.kind, content: r.content, id: r.id })),
+        uiCard: {
+          kind: "memory-search",
+          query: parsed.query,
+          items: items.slice(0, 5),
+        },
       };
     },
   };

@@ -10,6 +10,7 @@
     "./threads": "./src/threads.ts",
     "./runs": "./src/runs.ts",
     "./events": "./src/events.ts",
+    "./ui-cards": "./src/ui-cards.ts",
     "./memory": "./src/memory.ts",
     "./audit": "./src/audit.ts",
     "./artifacts": "./src/artifacts.ts",
@@ -23,6 +24,7 @@
   "dependencies": {
     "@tags/db": "workspace:*",
     "@tags/storage": "workspace:*",
+    "cron-parser": "^5.6.1",
     "drizzle-orm": "^0.44.2"
   }
 }

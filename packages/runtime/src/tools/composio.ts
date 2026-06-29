@@ -19,9 +19,9 @@ export type ComposioToolsHandle = {
  * The entity (`entityId`) is the Space id, so connected accounts are scoped per
  * channel. Toolkits come from the Space config's `enabledConnections`.
  *
- * NOTE: these tools self-execute inside the AI SDK loop. They intentionally
- * bypass the Tags approval / audit / idempotency machinery that wraps native
- * `TagsTool`s — see the agent loop for how they are merged.
+ * NOTE: Composio tools are only loaded in orchestrator mode (`runtimeMode`).
+ * On opencode-primary runs they are disabled entirely. In orchestrator mode,
+ * each MCP tool is wrapped with Tags approval gating (see composio-governance.ts).
  */
 export async function loadComposioTools(args: {
   apiKey: string;

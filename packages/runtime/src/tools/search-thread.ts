@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { truncateForPreview } from "@tags/core/ui-cards";
 import { listThreadMessages } from "@tags/core/threads";
 import type { Db } from "@tags/db";
 import type { TagsTool, ToolContext } from "./types";
@@ -24,15 +25,23 @@ export function createSearchThreadTool(db: Db): TagsTool {
           )
         : messages;
 
-      const preview = filtered.slice(-20).map((m) => ({
-        author: m.authorId,
-        text: m.text.slice(0, 500),
-      }));
+      const preview = filtered
+        .slice(-20)
+        .map((m) => `${m.authorId}: ${m.text.slice(0, 200)}`)
+        .join("\n");
 
       return {
         modelOutput: {
           count: filtered.length,
-          messages: preview,
+          messages: filtered.slice(-20).map((m) => ({
+            author: m.authorId,
+            text: m.text.slice(0, 500),
+          })),
+        },
+        uiCard: {
+          kind: "thread-search",
+          messageCount: filtered.length,
+          preview: truncateForPreview(preview || "(no messages)"),
         },
       };
     },

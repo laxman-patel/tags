@@ -1,6 +1,102 @@
 import type { TagsEvent } from "@tags/core/events";
+import type { UICard } from "@tags/core/ui-cards";
+import { formatUiCardPreview } from "@tags/core/ui-cards";
 
 export type SlackBlock = Record<string, unknown>;
+
+function renderUiCardBlocks(card: UICard): SlackBlock[] {
+  switch (card.kind) {
+    case "artifact":
+      return [
+        {
+          type: "section",
+          text: {
+            type: "mrkdwn",
+            text: card.url
+              ? `📎 *${card.title}* (${card.artifactKind})\n<${card.url}|Open artifact>`
+              : `📎 *${card.title}* (${card.artifactKind})`,
+          },
+        },
+        ...(card.preview
+          ? [
+              {
+                type: "section",
+                text: {
+                  type: "mrkdwn",
+                  text: `\`\`\`${card.preview.slice(0, 500)}\`\`\``,
+                },
+              },
+            ]
+          : []),
+      ];
+    case "memory-search":
+      return [
+        {
+          type: "section",
+          text: {
+            type: "mrkdwn",
+            text: `*Memory search:* \`${card.query}\`\n${card.items
+              .map((i) => `• [${i.kind}] ${i.content.slice(0, 120)}`)
+              .join("\n") || "_No matches_"}`,
+          },
+        },
+      ];
+    case "memory-saved":
+      return [
+        {
+          type: "section",
+          text: {
+            type: "mrkdwn",
+            text: `💾 Saved *${card.memoryKind}* memory:\n>${card.content}`,
+          },
+        },
+      ];
+    case "thread-search":
+      return [
+        {
+          type: "section",
+          text: {
+            type: "mrkdwn",
+            text: `*Thread search* — ${card.messageCount} message(s)\n\`\`\`${card.preview.slice(0, 400)}\`\`\``,
+          },
+        },
+      ];
+    case "coding-agent":
+      return [
+        {
+          type: "section",
+          text: {
+            type: "mrkdwn",
+            text: `*Coding agent* — exit \`${card.exitCode}\`\n\`\`\`${card.outputPreview.slice(0, 500)}\`\`\``,
+          },
+        },
+      ];
+    case "generic":
+      return [
+        {
+          type: "section",
+          text: {
+            type: "mrkdwn",
+            text: `*${card.title}*\n${card.body.slice(0, 1500)}`,
+          },
+        },
+      ];
+    default: {
+      const _exhaustive: never = card;
+      return _exhaustive;
+    }
+  }
+}
+
+function formatOutputPreview(output: unknown): string {
+  if (output == null) return "";
+  if (typeof output === "string") return output.slice(0, 300);
+  try {
+    return JSON.stringify(output, null, 0).slice(0, 300);
+  } catch {
+    return String(output).slice(0, 300);
+  }
+}
 
 export function renderSlackBlocks(event: TagsEvent): SlackBlock[] {
   switch (event.type) {
@@ -32,8 +128,8 @@ export function renderSlackBlocks(event: TagsEvent): SlackBlock[] {
           ],
         },
       ];
-    case "tool.finished":
-      return [
+    case "tool.finished": {
+      const blocks: SlackBlock[] = [
         {
           type: "context",
           elements: [
@@ -41,6 +137,19 @@ export function renderSlackBlocks(event: TagsEvent): SlackBlock[] {
           ],
         },
       ];
+      if (event.uiCard) {
+        blocks.push(...renderUiCardBlocks(event.uiCard));
+      } else {
+        const preview = formatOutputPreview(event.outputPreview);
+        if (preview) {
+          blocks.push({
+            type: "section",
+            text: { type: "mrkdwn", text: `\`\`\`${preview}\`\`\`` },
+          });
+        }
+      }
+      return blocks;
+    }
     case "approval.requested":
       return [
         {
@@ -111,6 +220,8 @@ export function renderSlackBlocks(event: TagsEvent): SlackBlock[] {
     }
   }
 }
+
+export { formatUiCardPreview };
 
 export function buildRunLinkBlock(appUrl: string, runId: string): SlackBlock[] {
   return [

@@ -1,5 +1,7 @@
 # Tags Plan
 
+> **Architecture evolution (2026):** Tags is a better open-source Claude Tag built on **opencode** as the agent harness (open source, multi-model-capable). **Fireworks** is the inference provider for now — not multi-provider routing yet. Hosting and durable runs moved to **Railway + Inngest**; coding runs use **E2B + opencode**. The target for coding-heavy Spaces is a thin Slack/Inngest shell around opencode, with Postgres as product-visible truth. Sections below that reference Vercel AI Gateway, Workflows, Connect, or a raw AI SDK-owned harness are historical unless code still uses them.
+
 ## Table of Contents
 
 - [One-Line Pitch](#one-line-pitch)
@@ -38,15 +40,15 @@
 
 ## One-Line Pitch
 
-Tags is a channel-native agent system for teams: a model-agnostic take on Claude Tag, built on the Vercel AI stack (AI SDK, AI Gateway, Workflows, Connect, Sandbox), where the agent runtime is ours and the channel is the unit of context, tools, memory, and collaboration.
+Tags is a better open-source Claude Tag for teams: channel-native org harness built on **opencode** (agent harness) with **Fireworks** inference for now, plus Railway, Inngest, and E2B for durable runs and coding tasks.
 
 ## Product Thesis
 
-Claude Tag is interesting because it is not just a chatbot in Slack. It is an org-level agent harness where the channel is the natural boundary for context, tools, memory, and collaboration. Tags keeps that insight and makes one thing configurable that Claude Tag does not: the model. A team should be able to run the same channel-native experience on whichever model is best for the job, and switch without rebuilding the agent.
+Claude Tag is interesting because it is not just a chatbot in Slack. It is an org-level agent harness where the channel is the natural boundary for context, tools, memory, and collaboration. Tags keeps that insight as an **open-source Claude Tag**: the same channel/thread primitives, multiplayer delegation, governance, streaming, and generative UI — built on **opencode** as the agent harness.
 
-Tags is honest about its dependencies. It runs on Vercel's AI stack and is most convenient to operate on Vercel. We are not claiming a vendor-neutral, self-host-anywhere product. The differentiator is **model choice plus a focused product layer** (spaces, thread context, memory, approvals, streaming UX, admin controls), not infrastructure independence. Where a dependency is risky (for example, Connect is in beta), we keep it behind a small interface so it can be swapped.
+Tags is honest about its dependencies. It runs on Railway, Inngest, Fireworks (for now), E2B, and opencode. The differentiator is **a focused product layer** (Spaces, thread context, memory, approvals, streaming UX, admin controls) wrapped around opencode, not infrastructure independence or harness choice. opencode can support additional inference providers later; Tags is Fireworks-only for now.
 
-For v0, Tags is intentionally not a generic agent-harness marketplace. There is one runtime, built on the AI SDK. This keeps the system coherent and lets Tags focus on the product layer.
+There is one harness — opencode — plus a thin Tags shell for Slack, durable runs, and persistence. This keeps the system coherent and lets Tags focus on the org-harness UX Claude Tag pioneered.
 
 ## Architecture Decisions (the bets this plan makes)
 
@@ -55,8 +57,8 @@ These are the load-bearing decisions. Everything else follows from them.
 1. **Positioning: model-agnostic, on the Vercel AI stack.** We embrace the stack instead of fighting it. The win is model choice and product polish, not "no lock-in."
 2. **Runtime: raw AI SDK, not a higher-level harness.** Tags owns its agent loop (AI SDK Core), its durability (Vercel Workflows), its Slack integration, and its persistence. This gives **one source of truth** (the Tags database) and full control over the multiplayer/thread/approval UX, at the cost of building the channel and human-in-the-loop plumbing ourselves.
 3. **One runtime, configured per Space from the database.** There is a single deployed agent runtime. A Space's model, instructions, tools, connections, memory scope, and approval policy are runtime data loaded per run. No per-channel code generation and no redeploy on a config change.
-4. **Slack is Block Kit; web is plain React over persisted data.** We do not adopt AI SDK UI "generative UI" as a v0 pillar. Tools return typed structured output; Slack renders Block Kit; the web renders normal React from the same persisted run records. A web chat surface is explicitly out of scope for v0.
-5. **The Tags database is the source of truth.** Runs, messages, approvals, artifacts, and memory live in Postgres. Durable execution state lives in Workflows, but the product-visible record of what happened is ours.
+4. **Generative UI from persisted run events.** Tools return typed `UICard` structured output alongside model payloads. Slack renders Block Kit; the web renders React cards from the same `run_events` / artifacts — one source of truth in Postgres.
+5. **The Tags database is the source of truth.** Runs, messages, approvals, artifacts, and memory live in Postgres. Durable execution state lives in Inngest, but the product-visible record of what happened is ours.
 
 ### Why raw AI SDK instead of a higher-level harness
 

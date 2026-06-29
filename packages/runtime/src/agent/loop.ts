@@ -1,10 +1,11 @@
 import { createFireworks } from "@ai-sdk/fireworks";
 import { tool, isStepCount, streamText } from "ai";
 import type { TagsEvent } from "@tags/core/events";
+import { formatToolResultForUser } from "@tags/core/ui-cards";
+import type { UICard } from "@tags/core/ui-cards";
 import { checkSpaceBudget } from "@tags/core/policies";
 import {
   appendRunEvent,
-  createApprovalRequest,
   createToolInvocation,
   completeToolInvocation,
   updateRunStatus,
@@ -12,13 +13,14 @@ import {
 import { loadActiveSpaceConfig } from "@tags/core/spaces";
 import { recordUsage } from "@tags/core/usage";
 import type { Db } from "@tags/db";
-import { newId } from "@tags/db";
-import { SlackStreamAdapter } from "@tags/slack";
+import { SlackStreamAdapter, buildRunLinkBlock, updateMessage } from "@tags/slack";
 import { ApprovalPauseError, type AgentSegmentResult } from "./types";
 import { buildSystemPrompt, reasoningEffortFor } from "./prompt";
 import { buildThreadContext } from "../context/builder";
 import { createRuntimeProviders, type RuntimeProviderConfig } from "../providers";
 import { loadComposioTools, type ComposioToolsHandle } from "../tools/composio";
+import { wrapComposioToolsWithApproval } from "../tools/composio-governance";
+import { gateSideEffectingTool } from "../tools/approval-gate";
 import { resolveTools, type ToolRegistryOptions } from "../tools/registry";
 import { toolIdempotencyKey, type TagsTool, type ToolContext } from "../tools/types";
 
@@ -41,6 +43,13 @@ export type AgentLoopArgs = {
   providerConfig: RuntimeProviderConfig;
   /** When set, the matching approval was granted and the gated tool may execute. */
   approvedRequestId?: string;
+  /** After an approved side effect, inject tool output so the agent can reply naturally. */
+  approvedToolContinuation?: {
+    toolName: string;
+    toolInput: unknown;
+    toolOutput: unknown;
+    uiCard?: UICard;
+  };
 };
 
 export async function runAgentSegment(args: AgentLoopArgs): Promise<AgentSegmentResult> {
@@ -80,17 +89,43 @@ export async function runAgentSegment(args: AgentLoopArgs): Promise<AgentSegment
   await emit({ type: "status", label: "Reading thread context" });
 
   const messages = await buildThreadContext(args.db, args.threadId, args.spaceId, args.triggerText);
+
+  if (args.approvedToolContinuation) {
+    const cont = args.approvedToolContinuation;
+    const resultText = formatToolResultForUser(cont.toolOutput, cont.uiCard);
+    messages.push({
+      role: "user",
+      content: `[Approved action completed]\nTool: ${cont.toolName}\nResult:\n${resultText}\n\nSummarize this outcome clearly for the user in Slack.`,
+    });
+  }
+
   const tagsTools = resolveTools(args.db, config.enabledTools, toolOptions);
   const aiTools = buildAiTools(tagsTools, args, toolOptions, emit);
 
   let composio: ComposioToolsHandle | null = null;
-  if (args.providerConfig.composioApiKey && config.enabledConnections.length > 0) {
+  // Composio MCP bypasses native TagsTool machinery; only load in orchestrator mode
+  // and wrap every tool with the shared approval gate (see composio-governance.ts).
+  if (
+    config.runtimeMode === "orchestrator" &&
+    args.providerConfig.composioApiKey &&
+    config.enabledConnections.length > 0
+  ) {
     try {
-      composio = await loadComposioTools({
+      const loaded = await loadComposioTools({
         apiKey: args.providerConfig.composioApiKey,
         entityId: args.spaceId,
         toolkits: config.enabledConnections,
       });
+      if (loaded) {
+        composio = {
+          tools: wrapComposioToolsWithApproval(loaded.tools, {
+            db: args.db,
+            args,
+            emit,
+          }),
+          close: loaded.close,
+        };
+      }
     } catch (composioError) {
       await emit({
         type: "status",
@@ -107,10 +142,8 @@ export async function runAgentSegment(args: AgentLoopArgs): Promise<AgentSegment
   } as Parameters<typeof streamText>[0]["tools"];
 
   // Native TagsTools emit their own tool.started/finished events (with approval,
-  // idempotency, and audit) inside buildAiTools. Composio tools self-execute, so
-  // we surface only those in the run timeline via the streamText callbacks below.
-  const nativeToolNames = new Set(tagsTools.map((tagsTool) => tagsTool.name));
-
+  // idempotency, and audit) inside buildAiTools. Wrapped Composio tools emit via
+  // composio-governance.ts; streamText callbacks are not used for either set.
   const instructions = buildSystemPrompt(config.instructions, args.spaceName);
 
   try {
@@ -121,25 +154,6 @@ export async function runAgentSegment(args: AgentLoopArgs): Promise<AgentSegment
       tools,
       stopWhen: isStepCount(config.maxSteps),
       reasoning: reasoningEffortFor(config.reasoning),
-      onToolExecutionStart: async ({ toolCall }) => {
-        if (!nativeToolNames.has(toolCall.toolName)) {
-          await emit({
-            type: "tool.started",
-            toolName: toolCall.toolName,
-            inputPreview: toolCall.input,
-          });
-        }
-      },
-      onToolExecutionEnd: async ({ toolCall, toolOutput }) => {
-        if (!nativeToolNames.has(toolCall.toolName)) {
-          await emit({
-            type: "tool.finished",
-            toolName: toolCall.toolName,
-            outputPreview:
-              toolOutput.type === "tool-result" ? toolOutput.output : { error: true },
-          });
-        }
-      },
       onChunk: async ({ chunk }) => {
         if (chunk.type === "text-delta") {
           await emit({ type: "text.delta", text: chunk.text });
@@ -155,7 +169,6 @@ export async function runAgentSegment(args: AgentLoopArgs): Promise<AgentSegment
     const usage = await result.usage;
 
     await stream.finalize(fullText || "Done.");
-    const { buildRunLinkBlock, updateMessage } = await import("@tags/slack");
     await updateMessage(
       args.slack,
       args.channelId,
@@ -222,7 +235,7 @@ export async function executeApprovedTool(
     invocationId: string;
     emit: (event: TagsEvent) => Promise<void>;
   },
-): Promise<unknown> {
+): Promise<{ modelOutput: unknown; uiCard?: UICard }> {
   const tagsTool = resolveTools(db, [args.toolName], args.toolOptions)[0];
   if (!tagsTool) {
     throw new Error(`Tool not found: ${args.toolName}`);
@@ -243,9 +256,10 @@ export async function executeApprovedTool(
     type: "tool.finished",
     toolName: args.toolName,
     outputPreview: toolResult.modelOutput,
+    uiCard: toolResult.uiCard,
   });
 
-  return toolResult.modelOutput;
+  return { modelOutput: toolResult.modelOutput, uiCard: toolResult.uiCard };
 }
 
 export async function rejectPendingTool(
@@ -317,48 +331,19 @@ function buildAiTools(
           needsApproval(tagsTool.approval, input) &&
           !args.approvedRequestId
         ) {
-          const idempotencyKey = toolIdempotencyKey(args.runId, tagsTool.name, input);
-          const invocation = await createToolInvocation(args.db, {
+          const gate = await gateSideEffectingTool({
+            db: args.db,
             runId: args.runId,
             organizationId: args.organizationId,
             spaceId: args.spaceId,
-            toolName: tagsTool.name,
-            toolInput: input,
-            idempotencyKey,
-          });
-
-          if (invocation.status === "succeeded" && invocation.result) {
-            return invocation.result;
-          }
-
-          const requestId = newId();
-          const approval = await createApprovalRequest(args.db, {
-            organizationId: args.organizationId,
-            spaceId: args.spaceId,
-            runId: args.runId,
             threadId: args.threadId,
-            toolInvocationId: invocation.id,
-            requestId,
             toolName: tagsTool.name,
             toolInput: input,
-            riskLevel: tagsTool.risk,
-            requestText: `Approve ${tagsTool.name}?`,
-            expiresAt: new Date(Date.now() + 60 * 60 * 1000),
+            emit,
           });
-
-          await emit({
-            type: "approval.requested",
-            approvalId: approval.id,
-            requestId,
-          });
-
-          throw new ApprovalPauseError({
-            requestId,
-            approvalId: approval.id,
-            toolName: tagsTool.name,
-            toolInput: input,
-            invocationId: invocation.id,
-          });
+          if (gate.cachedResult !== undefined) {
+            return gate.cachedResult;
+          }
         }
 
         if (args.approvedRequestId && tagsTool.sideEffecting) {
@@ -370,6 +355,9 @@ function buildAiTools(
             toolInput: input,
             idempotencyKey: toolIdempotencyKey(args.runId, tagsTool.name, input),
           });
+          if (invocation.status === "succeeded" && invocation.result != null) {
+            return invocation.result;
+          }
           return executeApprovedTool(args.db, {
             runId: args.runId,
             organizationId: args.organizationId,
@@ -383,7 +371,7 @@ function buildAiTools(
             toolInput: input,
             invocationId: invocation.id,
             emit,
-          });
+          }).then((result) => result.modelOutput);
         }
 
         const toolCtx = buildToolContext(args, toolOptions, emit);
@@ -410,6 +398,7 @@ function buildAiTools(
           type: "tool.finished",
           toolName: tagsTool.name,
           outputPreview: toolResult.modelOutput,
+          uiCard: toolResult.uiCard,
         });
 
         return toolResult.modelOutput;

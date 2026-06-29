@@ -1,4 +1,5 @@
 import type { ActiveSpaceConfig } from "@tags/core/spaces";
+import type { ModelMessage } from "ai";
 
 export function buildSystemPrompt(
   instructions: string,
@@ -9,6 +10,31 @@ export function buildSystemPrompt(
 # Runtime context
 - Space: #${spaceName}
 - Current time: ${new Date().toISOString()}`;
+}
+
+/** Flatten thread context into a single opencode run prompt. */
+export function buildOpencodePrompt(
+  instructions: string,
+  spaceName: string,
+  messages: ModelMessage[],
+): string {
+  const system = buildSystemPrompt(instructions, spaceName);
+  const thread = messages
+    .map((message) => {
+      const body =
+        typeof message.content === "string"
+          ? message.content
+          : JSON.stringify(message.content);
+      return `[${message.role}]\n${body}`;
+    })
+    .join("\n\n");
+
+  return `${system}
+
+# Task thread
+${thread}
+
+Respond to the latest user request in this thread. Be concise and actionable for Slack.`;
 }
 
 export const REASONING_EFFORTS = [

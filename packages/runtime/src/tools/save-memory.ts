@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { truncateForPreview } from "@tags/core/ui-cards";
 import { saveMemory } from "@tags/core/memory";
 import type { Db } from "@tags/db";
 import type { TagsTool, ToolContext } from "./types";
@@ -28,6 +29,11 @@ export function createSaveMemoryTool(db: Db): TagsTool {
       });
       return {
         modelOutput: { saved: true, id: row?.id, content: parsed.content },
+        uiCard: {
+          kind: "memory-saved",
+          memoryKind: parsed.kind,
+          content: truncateForPreview(parsed.content, 200),
+        },
       };
     },
   };

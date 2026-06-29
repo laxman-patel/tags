@@ -25,8 +25,8 @@ export default function NewSpacePage() {
           "search_memory",
           "save_memory",
           "create_artifact",
-          "run_coding_agent",
         ],
+        runtimeMode: "opencode",
       }),
     });
     const data = await res.json();
