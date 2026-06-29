@@ -9,7 +9,5 @@
   "scripts": {
     "typecheck": "tsc --noEmit"
   },
-  "dependencies": {
-    "@vercel/connect": "^0.2.9"
-  }
+  "dependencies": {}
 }

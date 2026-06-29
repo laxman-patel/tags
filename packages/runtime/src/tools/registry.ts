@@ -1,8 +1,7 @@
 import type { Db } from "@tags/db";
 import type { RuntimeProviders } from "../providers";
 import { createCreateArtifactTool } from "./create-artifact";
-import { createCreateLinearIssueTool } from "./create-linear-issue";
-import { createRunSandboxCommandTool } from "./run-sandbox-command";
+import { createRunCodingAgentTool } from "./run-coding-agent";
 import { createSearchMemoryTool } from "./search-memory";
 import { createSaveMemoryTool } from "./save-memory";
 import { createSearchThreadTool } from "./search-thread";
@@ -22,8 +21,7 @@ export function resolveTools(
     search_memory: createSearchMemoryTool(db),
     save_memory: createSaveMemoryTool(db),
     create_artifact: createCreateArtifactTool(db, appUrl),
-    create_linear_issue: createCreateLinearIssueTool(),
-    run_sandbox_command: createRunSandboxCommandTool(),
+    run_coding_agent: createRunCodingAgentTool(),
   };
 
   return enabledTools

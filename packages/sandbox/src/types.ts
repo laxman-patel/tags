@@ -1,16 +1,18 @@
-export interface SandboxCommandResult {
-  stdout: string;
-  stderr: string;
-  exitCode: number;
+export interface CodingAgentRequest {
+  /** Natural-language coding task for the opencode agent to perform. */
+  prompt: string;
+  /** Optional git repository to clone into the sandbox before running. */
+  repoUrl?: string;
 }
 
-export interface SandboxSession {
-  id: string;
-  runCommand(cmd: string, args?: string[]): Promise<SandboxCommandResult>;
-  readFile(path: string): Promise<string>;
-  stop(): Promise<void>;
+export interface CodingAgentResult {
+  sandboxId: string;
+  exitCode: number;
+  /** Combined stdout/stderr from the opencode run. */
+  output: string;
 }
 
 export interface SandboxProvider {
-  create(args?: { runtime?: string }): Promise<SandboxSession>;
+  /** Runs the opencode coding agent in an isolated E2B sandbox. */
+  runCodingAgent(request: CodingAgentRequest): Promise<CodingAgentResult>;
 }

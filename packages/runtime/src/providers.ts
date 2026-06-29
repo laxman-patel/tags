@@ -5,14 +5,12 @@ import type { R2Config } from "@tags/storage";
 
 export type RuntimeProviderConfig = {
   slackBotToken?: string;
-  vercelToken?: string;
-  oidcToken?: string;
-  vercelTeamId?: string;
-  vercelProjectId?: string;
-  connectorLinear?: string;
-  connectorSlack?: string;
-  linearApiKey?: string;
   composioApiKey?: string;
+  e2bApiKey?: string;
+  /** Fireworks key opencode uses for inference inside the sandbox. */
+  fireworksApiKey?: string;
+  /** opencode model string for the sandbox coding agent. */
+  opencodeModel?: string;
   r2?: R2Config;
 };
 
@@ -31,25 +29,15 @@ export async function createRuntimeProviders(
   const { createCredentialProvider } = await import("@tags/connections");
   const { createSandboxProvider } = await import("@tags/sandbox");
 
-  const connectorMap: Record<string, string> = {};
-  if (config.connectorLinear) connectorMap.linear = config.connectorLinear;
-  if (config.connectorSlack) connectorMap.slack = config.connectorSlack;
-
   const directSecrets: Record<string, string> = {};
   if (config.slackBotToken) directSecrets.slack = config.slackBotToken;
-  if (config.linearApiKey) directSecrets.linear = config.linearApiKey;
 
-  const credentials = createCredentialProvider({
-    connectorMap,
-    directSecrets,
-    vercelToken: config.vercelToken,
-    oidcToken: config.oidcToken ?? process.env.VERCEL_OIDC_TOKEN,
-  });
+  const credentials = createCredentialProvider({ directSecrets });
 
   const sandbox = createSandboxProvider({
-    teamId: config.vercelTeamId,
-    projectId: config.vercelProjectId,
-    token: config.vercelToken,
+    apiKey: config.e2bApiKey,
+    modelApiKey: config.fireworksApiKey,
+    model: config.opencodeModel,
   });
 
   let r2: RuntimeProviders["r2"];

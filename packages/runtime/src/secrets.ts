@@ -5,28 +5,21 @@ import type { RuntimeProviderConfig } from "./providers";
 
 const runtimeSecretsSchema = z.object({
   DATABASE_URL: z.string().min(1),
-  AI_GATEWAY_API_KEY: z.string().min(1),
+  FIREWORKS_API_KEY: z.string().min(1),
   SLACK_BOT_TOKEN: z.string().min(1),
-  VERCEL_TOKEN: z.string().optional(),
-  LINEAR_API_KEY: z.string().optional(),
+  E2B_API_KEY: z.string().optional(),
   COMPOSIO_API_KEY: z.string().optional(),
+  OPENCODE_MODEL: z.string().optional(),
 });
 
 export type RuntimeSecrets = {
   databaseUrl: string;
-  gatewayApiKey: string;
+  fireworksApiKey: string;
   slackBotToken: string;
-  vercelToken?: string;
-  linearApiKey?: string;
+  e2bApiKey?: string;
   composioApiKey?: string;
+  opencodeModel?: string;
   r2?: R2Config;
-};
-
-export type RuntimeProviderSelectors = {
-  vercelTeamId?: string;
-  vercelProjectId?: string;
-  connectorLinear?: string;
-  connectorSlack?: string;
 };
 
 export function loadRuntimeSecrets(): RuntimeSecrets {
@@ -43,28 +36,22 @@ export function loadRuntimeSecrets(): RuntimeSecrets {
 
   return {
     databaseUrl: env.DATABASE_URL,
-    gatewayApiKey: env.AI_GATEWAY_API_KEY,
+    fireworksApiKey: env.FIREWORKS_API_KEY,
     slackBotToken: env.SLACK_BOT_TOKEN,
-    vercelToken: env.VERCEL_TOKEN,
-    linearApiKey: env.LINEAR_API_KEY,
+    e2bApiKey: env.E2B_API_KEY,
     composioApiKey: env.COMPOSIO_API_KEY,
+    opencodeModel: env.OPENCODE_MODEL,
     ...(r2 ? { r2 } : {}),
   };
 }
 
-export function buildRuntimeProviderConfig(
-  secrets: RuntimeSecrets,
-  selectors: RuntimeProviderSelectors,
-): RuntimeProviderConfig {
+export function buildRuntimeProviderConfig(secrets: RuntimeSecrets): RuntimeProviderConfig {
   const config: RuntimeProviderConfig = {
     slackBotToken: secrets.slackBotToken,
-    vercelToken: secrets.vercelToken,
-    vercelTeamId: selectors.vercelTeamId,
-    vercelProjectId: selectors.vercelProjectId,
-    connectorLinear: selectors.connectorLinear,
-    connectorSlack: selectors.connectorSlack,
-    linearApiKey: secrets.linearApiKey,
     composioApiKey: secrets.composioApiKey,
+    e2bApiKey: secrets.e2bApiKey,
+    fireworksApiKey: secrets.fireworksApiKey,
+    opencodeModel: secrets.opencodeModel,
   };
 
   if (secrets.r2) {

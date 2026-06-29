@@ -19,10 +19,10 @@
     "@tags/storage": "workspace:*",
     "@tags/ui": "workspace:*",
     "drizzle-orm": "^0.44.2",
+    "inngest": "^4.11.0",
     "next": "^15.3.3",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
-    "workflow": "^4.5.0",
     "zod": "^3.25.51"
   },
   "devDependencies": {

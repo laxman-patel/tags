@@ -25,8 +25,7 @@ export default function NewSpacePage() {
           "search_memory",
           "save_memory",
           "create_artifact",
-          "create_linear_issue",
-          "run_sandbox_command",
+          "run_coding_agent",
         ],
       }),
     });

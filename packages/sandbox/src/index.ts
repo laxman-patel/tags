@@ -1,6 +1,6 @@
-export { createSandboxProvider, type SandboxProviderConfig } from "./vercel-provider";
+export { createSandboxProvider, type SandboxProviderConfig } from "./e2b-provider";
 export type {
-  SandboxCommandResult,
+  CodingAgentRequest,
+  CodingAgentResult,
   SandboxProvider,
-  SandboxSession,
 } from "./types";

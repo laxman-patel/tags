@@ -1,4 +1,4 @@
-import { createGateway } from "@ai-sdk/gateway";
+import { createFireworks } from "@ai-sdk/fireworks";
 import { tool, isStepCount, streamText } from "ai";
 import type { TagsEvent } from "@tags/core/events";
 import { checkSpaceBudget } from "@tags/core/policies";
@@ -25,7 +25,7 @@ import { toolIdempotencyKey, type TagsTool, type ToolContext } from "../tools/ty
 export type AgentLoopArgs = {
   db: Db;
   slack: import("@slack/web-api").WebClient;
-  gatewayApiKey: string;
+  fireworksApiKey: string;
   runId: string;
   spaceId: string;
   workspaceId: string;
@@ -49,7 +49,7 @@ export async function runAgentSegment(args: AgentLoopArgs): Promise<AgentSegment
     throw new Error(`No active space config for space ${args.spaceId}`);
   }
 
-  const gateway = createGateway({ apiKey: args.gatewayApiKey });
+  const fireworks = createFireworks({ apiKey: args.fireworksApiKey });
   const stream = new SlackStreamAdapter(
     args.slack,
     args.channelId,
@@ -106,16 +106,40 @@ export async function runAgentSegment(args: AgentLoopArgs): Promise<AgentSegment
     ...(composio?.tools ?? {}),
   } as Parameters<typeof streamText>[0]["tools"];
 
+  // Native TagsTools emit their own tool.started/finished events (with approval,
+  // idempotency, and audit) inside buildAiTools. Composio tools self-execute, so
+  // we surface only those in the run timeline via the streamText callbacks below.
+  const nativeToolNames = new Set(tagsTools.map((tagsTool) => tagsTool.name));
+
   const instructions = buildSystemPrompt(config.instructions, args.spaceName);
 
   try {
     const result = streamText({
-      model: gateway(config.modelId),
+      model: fireworks(config.modelId),
       instructions,
       messages,
       tools,
       stopWhen: isStepCount(config.maxSteps),
       reasoning: reasoningEffortFor(config.reasoning),
+      onToolExecutionStart: async ({ toolCall }) => {
+        if (!nativeToolNames.has(toolCall.toolName)) {
+          await emit({
+            type: "tool.started",
+            toolName: toolCall.toolName,
+            inputPreview: toolCall.input,
+          });
+        }
+      },
+      onToolExecutionEnd: async ({ toolCall, toolOutput }) => {
+        if (!nativeToolNames.has(toolCall.toolName)) {
+          await emit({
+            type: "tool.finished",
+            toolName: toolCall.toolName,
+            outputPreview:
+              toolOutput.type === "tool-result" ? toolOutput.output : { error: true },
+          });
+        }
+      },
       onChunk: async ({ chunk }) => {
         if (chunk.type === "text-delta") {
           await emit({ type: "text.delta", text: chunk.text });

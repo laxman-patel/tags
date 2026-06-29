@@ -1,15 +1,12 @@
 import type { NextConfig } from "next";
-import { withWorkflow } from "workflow/next";
 
 const nextConfig: NextConfig = {
   serverExternalPackages: [
-    "@vercel/connect",
-    "@vercel/oidc",
-    "@vercel/sandbox",
     "@aws-sdk/client-s3",
     "@opentelemetry/api",
     "@composio/core",
     "@ai-sdk/mcp",
+    "e2b",
     "semver",
   ],
   transpilePackages: [
@@ -24,4 +21,4 @@ const nextConfig: NextConfig = {
   ],
 };
 
-export default withWorkflow(nextConfig);
+export default nextConfig;

@@ -10,6 +10,6 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@vercel/sandbox": "^2.2.1"
+    "e2b": "^2.31.0"
   }
 }

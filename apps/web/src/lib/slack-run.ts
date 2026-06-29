@@ -1,8 +1,6 @@
 import { resolveSpaceByChannel } from "@tags/core/spaces";
-import { tagsRunWorkflow } from "@tags/runtime";
-import { start } from "workflow/api";
+import { inngest, RUN_REQUESTED_EVENT, type TagsRunInput } from "@tags/runtime";
 import type { Env } from "@/env";
-import { getWorkflowEnvExtras } from "@/env";
 import { getDb } from "@/lib/db";
 
 export type SlackTrigger = {
@@ -23,26 +21,24 @@ export async function startRunFromSlack(env: Env, trigger: SlackTrigger) {
   if (!resolved) return { ok: false as const, reason: "no_space" };
 
   const idempotencyKey = `slack:${trigger.teamId}:${trigger.channelId}:${trigger.eventId}`;
-  const extras = getWorkflowEnvExtras(env);
 
-  await start(tagsRunWorkflow, [
-    {
-      organizationId: resolved.space.organizationId,
-      workspaceId: resolved.workspace.id,
-      spaceId: resolved.space.id,
-      spaceName: resolved.space.name,
-      channelId: trigger.channelId,
-      teamId: trigger.teamId,
-      threadTs: trigger.threadTs,
-      rootMessageTs: trigger.rootTs,
-      triggerText: trigger.text || "Hello Tags",
-      triggerMessageTs: trigger.messageTs,
-      actorSlackUserId: trigger.actorSlackUserId,
-      idempotencyKey,
-      appUrl: env.NEXT_PUBLIC_APP_URL,
-      ...extras,
-    },
-  ]);
+  const data: TagsRunInput = {
+    organizationId: resolved.space.organizationId,
+    workspaceId: resolved.workspace.id,
+    spaceId: resolved.space.id,
+    spaceName: resolved.space.name,
+    channelId: trigger.channelId,
+    teamId: trigger.teamId,
+    threadTs: trigger.threadTs,
+    rootMessageTs: trigger.rootTs,
+    triggerText: trigger.text || "Hello Tags",
+    triggerMessageTs: trigger.messageTs,
+    actorSlackUserId: trigger.actorSlackUserId,
+    idempotencyKey,
+    appUrl: env.NEXT_PUBLIC_APP_URL,
+  };
+
+  await inngest.send({ name: RUN_REQUESTED_EVENT, data });
 
   return { ok: true as const };
 }

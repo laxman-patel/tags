@@ -51,7 +51,7 @@ export async function createSpaceWithConfig(db: Db, input: CreateSpaceInput) {
     version: 1,
     modelId: input.modelId,
     instructions: input.instructions,
-    enabledTools: input.enabledTools ?? ["search_thread", "create_linear_issue"],
+    enabledTools: input.enabledTools ?? ["search_thread", "create_artifact"],
     isActive: true,
   });
 

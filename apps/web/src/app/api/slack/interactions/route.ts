@@ -1,7 +1,7 @@
 import { resolveApprovalByRequestId } from "@tags/core/runs";
 import { canApprove } from "@tags/core/policies";
 import { recordAuditEvent } from "@tags/core/audit";
-import { approvalHook } from "@tags/runtime";
+import { inngest, APPROVAL_RESOLVED_EVENT } from "@tags/runtime";
 import { getEnv } from "@/env";
 import { getDb } from "@/lib/db";
 
@@ -92,7 +92,7 @@ export async function POST(request: Request) {
     payload: { approvalId: approval.id, decision, slackUserId: payload.user.id },
   });
 
-  await approvalHook.resume(requestId, { decision });
+  await inngest.send({ name: APPROVAL_RESOLVED_EVENT, data: { requestId, decision } });
 
   return Response.json({
     response_type: "ephemeral",

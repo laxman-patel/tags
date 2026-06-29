@@ -1,5 +1,5 @@
 import { resolveApprovalRequest } from "@tags/core/runs";
-import { approvalHook } from "@tags/runtime";
+import { inngest, APPROVAL_RESOLVED_EVENT } from "@tags/runtime";
 import { recordAuditEvent } from "@tags/core/audit";
 import { adminUnauthorizedResponse, isAdminAuthorized } from "@/lib/admin-auth";
 import { getDb } from "@/lib/db";
@@ -28,6 +28,9 @@ export async function POST(
     payload: { approvalId, decision: body.decision, source: "web" },
   });
 
-  await approvalHook.resume(resolved.requestId, { decision: body.decision });
+  await inngest.send({
+    name: APPROVAL_RESOLVED_EVENT,
+    data: { requestId: resolved.requestId, decision: body.decision },
+  });
   return Response.json({ ok: true });
 }

@@ -1,54 +1,20 @@
-import { createConnectCredentialProvider } from "./connect-provider";
 import { createDirectCredentialProvider } from "./direct-provider";
 import type { CredentialProvider } from "./types";
 
 export type CredentialProviderConfig = {
-  connectorMap?: Record<string, string>;
   directSecrets?: Record<string, string>;
-  vercelToken?: string;
-  oidcToken?: string;
 };
 
+/**
+ * Builds a CredentialProvider for app-level secrets (e.g. the Slack bot token).
+ *
+ * Third-party OAuth integrations (GitHub, Gmail, Linear, …) are handled by
+ * Composio's hosted connected-accounts layer, not here. This provider only
+ * serves direct, app-owned secrets passed in via config.
+ */
 export function createCredentialProvider(config: CredentialProviderConfig): CredentialProvider {
-  const connectorMap = config.connectorMap ?? {};
-  const directSecrets = config.directSecrets ?? {};
-  const connectAuthAvailable = Boolean(config.oidcToken || config.vercelToken);
-
-  const connectProvider =
-    Object.keys(connectorMap).length > 0 && connectAuthAvailable
-      ? createConnectCredentialProvider({
-          connectorMap,
-          vercelToken: config.vercelToken,
-          oidcToken: config.oidcToken,
-        })
-      : null;
-
-  const directProvider = createDirectCredentialProvider(directSecrets);
-
-  return {
-    async getToken(args) {
-      const connector = connectorMap[args.connectionId];
-      const directSecret = directSecrets[args.connectionId];
-
-      if (connector && connectProvider) {
-        return connectProvider.getToken(args);
-      }
-
-      if (directSecret) {
-        return directProvider.getToken(args);
-      }
-
-      if (connector && !connectAuthAvailable) {
-        throw new Error(
-          `Connect connector configured for ${args.connectionId} but no OIDC or Vercel token supplied`,
-        );
-      }
-
-      throw new Error(`No credential configured for ${args.connectionId}`);
-    },
-  };
+  return createDirectCredentialProvider(config.directSecrets ?? {});
 }
 
-export { createConnectCredentialProvider } from "./connect-provider";
 export { createDirectCredentialProvider } from "./direct-provider";
 export type { ConnectionId, CredentialProvider, ScopedToken } from "./types";
