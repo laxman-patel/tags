@@ -24,7 +24,7 @@ Open-source Claude Tag for teams — channel-native org harness built on **openc
 | 5 | Approval authorization + audit events |
 | 6 | Run timeline / tool trace depth |
 | 7 | Usage records + spend dashboard |
-| 8 | Schedules + cron trigger |
+| 8 | Schedules + Inngest cron tick |
 | 9 | Audit UI, export, redaction helpers |
 
 ## Quick start

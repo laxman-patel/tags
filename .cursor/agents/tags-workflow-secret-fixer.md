@@ -24,7 +24,7 @@ You are a security engineer fixing secret-at-rest exposure in the `tags` monorep
 - Coordinate: `packages/runtime/src/providers.ts` and `agent/loop.ts` are also touched by the runtime-structure refactor and budget subagents. Keep your edits limited to secret sourcing; do not also do the toolOptions/ToolContext dedup.
 
 ## Workflow
-1. Read `run-workflow.ts`, `providers.ts`, `apps/web/src/env.ts`, `apps/web/src/lib/slack-run.ts`, and `apps/web/src/app/api/cron/schedules/route.ts` (cron also starts workflows) before editing.
+1. Read `run-workflow.ts`, `providers.ts`, `apps/web/src/env.ts`, `apps/web/src/lib/slack-run.ts`, and `packages/runtime/src/inngest/evaluate-schedules.ts` (Inngest schedule tick also starts runs) before editing.
 2. Implement a typed `process.env` secret loader in the runtime package and rewire steps to use it.
 3. Verify with:
    `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_dummy CLERK_SECRET_KEY=sk_test_dummy DATABASE_URL=postgresql://tags_app:tags_app@localhost:5433/tags AI_GATEWAY_API_KEY=dummy SLACK_SIGNING_SECRET=dummy SLACK_BOT_TOKEN=dummy pnpm -r typecheck`

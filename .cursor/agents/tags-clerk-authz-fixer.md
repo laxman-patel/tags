@@ -14,10 +14,9 @@ You are a security-focused engineer hardening authorization in the `tags` monore
 - Fix: gate on an actual admin role, not mere sign-in. Prefer Clerk org roles via `const { has } = await auth(); return has({ role: 'org:admin' })`, OR map the Clerk user to the `users` table and require `role === 'admin' || role === 'owner'`. The codebase already does a role check in `canApprove` (`packages/core/src/policies.ts:42-57`) — reuse that pattern/shape. If no role system is wired yet, fall back to an explicit allowlist from env (e.g. `ADMIN_USER_IDS` / `ADMIN_EMAILS`) and document it. Keep `adminUnauthorizedResponse()` unchanged. Make sure `isAdminAuthorized()` stays callable with no args (all API routes call it as `isAdminAuthorized()`).
 - If you introduce a new env var, add it to `apps/web/src/env.ts` (optional unless required) and to `.env.example`. Do NOT read or print existing `.env` files.
 
-### L4 — Cron route is publicly callable when CRON_SECRET is unset
-- File: `apps/web/src/app/api/cron/schedules/route.ts`
-- Problem: the only gate is `if (cronSecret && auth !== ...)`, so when `CRON_SECRET` is unset the endpoint is open and can trigger paid runs. (This route is intentionally NOT behind the Clerk matcher — leave that as is.)
-- Fix: make the secret mandatory — reject (401) when `CRON_SECRET` is missing OR the provided header/bearer does not match. Add `CRON_SECRET` to `apps/web/src/env.ts` and `.env.example` if not present.
+### L4 — ~~Cron route is publicly callable when CRON_SECRET is unset~~ (removed)
+
+Schedule evaluation moved to Inngest (`schedule-tick` cron function in `packages/runtime/src/inngest/schedule-tick.ts`). The HTTP cron route was deleted.
 
 ## Workflow
 1. Read `apps/web/src/lib/admin-auth.ts`, `apps/web/src/components/auth-header.tsx`, `packages/core/src/policies.ts` (for the role pattern), and `apps/web/src/app/api/cron/schedules/route.ts` before editing.

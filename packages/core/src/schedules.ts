@@ -5,7 +5,7 @@ import { newId, schedules } from "@tags/db";
 
 export type ScheduleRow = typeof schedules.$inferSelect;
 
-/** Cron tick window — cron routes typically fire once per minute. */
+/** Cron tick window — the schedule evaluator runs once per minute. */
 const CRON_WINDOW_MS = 90_000;
 
 /**

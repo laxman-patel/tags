@@ -14,8 +14,6 @@ const envSchema = z.object({
   ADMIN_USER_IDS: z.string().optional(),
   /** Comma-separated emails allowed as admin when org roles are not configured. */
   ADMIN_EMAILS: z.string().optional(),
-  /** Bearer token required for /api/cron/schedules. */
-  CRON_SECRET: z.string().min(1),
   SENTRY_DSN: z.string().optional(),
   /** E2B sandbox API key (opencode coding agent). */
   E2B_API_KEY: z.string().optional(),
