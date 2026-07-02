@@ -22,6 +22,12 @@ async function seed() {
   const memoryPolicyId = newId();
 
   await sql`
+    insert into organizations (id, name)
+    values (${orgId}, 'Dev Organization')
+    on conflict do nothing
+  `;
+
+  await sql`
     insert into approval_policies (id, organization_id, name, require_admin_role, approver_allowlist, allow_self_approve, default_expiry_minutes)
     values (${approvalPolicyId}, ${orgId}, 'Default approval policy', false, '[]'::jsonb, false, 60)
   `;
@@ -34,12 +40,6 @@ async function seed() {
   await sql`
     insert into memory_policies (id, organization_id, name, allow_agent_proposed, require_approval_for_sensitive)
     values (${memoryPolicyId}, ${orgId}, 'Default memory policy', true, true)
-  `;
-
-  await sql`
-    insert into organizations (id, name)
-    values (${orgId}, 'Dev Organization')
-    on conflict do nothing
   `;
 
   const existingSpace = await sql<{ id: string }[]>`
@@ -82,7 +82,7 @@ async function seed() {
       ${orgId},
       ${spaceId},
       1,
-      ${process.env.SEED_MODEL_ID ?? "openai/gpt-4o-mini"},
+      ${process.env.SEED_MODEL_ID ?? "accounts/fireworks/models/kimi-k2-instruct"},
       'provider-default',
       ${defaultInstructions(channelName)},
       '[]'::jsonb,
