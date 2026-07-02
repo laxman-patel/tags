@@ -17,7 +17,7 @@ export async function withDbRlsScope<T>(
     await tx.execute(sql`select set_config('tags.organization_id', ${scope.organizationId}, true)`);
     await tx.execute(sql`select set_config('tags.space_id', ${scope.spaceId}, true)`);
     await tx.execute(sql`select set_config('tags.role', ${scope.role ?? "member"}, true)`);
-    return fn(tx as Db);
+    return fn(tx as unknown as Db);
   });
 }
 

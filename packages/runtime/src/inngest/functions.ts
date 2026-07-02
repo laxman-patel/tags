@@ -84,35 +84,41 @@ export const tagsRunFunction: InngestFunction.Any = inngest.createFunction(
       agentSegmentStep(input, setup),
     )) as AgentSegmentResult;
 
-    while (segment.kind === "approval_required" && segmentIndex < MAX_APPROVALS) {
+    while (segmentIndex < MAX_APPROVALS) {
+      if (segment.kind !== "approval_required") {
+        break;
+      }
+
+      const pendingApproval = segment;
+
       const resolved = await step.waitForEvent(`await-approval-${segmentIndex}`, {
         event: APPROVAL_RESOLVED_EVENT,
         timeout: "1h",
-        if: `async.data.requestId == "${segment.requestId}"`,
+        if: `async.data.requestId == "${pendingApproval.requestId}"`,
       });
 
       const approved = resolved?.data?.decision === "approved";
 
       if (approved) {
         const toolResult = (await step.run(`execute-approved-${segmentIndex}`, () =>
-          executeApprovedToolStep(input, setup, segment),
+          executeApprovedToolStep(input, setup, pendingApproval),
         )) as { modelOutput: unknown; uiCard?: UICard };
 
         segmentIndex += 1;
         segment = (await step.run(`resume-after-approval-${segmentIndex}`, () =>
-          resumeAfterApprovalStep(input, setup, segment, toolResult),
+          resumeAfterApprovalStep(input, setup, pendingApproval, toolResult),
         )) as AgentSegmentResult;
       } else {
         if (!resolved) {
           await step.run(`expire-approval-${segmentIndex}`, () =>
-            expireApprovalStep(segment.requestId),
+            expireApprovalStep(pendingApproval.requestId),
           );
         }
         await step.run(`reject-tool-${segmentIndex}`, () =>
           rejectToolStep({
             runId: setup.runId,
-            invocationId: segment.invocationId,
-            toolName: segment.toolName,
+            invocationId: pendingApproval.invocationId,
+            toolName: pendingApproval.toolName,
           }),
         );
         await step.run(`finalize-rejected-${segmentIndex}`, () =>
@@ -121,8 +127,8 @@ export const tagsRunFunction: InngestFunction.Any = inngest.createFunction(
             channelId: input.channelId,
             slackMessageTs: setup.slackMessageTs,
             summaryText: resolved
-              ? `Rejected ${segment.toolName}.`
-              : `Approval for ${segment.toolName} timed out.`,
+              ? `Rejected ${pendingApproval.toolName}.`
+              : `Approval for ${pendingApproval.toolName} timed out.`,
             appUrl: input.appUrl,
           }),
         );
