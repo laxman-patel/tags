@@ -22,24 +22,33 @@ async function seed() {
   const memoryPolicyId = newId();
 
   await sql`
-    insert into organizations (id, name, budget_policy_id)
-    values (${orgId}, 'Dev Organization', ${budgetPolicyId})
+    insert into organizations (id, name)
+    values (${orgId}, 'Dev Organization')
     on conflict do nothing
   `;
 
   await sql`
     insert into approval_policies (id, organization_id, name, require_admin_role, approver_allowlist, allow_self_approve, default_expiry_minutes)
     values (${approvalPolicyId}, ${orgId}, 'Default approval policy', false, '[]'::jsonb, false, 60)
+    on conflict do nothing
   `;
 
   await sql`
     insert into budget_policies (id, organization_id, name, monthly_budget_micro_usd, hard_limit)
     values (${budgetPolicyId}, ${orgId}, 'Default budget', 50000000, true)
+    on conflict do nothing
   `;
 
   await sql`
     insert into memory_policies (id, organization_id, name, allow_agent_proposed, require_approval_for_sensitive)
     values (${memoryPolicyId}, ${orgId}, 'Default memory policy', true, true)
+    on conflict do nothing
+  `;
+
+  await sql`
+    update organizations
+    set budget_policy_id = ${budgetPolicyId}
+    where id = ${orgId} and budget_policy_id is null
   `;
 
   const existingSpace = await sql<{ id: string }[]>`
