@@ -33,6 +33,7 @@ export class QuestionPauseError extends Error {
 
 export type AgentSegmentResult =
   | { kind: "complete"; text: string }
+  | { kind: "failed"; text: string }
   | {
       kind: "approval_required";
       requestId: string;

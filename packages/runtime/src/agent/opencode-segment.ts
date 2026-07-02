@@ -67,7 +67,7 @@ export async function runOpencodeSegment(
       finishedAt: new Date(),
     });
     await stream.finalize(message);
-    return { kind: "complete", text: message };
+    return { kind: "failed", text: message };
   }
 
   await updateRunStatus(args.db, args.runId, "streaming");

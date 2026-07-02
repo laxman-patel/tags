@@ -81,116 +81,133 @@ export const tagsRunFunction: InngestFunction.Any = inngest.createFunction(
     }
 
     let threadStatus: "done" | "failed" = "done";
-    let segmentIndex = 0;
-    let segment = (await step.run(`agent-segment-${segmentIndex}`, () =>
-      agentSegmentStep(input, setup),
-    )) as AgentSegmentResult;
 
-    while (segmentIndex < MAX_PAUSES) {
-      if (segment.kind === "approval_required") {
-        const pendingApproval = segment;
+    try {
+      let segmentIndex = 0;
+      let segment = (await step.run(`agent-segment-${segmentIndex}`, () =>
+        agentSegmentStep(input, setup),
+      )) as AgentSegmentResult;
 
-        const resolved = await step.waitForEvent(`await-approval-${segmentIndex}`, {
-          event: APPROVAL_RESOLVED_EVENT,
-          timeout: "1h",
-          if: `async.data.requestId == "${pendingApproval.requestId}"`,
-        });
-
-        const approved = resolved?.data?.decision === "approved";
-
-        if (approved) {
-          const toolResult = (await step.run(`execute-approved-${segmentIndex}`, () =>
-            executeApprovedToolStep(input, setup, pendingApproval),
-          )) as { modelOutput: unknown; uiCard?: UICard };
-
-          segmentIndex += 1;
-          segment = (await step.run(`resume-after-approval-${segmentIndex}`, () =>
-            resumeAfterApprovalStep(input, setup, pendingApproval, toolResult),
-          )) as AgentSegmentResult;
-        } else {
-          if (!resolved) {
-            await step.run(`expire-approval-${segmentIndex}`, () =>
-              expireApprovalStep(pendingApproval.requestId),
-            );
+      if (segment.kind !== "failed") {
+        while (segmentIndex < MAX_PAUSES) {
+          if (segment.kind === "failed") {
+            threadStatus = "failed";
+            break;
           }
-          await step.run(`reject-tool-${segmentIndex}`, () =>
-            rejectToolStep({
-              runId: setup.runId,
-              invocationId: pendingApproval.invocationId,
-              toolName: pendingApproval.toolName,
-            }),
-          );
-          await step.run(`finalize-rejected-${segmentIndex}`, () =>
-            finalizeRunStep({
-              runId: setup.runId,
-              channelId: input.channelId,
-              slackMessageTs: setup.slackMessageTs,
-              summaryText: resolved
-                ? `Rejected ${pendingApproval.toolName}.`
-                : `Approval for ${pendingApproval.toolName} timed out.`,
-              appUrl: input.appUrl,
-            }),
-          );
-          threadStatus = "failed";
+
+          if (segment.kind === "approval_required") {
+            const pendingApproval = segment;
+
+            const resolved = await step.waitForEvent(`await-approval-${segmentIndex}`, {
+              event: APPROVAL_RESOLVED_EVENT,
+              timeout: "1h",
+              if: `async.data.requestId == "${pendingApproval.requestId}"`,
+            });
+
+            const approved = resolved?.data?.decision === "approved";
+
+            if (approved) {
+              const toolResult = (await step.run(`execute-approved-${segmentIndex}`, () =>
+                executeApprovedToolStep(input, setup, pendingApproval),
+              )) as { modelOutput: unknown; uiCard?: UICard };
+
+              segmentIndex += 1;
+              segment = (await step.run(`resume-after-approval-${segmentIndex}`, () =>
+                resumeAfterApprovalStep(input, setup, pendingApproval, toolResult),
+              )) as AgentSegmentResult;
+            } else {
+              if (!resolved) {
+                await step.run(`expire-approval-${segmentIndex}`, () =>
+                  expireApprovalStep(pendingApproval.requestId),
+                );
+              }
+              await step.run(`reject-tool-${segmentIndex}`, () =>
+                rejectToolStep({
+                  runId: setup.runId,
+                  invocationId: pendingApproval.invocationId,
+                  toolName: pendingApproval.toolName,
+                }),
+              );
+              await step.run(`finalize-rejected-${segmentIndex}`, () =>
+                finalizeRunStep({
+                  runId: setup.runId,
+                  channelId: input.channelId,
+                  slackMessageTs: setup.slackMessageTs,
+                  summaryText: resolved
+                    ? `Rejected ${pendingApproval.toolName}.`
+                    : `Approval for ${pendingApproval.toolName} timed out.`,
+                  appUrl: input.appUrl,
+                }),
+              );
+              threadStatus = "failed";
+              break;
+            }
+            continue;
+          }
+
+          if (segment.kind === "question_required") {
+            const pendingQuestion = segment;
+
+            const answered = await step.waitForEvent(`await-question-${segmentIndex}`, {
+              event: QUESTION_ANSWERED_EVENT,
+              timeout: "1h",
+              if: `async.data.requestId == "${pendingQuestion.requestId}"`,
+            });
+
+            if (answered?.data?.answer) {
+              await step.run(`complete-question-${segmentIndex}`, () =>
+                completeQuestionStep(setup.runId, pendingQuestion, answered.data.answer as string),
+              );
+
+              segmentIndex += 1;
+              segment = (await step.run(`resume-after-question-${segmentIndex}`, () =>
+                resumeAfterQuestionStep(input, setup, pendingQuestion, answered.data.answer as string),
+              )) as AgentSegmentResult;
+            } else {
+              await step.run(`expire-question-${segmentIndex}`, () =>
+                expireQuestionStep(pendingQuestion.requestId),
+              );
+              await step.run(`reject-question-tool-${segmentIndex}`, () =>
+                rejectToolStep({
+                  runId: setup.runId,
+                  invocationId: pendingQuestion.invocationId,
+                  toolName: "ask_user",
+                }),
+              );
+              await step.run(`finalize-question-timeout-${segmentIndex}`, () =>
+                finalizeRunStep({
+                  runId: setup.runId,
+                  channelId: input.channelId,
+                  slackMessageTs: setup.slackMessageTs,
+                  summaryText: "Question timed out without an answer.",
+                  appUrl: input.appUrl,
+                }),
+              );
+              threadStatus = "failed";
+              break;
+            }
+            continue;
+          }
+
           break;
         }
-        continue;
-      }
 
-      if (segment.kind === "question_required") {
-        const pendingQuestion = segment;
-
-        const answered = await step.waitForEvent(`await-question-${segmentIndex}`, {
-          event: QUESTION_ANSWERED_EVENT,
-          timeout: "1h",
-          if: `async.data.requestId == "${pendingQuestion.requestId}"`,
-        });
-
-        if (answered?.data?.answer) {
-          await step.run(`complete-question-${segmentIndex}`, () =>
-            completeQuestionStep(setup.runId, pendingQuestion, answered.data.answer as string),
-          );
-
-          segmentIndex += 1;
-          segment = (await step.run(`resume-after-question-${segmentIndex}`, () =>
-            resumeAfterQuestionStep(input, setup, pendingQuestion, answered.data.answer as string),
-          )) as AgentSegmentResult;
-        } else {
-          await step.run(`expire-question-${segmentIndex}`, () =>
-            expireQuestionStep(pendingQuestion.requestId),
-          );
-          await step.run(`reject-question-tool-${segmentIndex}`, () =>
-            rejectToolStep({
-              runId: setup.runId,
-              invocationId: pendingQuestion.invocationId,
-              toolName: "ask_user",
-            }),
-          );
-          await step.run(`finalize-question-timeout-${segmentIndex}`, () =>
-            finalizeRunStep({
-              runId: setup.runId,
-              channelId: input.channelId,
-              slackMessageTs: setup.slackMessageTs,
-              summaryText: "Question timed out without an answer.",
-              appUrl: input.appUrl,
-            }),
-          );
+        if (segment.kind === "failed") {
           threadStatus = "failed";
-          break;
+        } else if (segment.kind === "approval_required" || segment.kind === "question_required") {
+          threadStatus = "failed";
         }
-        continue;
+      } else {
+        threadStatus = "failed";
       }
-
-      break;
-    }
-
-    if (segment.kind === "approval_required" || segment.kind === "question_required") {
+    } catch {
       threadStatus = "failed";
+      throw;
+    } finally {
+      await step.run("release-thread", () =>
+        releaseThreadStep(setup.threadId, setup.runId, threadStatus),
+      );
     }
-
-    await step.run("release-thread", () =>
-      releaseThreadStep(setup.threadId, setup.runId, threadStatus),
-    );
 
     return { runId: setup.runId };
   },

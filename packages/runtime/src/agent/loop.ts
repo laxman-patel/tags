@@ -84,7 +84,7 @@ export async function runAgentSegment(args: AgentLoopArgs): Promise<AgentSegment
       finishedAt: new Date(),
     });
     await stream.finalize(message);
-    return { kind: "complete", text: message };
+    return { kind: "failed", text: message };
   }
 
   const providers = await createRuntimeProviders(args.providerConfig);
