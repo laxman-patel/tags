@@ -9,6 +9,7 @@ import { newId, usageRecords } from "@tags/db";
  */
 const MODEL_COST_RATES: Record<string, { input: number; output: number }> = {
   "accounts/fireworks/models/kimi-k2-instruct": { input: 60_000, output: 250_000 },
+  "accounts/fireworks/routers/glm-5p2-fast": { input: 100_000, output: 200_000 },
   "openai/gpt-4o-mini": { input: 150_000, output: 600_000 },
   "openai/gpt-4o": { input: 2_500_000, output: 10_000_000 },
 };

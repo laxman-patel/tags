@@ -91,7 +91,7 @@ async function seed() {
       ${orgId},
       ${spaceId},
       1,
-      ${process.env.SEED_MODEL_ID ?? "accounts/fireworks/models/kimi-k2-instruct"},
+      ${process.env.SEED_MODEL_ID ?? "accounts/fireworks/routers/glm-5p2-fast"},
       'provider-default',
       ${defaultInstructions(channelName)},
       '[]'::jsonb,

@@ -26,6 +26,8 @@ export async function findOrCreateThread(
   if (existing[0]) return existing[0];
 
   const id = newId();
+  // Concurrent Slack events for the same thread can race past the select above;
+  // on conflict, defer to the row the other insert created.
   const [row] = await db
     .insert(threads)
     .values({
@@ -37,10 +39,26 @@ export async function findOrCreateThread(
       createdByUserId: args.createdByUserId,
       status: "open",
     })
+    .onConflictDoNothing({
+      target: [threads.spaceId, threads.providerThreadId],
+    })
     .returning();
 
-  if (!row) throw new Error("Failed to create thread");
-  return row;
+  if (row) return row;
+
+  const winner = await db
+    .select()
+    .from(threads)
+    .where(
+      and(
+        eq(threads.spaceId, args.spaceId),
+        eq(threads.providerThreadId, args.providerThreadId),
+      ),
+    )
+    .limit(1);
+
+  if (!winner[0]) throw new Error("Failed to create thread");
+  return winner[0];
 }
 
 export async function upsertMessage(

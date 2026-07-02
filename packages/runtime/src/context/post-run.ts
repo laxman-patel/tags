@@ -10,7 +10,7 @@ import {
 import type { Db } from "@tags/db";
 
 const SUMMARY_THRESHOLD = 20;
-const SUMMARY_MODEL = "accounts/fireworks/models/kimi-k2-instruct";
+const SUMMARY_MODEL = "accounts/fireworks/routers/glm-5p2-fast";
 
 export async function maybeSummarizeThread(
   db: Db,

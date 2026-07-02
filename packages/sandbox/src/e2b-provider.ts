@@ -29,10 +29,27 @@ function shellQuote(value: string): string {
   return `'${value.replace(/'/g, "'\\''")}'`;
 }
 
+/**
+ * opencode expects `provider/model` ids (e.g. `fireworks-ai/accounts/fireworks/models/glm-5p2`),
+ * while the rest of Tags stores bare Fireworks ids (`accounts/fireworks/...`). Passing a bare id
+ * makes opencode treat `accounts` as the provider and fail with an opaque UnknownError.
+ */
+export function toOpencodeModelId(model: string): string {
+  return model.startsWith("accounts/") ? `fireworks-ai/${model}` : model;
+}
+
 type CommandLike = { stdout?: string; stderr?: string; exitCode?: number };
 
+/** opencode writes terminal color codes; strip them so Slack/DB output stays readable. */
+// eslint-disable-next-line no-control-regex
+const ANSI_PATTERN = /\u001b\[[0-9;]*m/g;
+
+function stripAnsi(value: string): string {
+  return value.replace(ANSI_PATTERN, "");
+}
+
 function combineOutput(result: CommandLike): string {
-  return `${result.stdout ?? ""}\n${result.stderr ?? ""}`.trim();
+  return stripAnsi(`${result.stdout ?? ""}\n${result.stderr ?? ""}`).trim();
 }
 
 export function createSandboxProvider(config: SandboxProviderConfig = {}): SandboxProvider {
@@ -67,13 +84,16 @@ export function createSandboxProvider(config: SandboxProviderConfig = {}): Sandb
         }
 
         const cwd = request.repoUrl ? REPO_PATH : WORKDIR;
-        const model = request.model ?? config.model ?? "accounts/fireworks/models/kimi-k2-instruct";
+        const model = toOpencodeModelId(
+          request.model ?? config.model ?? "accounts/fireworks/routers/glm-5p2-fast",
+        );
         const command = `opencode run --model ${shellQuote(model)} ${shellQuote(request.prompt)}`;
 
         const appendStream = async (chunk: string) => {
-          streamed += chunk;
-          if (request.onOutput) {
-            await request.onOutput(chunk);
+          const clean = stripAnsi(chunk);
+          streamed += clean;
+          if (request.onOutput && clean) {
+            await request.onOutput(clean);
           }
         };
 
