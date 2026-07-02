@@ -201,9 +201,9 @@ export const tagsRunFunction: InngestFunction.Any = inngest.createFunction(
       } else {
         threadStatus = "failed";
       }
-    } catch {
+    } catch (error) {
       threadStatus = "failed";
-      throw;
+      throw error;
     } finally {
       await step.run("release-thread", () =>
         releaseThreadStep(setup.threadId, setup.runId, threadStatus),
