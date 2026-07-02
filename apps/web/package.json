@@ -10,8 +10,8 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@aws-sdk/client-s3": "^3.1075.0",
-    "@clerk/nextjs": "^7.5.9",
+    "@aws-sdk/client-s3": "^3.1078.0",
+    "@clerk/nextjs": "^7.5.12",
     "@tags/core": "workspace:*",
     "@tags/db": "workspace:*",
     "@tags/runtime": "workspace:*",

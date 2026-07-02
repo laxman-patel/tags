@@ -14,7 +14,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@slack/web-api": "^7.9.2",
+    "@slack/web-api": "^7.18.0",
     "@tags/core": "workspace:*",
     "@tags/db": "workspace:*"
   }
