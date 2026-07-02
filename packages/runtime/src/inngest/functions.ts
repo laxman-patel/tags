@@ -19,6 +19,7 @@ import {
   updateMessage,
 } from "@tags/slack";
 import { parseRememberCommand } from "../context/builder";
+import { setSentryRunContext } from "../observability/sentry";
 import { syncSlackThreadToDb } from "@tags/slack/sync-thread";
 import { saveMemory } from "@tags/core/memory";
 import {
@@ -331,6 +332,12 @@ async function ingestStep(input: TagsRunInput): Promise<RunSetup> {
     threadTs,
     "Tags is working…",
   );
+
+  setSentryRunContext({
+    organizationId: input.organizationId,
+    spaceId: input.spaceId,
+    runId: run.id,
+  });
 
   return {
     runId: run.id,

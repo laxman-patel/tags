@@ -1,5 +1,7 @@
 import * as Sentry from "@sentry/nextjs";
 
+export { setSentryRunContext } from "@tags/runtime/observability/sentry";
+
 export async function register() {
   if (process.env.NEXT_RUNTIME === "nodejs") {
     const { getEnv } = await import("./env");
@@ -18,16 +20,4 @@ export async function register() {
       });
     }
   }
-}
-
-export function setSentryRunContext(context: {
-  organizationId?: string;
-  spaceId?: string;
-  runId?: string;
-}) {
-  Sentry.setTags({
-    ...(context.organizationId ? { organization_id: context.organizationId } : {}),
-    ...(context.spaceId ? { space_id: context.spaceId } : {}),
-    ...(context.runId ? { run_id: context.runId } : {}),
-  });
 }
