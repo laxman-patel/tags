@@ -19,7 +19,7 @@
     "@tags/slack": "workspace:*",
     "@tags/storage": "workspace:*",
     "@tags/ui": "workspace:*",
-    "drizzle-orm": "^0.44.2",
+    "drizzle-orm": "^0.45.2",
     "inngest": "^4.11.0",
     "next": "^15.3.3",
     "react": "^19.1.0",

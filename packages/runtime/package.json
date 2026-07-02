@@ -22,7 +22,7 @@
     "@tags/slack": "workspace:*",
     "@tags/storage": "workspace:*",
     "ai": "^7.0.11",
-    "drizzle-orm": "^0.44.2",
+    "drizzle-orm": "^0.45.2",
     "inngest": "^4.11.0",
     "zod": "^3.25.51"
   }

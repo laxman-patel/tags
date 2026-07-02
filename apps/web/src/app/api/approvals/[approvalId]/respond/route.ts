@@ -15,8 +15,7 @@ export async function POST(
   const body = (await request.json()) as { decision: "approved" | "rejected" };
   const db = getDb();
 
-  const { approvalRequests } = await import("@tags/db");
-  const { eq } = await import("drizzle-orm");
+  const { approvalRequests, eq } = await import("@tags/db");
   const pending = await db
     .select()
     .from(approvalRequests)
