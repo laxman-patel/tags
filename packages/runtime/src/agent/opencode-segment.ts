@@ -13,6 +13,7 @@ import {
 import type { AgentSegmentResult } from "./types";
 import { buildOpencodePrompt } from "./prompt";
 import { buildThreadContext } from "../context/builder";
+import { maybeExtractMemories, maybeSummarizeThread } from "../context/post-run";
 import {
   createRuntimeProviders,
   type RuntimeProviderConfig,
@@ -93,6 +94,7 @@ export async function runOpencodeSegment(
     const result = await providers.sandbox.runCodingAgent({
       prompt,
       model: config.modelId,
+      repoUrl: config.repoUrl ?? undefined,
       onOutput: async (chunk) => {
         await emit({ type: "text.delta", text: chunk });
       },
@@ -149,6 +151,19 @@ export async function runOpencodeSegment(
       modelId: config.modelId,
       promptTokens,
       completionTokens,
+    });
+
+    await maybeSummarizeThread(args.db, {
+      threadId: args.threadId,
+      organizationId: args.organizationId,
+      spaceId: args.spaceId,
+      fireworksApiKey: args.providerConfig.fireworksApiKey ?? "",
+    });
+    await maybeExtractMemories(args.db, {
+      threadId: args.threadId,
+      organizationId: args.organizationId,
+      spaceId: args.spaceId,
+      fireworksApiKey: args.providerConfig.fireworksApiKey ?? "",
     });
 
     return { kind: "complete", text: replyText };

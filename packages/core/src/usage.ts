@@ -32,6 +32,8 @@ function estimateCostMicroUsd(
   );
 }
 
+export { estimateCostMicroUsd };
+
 export function startOfCurrentMonth(): Date {
   const now = new Date();
   return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
@@ -43,6 +45,23 @@ export async function getMonthlySpendMicroUsd(db: Db, spaceId: string): Promise<
     .from(usageRecords)
     .where(
       and(eq(usageRecords.spaceId, spaceId), gte(usageRecords.createdAt, startOfCurrentMonth())),
+    );
+
+  return Number(agg[0]?.total ?? 0);
+}
+
+export async function getOrgMonthlySpendMicroUsd(
+  db: Db,
+  organizationId: string,
+): Promise<number> {
+  const agg = await db
+    .select({ total: sum(usageRecords.costMicroUsd) })
+    .from(usageRecords)
+    .where(
+      and(
+        eq(usageRecords.organizationId, organizationId),
+        gte(usageRecords.createdAt, startOfCurrentMonth()),
+      ),
     );
 
   return Number(agg[0]?.total ?? 0);

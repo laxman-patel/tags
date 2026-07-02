@@ -14,9 +14,10 @@ import { loadActiveSpaceConfig } from "@tags/core/spaces";
 import { recordUsage } from "@tags/core/usage";
 import type { Db } from "@tags/db";
 import { SlackStreamAdapter, buildRunLinkBlock, updateMessage } from "@tags/slack";
-import { ApprovalPauseError, type AgentSegmentResult } from "./types";
+import { ApprovalPauseError, QuestionPauseError, type AgentSegmentResult } from "./types";
 import { buildSystemPrompt, reasoningEffortFor } from "./prompt";
 import { buildThreadContext } from "../context/builder";
+import { maybeExtractMemories, maybeSummarizeThread } from "../context/post-run";
 import { createRuntimeProviders, type RuntimeProviderConfig } from "../providers";
 import { loadComposioTools, type ComposioToolsHandle } from "../tools/composio";
 import { wrapComposioToolsWithApproval } from "../tools/composio-governance";
@@ -199,12 +200,33 @@ export async function runAgentSegment(args: AgentLoopArgs): Promise<AgentSegment
       completionTokens: usage?.outputTokens ?? 0,
     });
 
+    await maybeSummarizeThread(args.db, {
+      threadId: args.threadId,
+      organizationId: args.organizationId,
+      spaceId: args.spaceId,
+      fireworksApiKey: args.fireworksApiKey,
+    });
+    await maybeExtractMemories(args.db, {
+      threadId: args.threadId,
+      organizationId: args.organizationId,
+      spaceId: args.spaceId,
+      fireworksApiKey: args.fireworksApiKey,
+    });
+
     return { kind: "complete", text: fullText };
   } catch (error) {
     if (error instanceof ApprovalPauseError) {
       await updateRunStatus(args.db, args.runId, "waiting");
       return {
         kind: "approval_required",
+        ...error.payload,
+      };
+    }
+
+    if (error instanceof QuestionPauseError) {
+      await updateRunStatus(args.db, args.runId, "waiting");
+      return {
+        kind: "question_required",
         ...error.payload,
       };
     }

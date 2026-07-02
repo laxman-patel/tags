@@ -1,4 +1,4 @@
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, count, eq } from "drizzle-orm";
 import type { Db } from "@tags/db";
 import { messages, newId, threads, withDbRlsScope } from "@tags/db";
 
@@ -97,6 +97,25 @@ export async function getThreadById(db: Db, threadId: string) {
     .where(eq(threads.id, threadId))
     .limit(1);
   return rows[0];
+}
+
+export async function countThreadMessages(db: Db, threadId: string): Promise<number> {
+  const rows = await db
+    .select({ total: count() })
+    .from(messages)
+    .where(eq(messages.threadId, threadId));
+  return Number(rows[0]?.total ?? 0);
+}
+
+export async function updateThreadSummary(
+  db: Db,
+  threadId: string,
+  summary: { text: string; updatedAt: string },
+): Promise<void> {
+  await db
+    .update(threads)
+    .set({ summary, updatedAt: new Date() })
+    .where(eq(threads.id, threadId));
 }
 
 export async function listThreadMessages(

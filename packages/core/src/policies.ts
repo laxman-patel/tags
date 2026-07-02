@@ -1,7 +1,7 @@
 import { and, eq } from "drizzle-orm";
 import type { Db } from "@tags/db";
-import { approvalPolicies, budgetPolicies, memoryPolicies, newId, spaces } from "@tags/db";
-import { getMonthlySpendMicroUsd } from "./usage";
+import { approvalPolicies, budgetPolicies, memoryPolicies, newId, organizations, spaces } from "@tags/db";
+import { getMonthlySpendMicroUsd, getOrgMonthlySpendMicroUsd } from "./usage";
 
 export async function getApprovalPolicyForSpace(db: Db, spaceId: string) {
   const { spaces } = await import("@tags/db");
@@ -94,6 +94,18 @@ export async function createDefaultPolicies(db: Db, organizationId: string) {
   return { approvalId, budgetId, memoryId };
 }
 
+export async function getMemoryPolicyForSpace(db: Db, spaceId: string) {
+  const space = await db.select().from(spaces).where(eq(spaces.id, spaceId)).limit(1);
+  const policyId = space[0]?.memoryPolicyId;
+  if (!policyId) return null;
+  const rows = await db
+    .select()
+    .from(memoryPolicies)
+    .where(eq(memoryPolicies.id, policyId))
+    .limit(1);
+  return rows[0];
+}
+
 export async function getBudgetPolicy(db: Db, organizationId: string, policyId?: string | null) {
   if (!policyId) return null;
   const rows = await db
@@ -110,6 +122,9 @@ export type SpaceBudgetStatus = {
   hardLimit: boolean;
   spentMicroUsd: number;
   budgetMicroUsd: number;
+  orgExceeded?: boolean;
+  orgSpentMicroUsd?: number;
+  orgBudgetMicroUsd?: number;
 };
 
 export async function checkSpaceBudget(db: Db, spaceId: string): Promise<SpaceBudgetStatus> {
@@ -126,24 +141,42 @@ export async function checkSpaceBudget(db: Db, spaceId: string): Promise<SpaceBu
   }
 
   const policy = await getBudgetPolicy(db, space.organizationId, space.budgetPolicyId);
-  if (!policy) {
-    return {
-      allowed: true,
-      exceeded: false,
-      hardLimit: false,
-      spentMicroUsd: 0,
-      budgetMicroUsd: 0,
-    };
+  const spentMicroUsd = await getMonthlySpendMicroUsd(db, spaceId);
+  const spaceExceeded = policy ? spentMicroUsd >= policy.monthlyBudgetMicroUsd : false;
+  const spaceBlocked = spaceExceeded && (policy?.hardLimit ?? false);
+
+  const orgRows = await db
+    .select()
+    .from(organizations)
+    .where(eq(organizations.id, space.organizationId))
+    .limit(1);
+  const org = orgRows[0];
+  let orgExceeded = false;
+  let orgBlocked = false;
+  let orgSpentMicroUsd = 0;
+  let orgBudgetMicroUsd = 0;
+
+  if (org?.budgetPolicyId) {
+    const orgPolicy = await getBudgetPolicy(db, space.organizationId, org.budgetPolicyId);
+    if (orgPolicy) {
+      orgSpentMicroUsd = await getOrgMonthlySpendMicroUsd(db, space.organizationId);
+      orgBudgetMicroUsd = orgPolicy.monthlyBudgetMicroUsd;
+      orgExceeded = orgSpentMicroUsd >= orgPolicy.monthlyBudgetMicroUsd;
+      orgBlocked = orgExceeded && orgPolicy.hardLimit;
+    }
   }
 
-  const spentMicroUsd = await getMonthlySpendMicroUsd(db, spaceId);
-  const exceeded = spentMicroUsd >= policy.monthlyBudgetMicroUsd;
+  const exceeded = spaceExceeded || orgExceeded;
+  const allowed = !spaceBlocked && !orgBlocked;
 
   return {
-    allowed: !exceeded || !policy.hardLimit,
+    allowed,
     exceeded,
-    hardLimit: policy.hardLimit,
+    hardLimit: (policy?.hardLimit ?? false) || orgBlocked,
     spentMicroUsd,
-    budgetMicroUsd: policy.monthlyBudgetMicroUsd,
+    budgetMicroUsd: policy?.monthlyBudgetMicroUsd ?? 0,
+    orgExceeded,
+    orgSpentMicroUsd,
+    orgBudgetMicroUsd,
   };
 }
