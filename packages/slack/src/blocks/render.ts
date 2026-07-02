@@ -75,6 +75,16 @@ function renderUiCardBlocks(card: UICard): SlackBlock[] {
           },
         },
       ];
+    case "schedule-created":
+      return [
+        {
+          type: "section",
+          text: {
+            type: "mrkdwn",
+            text: `📅 *Schedule created* — \`${card.cron}\`\n${card.promptPreview}`,
+          },
+        },
+      ];
     case "generic":
       return [
         {
@@ -188,7 +198,22 @@ export function renderSlackBlocks(event: TagsEvent): SlackBlock[] {
       return [
         {
           type: "section",
-          text: { type: "mrkdwn", text: "Tags needs your input." },
+          text: {
+            type: "mrkdwn",
+            text: `❓ *Tags needs your input:*\n${event.questionText ?? "Please answer the question."}`,
+          },
+        },
+        {
+          type: "actions",
+          elements: [
+            {
+              type: "button",
+              action_id: `question:answer:${event.questionId}`,
+              text: { type: "plain_text", text: "Answer" },
+              style: "primary",
+              value: event.requestId,
+            },
+          ],
         },
       ];
     case "artifact.created":

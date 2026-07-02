@@ -35,11 +35,13 @@ import { loadComposioTools } from "../tools/composio";
 import type { UICard } from "@tags/core/ui-cards";
 import {
   APPROVAL_RESOLVED_EVENT,
+  QUESTION_ANSWERED_EVENT,
   RUN_REQUESTED_EVENT,
   inngest,
 } from "./client";
 
 const MAX_APPROVALS = 10;
+const MAX_PAUSES = 10;
 
 export type TagsRunInput = {
   organizationId: string;
@@ -84,60 +86,105 @@ export const tagsRunFunction: InngestFunction.Any = inngest.createFunction(
       agentSegmentStep(input, setup),
     )) as AgentSegmentResult;
 
-    while (segmentIndex < MAX_APPROVALS) {
-      if (segment.kind !== "approval_required") {
-        break;
-      }
+    while (segmentIndex < MAX_PAUSES) {
+      if (segment.kind === "approval_required") {
+        const pendingApproval = segment;
 
-      const pendingApproval = segment;
+        const resolved = await step.waitForEvent(`await-approval-${segmentIndex}`, {
+          event: APPROVAL_RESOLVED_EVENT,
+          timeout: "1h",
+          if: `async.data.requestId == "${pendingApproval.requestId}"`,
+        });
 
-      const resolved = await step.waitForEvent(`await-approval-${segmentIndex}`, {
-        event: APPROVAL_RESOLVED_EVENT,
-        timeout: "1h",
-        if: `async.data.requestId == "${pendingApproval.requestId}"`,
-      });
+        const approved = resolved?.data?.decision === "approved";
 
-      const approved = resolved?.data?.decision === "approved";
+        if (approved) {
+          const toolResult = (await step.run(`execute-approved-${segmentIndex}`, () =>
+            executeApprovedToolStep(input, setup, pendingApproval),
+          )) as { modelOutput: unknown; uiCard?: UICard };
 
-      if (approved) {
-        const toolResult = (await step.run(`execute-approved-${segmentIndex}`, () =>
-          executeApprovedToolStep(input, setup, pendingApproval),
-        )) as { modelOutput: unknown; uiCard?: UICard };
-
-        segmentIndex += 1;
-        segment = (await step.run(`resume-after-approval-${segmentIndex}`, () =>
-          resumeAfterApprovalStep(input, setup, pendingApproval, toolResult),
-        )) as AgentSegmentResult;
-      } else {
-        if (!resolved) {
-          await step.run(`expire-approval-${segmentIndex}`, () =>
-            expireApprovalStep(pendingApproval.requestId),
+          segmentIndex += 1;
+          segment = (await step.run(`resume-after-approval-${segmentIndex}`, () =>
+            resumeAfterApprovalStep(input, setup, pendingApproval, toolResult),
+          )) as AgentSegmentResult;
+        } else {
+          if (!resolved) {
+            await step.run(`expire-approval-${segmentIndex}`, () =>
+              expireApprovalStep(pendingApproval.requestId),
+            );
+          }
+          await step.run(`reject-tool-${segmentIndex}`, () =>
+            rejectToolStep({
+              runId: setup.runId,
+              invocationId: pendingApproval.invocationId,
+              toolName: pendingApproval.toolName,
+            }),
           );
+          await step.run(`finalize-rejected-${segmentIndex}`, () =>
+            finalizeRunStep({
+              runId: setup.runId,
+              channelId: input.channelId,
+              slackMessageTs: setup.slackMessageTs,
+              summaryText: resolved
+                ? `Rejected ${pendingApproval.toolName}.`
+                : `Approval for ${pendingApproval.toolName} timed out.`,
+              appUrl: input.appUrl,
+            }),
+          );
+          threadStatus = "failed";
+          break;
         }
-        await step.run(`reject-tool-${segmentIndex}`, () =>
-          rejectToolStep({
-            runId: setup.runId,
-            invocationId: pendingApproval.invocationId,
-            toolName: pendingApproval.toolName,
-          }),
-        );
-        await step.run(`finalize-rejected-${segmentIndex}`, () =>
-          finalizeRunStep({
-            runId: setup.runId,
-            channelId: input.channelId,
-            slackMessageTs: setup.slackMessageTs,
-            summaryText: resolved
-              ? `Rejected ${pendingApproval.toolName}.`
-              : `Approval for ${pendingApproval.toolName} timed out.`,
-            appUrl: input.appUrl,
-          }),
-        );
-        threadStatus = "failed";
-        break;
+        continue;
       }
+
+      if (segment.kind === "question_required") {
+        const pendingQuestion = segment;
+
+        const answered = await step.waitForEvent(`await-question-${segmentIndex}`, {
+          event: QUESTION_ANSWERED_EVENT,
+          timeout: "1h",
+          if: `async.data.requestId == "${pendingQuestion.requestId}"`,
+        });
+
+        if (answered?.data?.answer) {
+          await step.run(`complete-question-${segmentIndex}`, () =>
+            completeQuestionStep(setup.runId, pendingQuestion, answered.data.answer as string),
+          );
+
+          segmentIndex += 1;
+          segment = (await step.run(`resume-after-question-${segmentIndex}`, () =>
+            resumeAfterQuestionStep(input, setup, pendingQuestion, answered.data.answer as string),
+          )) as AgentSegmentResult;
+        } else {
+          await step.run(`expire-question-${segmentIndex}`, () =>
+            expireQuestionStep(pendingQuestion.requestId),
+          );
+          await step.run(`reject-question-tool-${segmentIndex}`, () =>
+            rejectToolStep({
+              runId: setup.runId,
+              invocationId: pendingQuestion.invocationId,
+              toolName: "ask_user",
+            }),
+          );
+          await step.run(`finalize-question-timeout-${segmentIndex}`, () =>
+            finalizeRunStep({
+              runId: setup.runId,
+              channelId: input.channelId,
+              slackMessageTs: setup.slackMessageTs,
+              summaryText: "Question timed out without an answer.",
+              appUrl: input.appUrl,
+            }),
+          );
+          threadStatus = "failed";
+          break;
+        }
+        continue;
+      }
+
+      break;
     }
 
-    if (segment.kind === "approval_required") {
+    if (segment.kind === "approval_required" || segment.kind === "question_required") {
       threadStatus = "failed";
     }
 
@@ -440,6 +487,71 @@ async function resumeAfterApprovalStep(
   };
 
   return runAgentSegment(loopArgs);
+}
+
+async function resumeAfterQuestionStep(
+  input: TagsRunInput,
+  setup: RunSetup,
+  segment: { requestId: string; questionText: string },
+  answer: string,
+) {
+  const secrets = loadRuntimeSecrets();
+  const db = createDb(secrets.databaseUrl);
+  const slack = createSlackClient(secrets.slackBotToken);
+
+  const loopArgs: AgentLoopArgs = {
+    db,
+    slack,
+    fireworksApiKey: secrets.fireworksApiKey,
+    runId: setup.runId,
+    spaceId: input.spaceId,
+    workspaceId: input.workspaceId,
+    threadId: setup.threadId,
+    organizationId: input.organizationId,
+    channelId: input.channelId,
+    threadTs: setup.threadTs,
+    slackMessageTs: setup.slackMessageTs,
+    triggerText: input.triggerText,
+    actorUserId: input.actorSlackUserId,
+    spaceName: input.spaceName,
+    appUrl: input.appUrl,
+    providerConfig: buildRuntimeProviderConfig(secrets),
+    approvedToolContinuation: {
+      toolName: "ask_user",
+      toolInput: { question: segment.questionText },
+      toolOutput: { answer },
+    },
+  };
+
+  return runAgentSegment(loopArgs);
+}
+
+async function completeQuestionStep(
+  runId: string,
+  segment: { invocationId: string },
+  answer: string,
+) {
+  const secrets = loadRuntimeSecrets();
+  const db = createDb(secrets.databaseUrl);
+  const result = { answer };
+
+  await completeToolInvocation(db, segment.invocationId, {
+    status: "succeeded",
+    result,
+  });
+
+  await appendRunEvent(db, runId, {
+    type: "tool.finished",
+    toolName: "ask_user",
+    outputPreview: result,
+  });
+}
+
+async function expireQuestionStep(requestId: string) {
+  const secrets = loadRuntimeSecrets();
+  const db = createDb(secrets.databaseUrl);
+  const { expireQuestionByRequestId } = await import("@tags/core/questions");
+  await expireQuestionByRequestId(db, requestId);
 }
 
 async function finalizeRunStep(args: {

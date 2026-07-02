@@ -70,6 +70,14 @@ function UiCardView(props: { card: UICard }) {
           ) : null}
         </div>
       );
+    case "schedule-created":
+      return (
+        <div style={card}>
+          <strong>Schedule created</strong>
+          <p style={muted}>Cron: {ui.cron}</p>
+          <p>{ui.promptPreview}</p>
+        </div>
+      );
     case "generic":
       return (
         <div style={card}>
@@ -134,6 +142,7 @@ export function EventRenderer(props: { event: TagsEvent }) {
       return (
         <div style={card}>
           <strong>Question requested</strong>
+          {event.questionText ? <p>{event.questionText}</p> : null}
           <p style={muted}>ID: {event.questionId}</p>
         </div>
       );

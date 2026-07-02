@@ -12,6 +12,7 @@
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1078.0",
     "@clerk/nextjs": "^7.5.12",
+    "@sentry/nextjs": "^10.63.0",
     "@tags/core": "workspace:*",
     "@tags/db": "workspace:*",
     "@tags/runtime": "workspace:*",

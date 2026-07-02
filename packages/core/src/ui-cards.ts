@@ -29,6 +29,11 @@ export type UICard =
       gitDiffPreview?: string;
     }
   | {
+      kind: "schedule-created";
+      cron: string;
+      promptPreview: string;
+    }
+  | {
       kind: "generic";
       title: string;
       body: string;
@@ -63,6 +68,8 @@ export function formatUiCardPreview(card: UICard): string {
       return card.gitDiffPreview
         ? `${card.outputPreview}\n\n--- git diff ---\n${card.gitDiffPreview}`
         : card.outputPreview;
+    case "schedule-created":
+      return `Schedule created: \`${card.cron}\` — ${card.promptPreview}`;
     case "generic":
       return card.body;
     default: {
