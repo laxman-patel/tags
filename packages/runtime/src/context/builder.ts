@@ -51,7 +51,11 @@ export async function buildThreadContext(
   triggerText: string,
 ): Promise<ModelMessage[]> {
   const thread = await getThreadById(db, threadId);
-  const stored = await listThreadMessages(db, threadId);
+  const stored = await listThreadMessages(
+    db,
+    threadId,
+    thread ? { organizationId: thread.organizationId, spaceId: thread.spaceId } : undefined,
+  );
 
   const history: ModelMessage[] = stored.map((m) => ({
     role: m.authorType === "human" ? "user" : "assistant",
@@ -69,7 +73,13 @@ export async function buildThreadContext(
     preamble.push(`Thread summary:\n${summary.text.trim()}`);
   }
 
-  const memories = await searchMemories(db, spaceId, triggerText, 10);
+  const memories = await searchMemories(
+    db,
+    spaceId,
+    triggerText,
+    10,
+    thread?.organizationId,
+  );
   if (memories.length > 0) {
     const memoryBlock = memories
       .map((m) => `- [${m.kind}] ${m.content}`)

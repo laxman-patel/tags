@@ -18,7 +18,10 @@ export function createSearchThreadTool(db: Db): TagsTool {
     sideEffecting: false,
     async execute(input: unknown, ctx: ToolContext) {
       const parsed = inputSchema.parse(input);
-      const messages = await listThreadMessages(db, ctx.threadId);
+      const messages = await listThreadMessages(db, ctx.threadId, {
+        organizationId: ctx.organizationId,
+        spaceId: ctx.spaceId,
+      });
       const filtered = parsed.query
         ? messages.filter((m) =>
             m.text.toLowerCase().includes(parsed.query!.toLowerCase()),

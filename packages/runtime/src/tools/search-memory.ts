@@ -17,7 +17,7 @@ export function createSearchMemoryTool(db: Db): TagsTool {
     sideEffecting: false,
     async execute(input: unknown, ctx: ToolContext) {
       const parsed = inputSchema.parse(input);
-      const rows = await searchMemories(db, ctx.spaceId, parsed.query);
+      const rows = await searchMemories(db, ctx.spaceId, parsed.query, 20, ctx.organizationId);
       const items = rows.map((r) => ({ kind: r.kind, content: r.content }));
       return {
         modelOutput: rows.map((r) => ({ kind: r.kind, content: r.content, id: r.id })),

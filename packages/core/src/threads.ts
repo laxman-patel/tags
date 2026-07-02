@@ -1,6 +1,6 @@
 import { and, asc, eq } from "drizzle-orm";
 import type { Db } from "@tags/db";
-import { messages, newId, threads } from "@tags/db";
+import { messages, newId, threads, withDbRlsScope } from "@tags/db";
 
 export async function findOrCreateThread(
   db: Db,
@@ -102,10 +102,22 @@ export async function getThreadById(db: Db, threadId: string) {
 export async function listThreadMessages(
   db: Db,
   threadId: string,
+  scope?: { organizationId: string; spaceId: string },
 ): Promise<Array<typeof messages.$inferSelect>> {
-  return db
-    .select()
-    .from(messages)
-    .where(eq(messages.threadId, threadId))
-    .orderBy(asc(messages.createdAt));
+  const runQuery = async (scopedDb: Db) =>
+    scopedDb
+      .select()
+      .from(messages)
+      .where(eq(messages.threadId, threadId))
+      .orderBy(asc(messages.createdAt));
+
+  if (scope) {
+    return withDbRlsScope(
+      db,
+      { organizationId: scope.organizationId, spaceId: scope.spaceId },
+      runQuery,
+    );
+  }
+
+  return runQuery(db);
 }

@@ -1,32 +1,46 @@
 import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import type { Db } from "@tags/db";
-import { memories, newId } from "@tags/db";
+import { memories, newId, withDbRlsScope } from "@tags/db";
 
-export async function searchMemories(db: Db, spaceId: string, query: string, limit = 20) {
-  if (!query.trim()) {
-    return db
+export async function searchMemories(
+  db: Db,
+  spaceId: string,
+  query: string,
+  limit = 20,
+  organizationId?: string,
+) {
+  const runQuery = async (scopedDb: Db) => {
+    if (!query.trim()) {
+      return scopedDb
+        .select()
+        .from(memories)
+        .where(and(eq(memories.spaceId, spaceId), isNull(memories.deletedAt)))
+        .orderBy(desc(memories.createdAt))
+        .limit(limit);
+    }
+
+    return scopedDb
       .select()
       .from(memories)
-      .where(and(eq(memories.spaceId, spaceId), isNull(memories.deletedAt)))
-      .orderBy(desc(memories.createdAt))
-      .limit(limit);
-  }
-
-  return db
-    .select()
-    .from(memories)
-    .where(
-      and(
-        eq(memories.spaceId, spaceId),
-        isNull(memories.deletedAt),
-        sql`(
+      .where(
+        and(
+          eq(memories.spaceId, spaceId),
+          isNull(memories.deletedAt),
+          sql`(
           ${memories.searchText} % ${query}
           OR ${memories.content} ILIKE ${`%${query}%`}
         )`,
-      ),
-    )
-    .orderBy(desc(memories.createdAt))
-    .limit(limit);
+        ),
+      )
+      .orderBy(desc(memories.createdAt))
+      .limit(limit);
+  };
+
+  if (organizationId) {
+    return withDbRlsScope(db, { organizationId, spaceId }, runQuery);
+  }
+
+  return runQuery(db);
 }
 
 export async function saveMemory(
