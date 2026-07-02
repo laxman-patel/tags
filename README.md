@@ -48,6 +48,47 @@ Point Slack Event Subscriptions and Interactivity to:
 
 Subscribe to `app_mention`. Map your test channel via seed env vars or update the seeded space row.
 
+## Production deploy (Railway)
+
+### Environment
+
+Set `NEXT_PUBLIC_APP_URL` to your public Railway URL **before** building (e.g. `https://tags-production.up.railway.app`). Run links posted to Slack and schedule evaluation depend on it.
+
+Required at boot: `DATABASE_URL`, `FIREWORKS_API_KEY`, `SLACK_SIGNING_SECRET`, `SLACK_BOT_TOKEN`, `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY`, `INNGEST_EVENT_KEY`, `INNGEST_SIGNING_KEY`, `NEXT_PUBLIC_APP_URL`.
+
+Migrations run automatically via `preDeployCommand` when `DATABASE_MIGRATE_URL` (owner role) is set.
+
+### Slack app configuration
+
+In your Slack app settings (production domain `https://<your-domain>`):
+
+| Setting | URL |
+| --- | --- |
+| Event Subscriptions | `https://<your-domain>/api/slack/events` |
+| Interactivity | `https://<your-domain>/api/slack/interactions` |
+
+**Bot token scopes:** `app_mentions:read`, `channels:history`, `chat:write`.
+
+**Event subscriptions:** `app_mention` (add `message.channels` only if you need thread-reply triggers — bot messages are ignored).
+
+Sync Inngest at `https://<your-domain>/api/inngest` from the Inngest dashboard after deploy.
+
+### Bootstrap data
+
+After migrations, seed or create your first Space:
+
+```bash
+# Option A — seed script (set real Slack team/channel IDs)
+SEED_SLACK_TEAM_ID=T… SEED_SLACK_CHANNEL_ID=C… pnpm db:seed
+```
+
+```bash
+# Option B — admin API (requires Clerk admin via ADMIN_USER_IDS or org:admin)
+POST /api/spaces
+```
+
+Run and artifact pages require Clerk sign-in (`/runs`, `/artifacts`).
+
 ## Verify Phase 0
 
 1. `@tags summarize this thread` — streams progress in Slack
