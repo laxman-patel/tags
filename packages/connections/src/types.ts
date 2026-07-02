@@ -17,7 +17,7 @@ export interface CredentialProvider {
 
   verifyWebhook?(args: {
     connectionId: ConnectionId;
-    headers: Headers;
+    headers: Record<string, string | undefined>;
     rawBody: string;
   }): Promise<boolean>;
 }
