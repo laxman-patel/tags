@@ -16,6 +16,7 @@ type SlackEventPayload = {
     ts: string;
     thread_ts?: string;
     event_ts?: string;
+    bot_id?: string;
   };
   event_id?: string;
   team_id?: string;
@@ -40,6 +41,10 @@ export async function POST(request: Request) {
 
   const event = payload.event;
   if (!event) return new Response("ok");
+
+  if (event.bot_id) {
+    return new Response("ok");
+  }
 
   const teamId = payload.team_id ?? "";
   const channelId = event.channel;
