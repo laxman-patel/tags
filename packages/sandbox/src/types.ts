@@ -3,6 +3,8 @@ export interface CodingAgentRequest {
   prompt: string;
   /** Optional git repository to clone into the sandbox before running. */
   repoUrl?: string;
+  /** opencode `--model` override for this run (falls back to provider config). */
+  model?: string;
   /** Live opencode CLI output (E2B `onStdout` / `onStderr`). */
   onOutput?: (chunk: string) => void | Promise<void>;
 }

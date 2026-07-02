@@ -37,7 +37,6 @@ function combineOutput(result: CommandLike): string {
 
 export function createSandboxProvider(config: SandboxProviderConfig = {}): SandboxProvider {
   const template = config.template ?? DEFAULT_OPENCODE_TEMPLATE;
-  const model = config.model ?? "accounts/fireworks/models/kimi-k2-instruct";
 
   return {
     async runCodingAgent(request: CodingAgentRequest): Promise<CodingAgentResult> {
@@ -68,6 +67,7 @@ export function createSandboxProvider(config: SandboxProviderConfig = {}): Sandb
         }
 
         const cwd = request.repoUrl ? REPO_PATH : WORKDIR;
+        const model = request.model ?? config.model ?? "accounts/fireworks/models/kimi-k2-instruct";
         const command = `opencode run --model ${shellQuote(model)} ${shellQuote(request.prompt)}`;
 
         const appendStream = async (chunk: string) => {

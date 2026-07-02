@@ -3,6 +3,7 @@ import { truncateForPreview } from "@tags/core/ui-cards";
 import { checkSpaceBudget } from "@tags/core/policies";
 import { appendRunEvent, updateRunStatus } from "@tags/core/runs";
 import { loadActiveSpaceConfig } from "@tags/core/spaces";
+import { recordUsage } from "@tags/core/usage";
 import type { Db } from "@tags/db";
 import {
   buildRunLinkBlock,
@@ -91,6 +92,7 @@ export async function runOpencodeSegment(
   try {
     const result = await providers.sandbox.runCodingAgent({
       prompt,
+      model: config.modelId,
       onOutput: async (chunk) => {
         await emit({ type: "text.delta", text: chunk });
       },
@@ -126,7 +128,28 @@ export async function runOpencodeSegment(
       [...buildRunLinkBlock(args.appUrl, args.runId)],
     );
     await emit({ type: "run.finished" });
-    await updateRunStatus(args.db, args.runId, "done", { finishedAt: new Date() });
+
+    const promptTokens = Math.ceil(prompt.length / 4);
+    const completionTokens = Math.ceil(result.output.length / 4);
+    const tokenUsage = {
+      prompt: promptTokens,
+      completion: completionTokens,
+      total: promptTokens + completionTokens,
+    };
+
+    await updateRunStatus(args.db, args.runId, "done", {
+      finishedAt: new Date(),
+      tokenUsage,
+    });
+
+    await recordUsage(args.db, {
+      organizationId: args.organizationId,
+      spaceId: args.spaceId,
+      runId: args.runId,
+      modelId: config.modelId,
+      promptTokens,
+      completionTokens,
+    });
 
     return { kind: "complete", text: replyText };
   } catch (error) {
