@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gt } from "drizzle-orm";
+import { and, asc, desc, eq, gt, sql } from "drizzle-orm";
 import type { Db } from "@tags/db";
 import { approvalRequests, newId, runEvents, runs, toolInvocations } from "@tags/db";
 
@@ -52,20 +52,31 @@ export async function appendRunEvent(
   runId: string,
   event: RunEventPayload,
 ): Promise<void> {
-  const existing = await db
-    .select({ seq: runEvents.seq })
-    .from(runEvents)
-    .where(eq(runEvents.runId, runId))
-    .orderBy(asc(runEvents.seq));
+  const payload = JSON.stringify(event);
+  const maxAttempts = 3;
 
-  const nextSeq = existing.length > 0 ? Number(existing[existing.length - 1]!.seq) + 1 : 1;
-
-  await db.insert(runEvents).values({
-    runId,
-    seq: nextSeq,
-    eventType: event.type,
-    payload: event,
-  });
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    try {
+      await db.execute(sql`
+        insert into run_events (run_id, seq, event_type, payload)
+        values (
+          ${runId},
+          coalesce((select max(seq) from run_events where run_id = ${runId}), 0) + 1,
+          ${event.type},
+          ${payload}::jsonb
+        )
+      `);
+      return;
+    } catch (error) {
+      const isUniqueViolation =
+        error instanceof Error &&
+        "code" in error &&
+        (error as { code?: string }).code === "23505";
+      if (!isUniqueViolation || attempt === maxAttempts - 1) {
+        throw error;
+      }
+    }
+  }
 }
 
 export async function updateRunStatus(
