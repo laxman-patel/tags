@@ -76,6 +76,7 @@ export async function runOpencodeSegment(
   const messages = await buildThreadContext(
     args.db,
     args.threadId,
+    args.organizationId,
     args.spaceId,
     args.triggerText,
   );

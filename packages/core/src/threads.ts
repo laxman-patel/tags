@@ -1,6 +1,6 @@
 import { and, asc, count, eq } from "drizzle-orm";
 import type { Db } from "@tags/db";
-import { messages, newId, threads, withDbRlsScope } from "@tags/db";
+import { messages, newId, threads, withDbRlsScope, type RlsScope } from "@tags/db";
 
 export async function findOrCreateThread(
   db: Db,
@@ -90,13 +90,31 @@ export async function upsertMessage(
   return row ?? null;
 }
 
-export async function getThreadById(db: Db, threadId: string) {
-  const rows = await db
-    .select()
-    .from(threads)
-    .where(eq(threads.id, threadId))
-    .limit(1);
-  return rows[0];
+export async function getThreadById(
+  db: Db,
+  threadId: string,
+  scope?: Pick<RlsScope, "organizationId" | "spaceId">,
+) {
+  const runQuery = async (scopedDb: Db) => {
+    const conditions = [eq(threads.id, threadId)];
+    if (scope) {
+      conditions.push(eq(threads.organizationId, scope.organizationId));
+      conditions.push(eq(threads.spaceId, scope.spaceId));
+    }
+
+    const rows = await scopedDb
+      .select()
+      .from(threads)
+      .where(and(...conditions))
+      .limit(1);
+    return rows[0];
+  };
+
+  if (scope) {
+    return withDbRlsScope(db, scope, runQuery);
+  }
+
+  return runQuery(db);
 }
 
 export async function countThreadMessages(db: Db, threadId: string): Promise<number> {

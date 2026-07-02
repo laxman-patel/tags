@@ -1,6 +1,14 @@
 import { and, asc, desc, eq, gt, sql } from "drizzle-orm";
 import type { Db } from "@tags/db";
-import { approvalRequests, newId, runEvents, runs, toolInvocations } from "@tags/db";
+import {
+  approvalRequests,
+  newId,
+  runEvents,
+  runs,
+  toolInvocations,
+  withDbRlsScope,
+  type RlsScope,
+} from "@tags/db";
 
 export type RunEventPayload = { type: string } & Record<string, unknown>;
 
@@ -102,12 +110,33 @@ export async function updateRunStatus(
     .where(eq(runs.id, runId));
 }
 
-export async function getRunById(db: Db, runId: string) {
-  const rows = await db.select().from(runs).where(eq(runs.id, runId)).limit(1);
-  return rows[0];
+export async function getRunById(
+  db: Db,
+  runId: string,
+  scope?: Pick<RlsScope, "organizationId" | "spaceId">,
+) {
+  const runQuery = async (scopedDb: Db) => {
+    const rows = await scopedDb.select().from(runs).where(eq(runs.id, runId)).limit(1);
+    return rows[0];
+  };
+
+  if (scope) {
+    return withDbRlsScope(db, scope, runQuery);
+  }
+
+  return runQuery(db);
 }
 
-export async function listRunEvents(db: Db, runId: string) {
+export async function listRunEvents(
+  db: Db,
+  runId: string,
+  scope?: Pick<RlsScope, "organizationId" | "spaceId">,
+) {
+  if (scope) {
+    const run = await getRunById(db, runId, scope);
+    if (!run) return [];
+  }
+
   return db
     .select()
     .from(runEvents)
@@ -115,7 +144,17 @@ export async function listRunEvents(db: Db, runId: string) {
     .orderBy(asc(runEvents.seq));
 }
 
-export async function listRunEventsAfter(db: Db, runId: string, afterSeq: number) {
+export async function listRunEventsAfter(
+  db: Db,
+  runId: string,
+  afterSeq: number,
+  scope?: Pick<RlsScope, "organizationId" | "spaceId">,
+) {
+  if (scope) {
+    const run = await getRunById(db, runId, scope);
+    if (!run) return [];
+  }
+
   return db
     .select()
     .from(runEvents)

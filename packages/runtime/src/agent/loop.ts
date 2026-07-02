@@ -93,7 +93,7 @@ export async function runAgentSegment(args: AgentLoopArgs): Promise<AgentSegment
   await updateRunStatus(args.db, args.runId, "streaming");
   await emit({ type: "status", label: "Reading thread context" });
 
-  const messages = await buildThreadContext(args.db, args.threadId, args.spaceId, args.triggerText);
+  const messages = await buildThreadContext(args.db, args.threadId, args.organizationId, args.spaceId, args.triggerText);
 
   if (args.approvedToolContinuation) {
     const cont = args.approvedToolContinuation;

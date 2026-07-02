@@ -26,8 +26,9 @@ export default async function RunDetailPage({
     );
   }
 
-  const events = await listRunEvents(db, runId);
-  const artifacts = await listArtifactsForRun(db, runId);
+  const scope = { organizationId: run.organizationId, spaceId: run.spaceId };
+  const events = await listRunEvents(db, runId, scope);
+  const artifacts = await listArtifactsForRun(db, runId, scope);
 
   const toolEvents = events
     .filter((e) => e.eventType.startsWith("tool."))

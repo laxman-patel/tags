@@ -1,7 +1,19 @@
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import type { Db } from "@tags/db";
-import { artifacts } from "@tags/db";
+import { artifacts, type RlsScope } from "@tags/db";
 import type { ArtifactBodyReadResult } from "@tags/storage";
+
+function scopedArtifactConditions(
+  artifactId: string,
+  scope?: Pick<RlsScope, "organizationId" | "spaceId">,
+) {
+  const conditions = [eq(artifacts.id, artifactId)];
+  if (scope) {
+    conditions.push(eq(artifacts.organizationId, scope.organizationId));
+    conditions.push(eq(artifacts.spaceId, scope.spaceId));
+  }
+  return conditions;
+}
 
 export async function createArtifact(
   db: Db,
@@ -44,13 +56,31 @@ export async function createArtifact(
   return row;
 }
 
-export async function getArtifactById(db: Db, artifactId: string) {
-  const rows = await db.select().from(artifacts).where(eq(artifacts.id, artifactId)).limit(1);
+export async function getArtifactById(
+  db: Db,
+  artifactId: string,
+  scope?: Pick<RlsScope, "organizationId" | "spaceId">,
+) {
+  const rows = await db
+    .select()
+    .from(artifacts)
+    .where(and(...scopedArtifactConditions(artifactId, scope)))
+    .limit(1);
   return rows[0];
 }
 
-export async function listArtifactsForRun(db: Db, runId: string) {
-  return db.select().from(artifacts).where(eq(artifacts.runId, runId));
+export async function listArtifactsForRun(
+  db: Db,
+  runId: string,
+  scope?: Pick<RlsScope, "organizationId" | "spaceId">,
+) {
+  const conditions = [eq(artifacts.runId, runId)];
+  if (scope) {
+    conditions.push(eq(artifacts.organizationId, scope.organizationId));
+    conditions.push(eq(artifacts.spaceId, scope.spaceId));
+  }
+
+  return db.select().from(artifacts).where(and(...conditions));
 }
 
 export type ResolvedArtifactBody = {

@@ -17,10 +17,11 @@ export async function GET(
     return Response.json({ error: "not_found" }, { status: 404 });
   }
 
+  const scope = { organizationId: run.organizationId, spaceId: run.spaceId };
   const events =
     afterSeq > 0
-      ? await listRunEventsAfter(db, runId, afterSeq)
-      : await listRunEventsAfter(db, runId, 0);
+      ? await listRunEventsAfter(db, runId, afterSeq, scope)
+      : await listRunEventsAfter(db, runId, 0, scope);
 
   return Response.json({
     runId,

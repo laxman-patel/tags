@@ -47,15 +47,13 @@ export function packThreadHistory(history: ModelMessage[]): ModelMessage[] {
 export async function buildThreadContext(
   db: Db,
   threadId: string,
+  organizationId: string,
   spaceId: string,
   triggerText: string,
 ): Promise<ModelMessage[]> {
-  const thread = await getThreadById(db, threadId);
-  const stored = await listThreadMessages(
-    db,
-    threadId,
-    thread ? { organizationId: thread.organizationId, spaceId: thread.spaceId } : undefined,
-  );
+  const scope = { organizationId, spaceId };
+  const thread = await getThreadById(db, threadId, scope);
+  const stored = await listThreadMessages(db, threadId, scope);
 
   const history: ModelMessage[] = stored.map((m) => ({
     role: m.authorType === "human" ? "user" : "assistant",
@@ -78,7 +76,7 @@ export async function buildThreadContext(
     spaceId,
     triggerText,
     10,
-    thread?.organizationId,
+    organizationId,
   );
   if (memories.length > 0) {
     const memoryBlock = memories
