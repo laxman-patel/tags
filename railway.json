@@ -5,6 +5,7 @@
     "buildCommand": "corepack enable && pnpm install --frozen-lockfile && pnpm --filter @tags/web build"
   },
   "deploy": {
+    "preDeployCommand": "pnpm db:migrate",
     "startCommand": "pnpm --filter @tags/web start",
     "restartPolicyType": "ON_FAILURE",
     "restartPolicyMaxRetries": 3
