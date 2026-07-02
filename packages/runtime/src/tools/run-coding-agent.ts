@@ -4,7 +4,7 @@ import type { TagsTool } from "./types";
 
 const inputSchema = z.object({
   prompt: z.string().describe("Coding task for the opencode agent to perform"),
-  repoUrl: z.string().url().optional().describe("Optional git repo to clone before running"),
+  repoUrl: z.url().optional().describe("Optional git repo to clone before running"),
 });
 
 export function createRunCodingAgentTool(): TagsTool {

@@ -7,7 +7,7 @@ const runtimeSecretsSchema = z.object({
   DATABASE_URL: z.string().min(1),
   FIREWORKS_API_KEY: z.string().min(1),
   SLACK_BOT_TOKEN: z.string().min(1),
-  NEXT_PUBLIC_APP_URL: z.string().url().default("http://localhost:3000"),
+  NEXT_PUBLIC_APP_URL: z.url().default("http://localhost:3000"),
   E2B_API_KEY: z.string().optional(),
   E2B_OPENCODE_TEMPLATE: z.string().optional(),
   GITHUB_TOKEN: z.string().optional(),

@@ -8,7 +8,7 @@ const envSchema = z
     FIREWORKS_API_KEY: z.string().min(1),
     SLACK_SIGNING_SECRET: z.string().min(1),
     SLACK_BOT_TOKEN: z.string().min(1),
-    NEXT_PUBLIC_APP_URL: z.string().url().default("http://localhost:3000"),
+    NEXT_PUBLIC_APP_URL: z.url().default("http://localhost:3000"),
     NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: z.string().min(1),
     CLERK_SECRET_KEY: z.string().min(1),
     /** Comma-separated Clerk user IDs allowed as admin when org roles are not configured. */
@@ -28,7 +28,7 @@ const envSchema = z
     R2_ACCESS_KEY_ID: z.string().optional(),
     R2_SECRET_ACCESS_KEY: z.string().optional(),
     R2_BUCKET_NAME: z.string().optional(),
-    R2_PUBLIC_BASE_URL: z.string().url().optional(),
+    R2_PUBLIC_BASE_URL: z.url().optional(),
   })
   .superRefine((data, ctx) => {
     if (data.NODE_ENV === "production") {
