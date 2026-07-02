@@ -189,3 +189,33 @@ export const approvalRequests = pgTable(
   },
   (table) => [uniqueIndex("approval_requests_request_id_idx").on(table.requestId)],
 );
+
+export const questionRequests = pgTable(
+  "question_requests",
+  {
+    id: uuid("id").primaryKey(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id),
+    spaceId: uuid("space_id")
+      .notNull()
+      .references(() => spaces.id),
+    runId: uuid("run_id")
+      .notNull()
+      .references(() => runs.id),
+    threadId: uuid("thread_id")
+      .notNull()
+      .references(() => threads.id),
+    toolInvocationId: uuid("tool_invocation_id")
+      .notNull()
+      .references(() => toolInvocations.id),
+    requestId: text("request_id").notNull(),
+    questionText: text("question_text").notNull(),
+    answerText: text("answer_text"),
+    status: text("status").notNull().default("pending"),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    answeredAt: timestamp("answered_at", { withTimezone: true }),
+  },
+  (table) => [uniqueIndex("question_requests_request_id_idx").on(table.requestId)],
+);

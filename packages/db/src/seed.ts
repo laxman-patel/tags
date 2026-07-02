@@ -22,8 +22,8 @@ async function seed() {
   const memoryPolicyId = newId();
 
   await sql`
-    insert into organizations (id, name)
-    values (${orgId}, 'Dev Organization')
+    insert into organizations (id, name, budget_policy_id)
+    values (${orgId}, 'Dev Organization', ${budgetPolicyId})
     on conflict do nothing
   `;
 

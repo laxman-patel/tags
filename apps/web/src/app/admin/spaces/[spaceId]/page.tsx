@@ -12,6 +12,7 @@ export default function SpaceDetailPage() {
   const [instructions, setInstructions] = useState("");
   const [enabledTools, setEnabledTools] = useState("");
   const [runtimeMode, setRuntimeMode] = useState<"opencode" | "orchestrator">("opencode");
+  const [repoUrl, setRepoUrl] = useState("");
   const [message, setMessage] = useState("");
 
   useEffect(() => {
@@ -25,6 +26,7 @@ export default function SpaceDetailPage() {
         setEnabledTools((data.activeConfig?.enabledTools as string[])?.join(", ") ?? "");
         const mode = data.activeConfig?.runtimeMode;
         setRuntimeMode(mode === "orchestrator" ? "orchestrator" : "opencode");
+        setRepoUrl(String(data.activeConfig?.repoUrl ?? ""));
       });
   }, [spaceId]);
 
@@ -39,6 +41,7 @@ export default function SpaceDetailPage() {
         instructions,
         enabledTools: enabledTools.split(",").map((s) => s.trim()).filter(Boolean),
         runtimeMode,
+        repoUrl: repoUrl.trim() || null,
       }),
     });
     const data = await res.json();
@@ -67,6 +70,7 @@ export default function SpaceDetailPage() {
           </select>
         </label>
         <label>Tools (comma-separated)<input value={enabledTools} onChange={(e) => setEnabledTools(e.target.value)} style={{ width: "100%" }} /></label>
+        <label>Repo URL (opencode clone target)<input value={repoUrl} onChange={(e) => setRepoUrl(e.target.value)} placeholder="https://github.com/org/repo" style={{ width: "100%" }} /></label>
         <button type="button" onClick={save}>Save new config version</button>
       </div>
       {message && <p>{message}</p>}

@@ -41,6 +41,7 @@ export async function PATCH(
     reasoning?: string;
     maxSteps?: number;
     runtimeMode?: string;
+    repoUrl?: string | null;
   };
 
   const db = getDb();
@@ -56,6 +57,7 @@ export async function PATCH(
     reasoning: body.reasoning,
     maxSteps: body.maxSteps,
     runtimeMode: parseRuntimeMode(body.runtimeMode),
+    repoUrl: body.repoUrl,
   });
 
   await recordAuditEvent(db, {

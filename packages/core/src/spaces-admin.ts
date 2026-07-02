@@ -70,6 +70,7 @@ export type UpdateSpaceConfigInput = {
   enabledTools: string[];
   maxSteps?: number;
   runtimeMode?: RuntimeMode;
+  repoUrl?: string | null;
 };
 
 export async function createSpaceConfigVersion(db: Db, input: UpdateSpaceConfigInput) {
@@ -101,6 +102,7 @@ export async function createSpaceConfigVersion(db: Db, input: UpdateSpaceConfigI
     enabledConnections: active?.enabledConnections ?? [],
     maxSteps: input.maxSteps ?? active?.maxSteps ?? 12,
     runtimeMode: input.runtimeMode ?? active?.runtimeMode ?? "opencode",
+    repoUrl: input.repoUrl !== undefined ? input.repoUrl : (active?.repoUrl ?? null),
     isActive: true,
   });
 
