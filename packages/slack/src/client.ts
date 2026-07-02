@@ -18,18 +18,28 @@ export async function postThreadMessage(
   blocks?: unknown[],
 ): Promise<SlackMessageRef> {
   await globalSlackRateLimiter.acquire(channelId);
-  const result = await client.chat.postMessage({
-    channel: channelId,
-    ...(threadTs ? { thread_ts: threadTs } : {}),
-    text,
-    blocks: blocks as never,
-  });
 
-  if (!result.ok || !result.ts) {
-    throw new Error(result.error ?? "Failed to post Slack message");
+  try {
+    const result = await client.chat.postMessage({
+      channel: channelId,
+      ...(threadTs ? { thread_ts: threadTs } : {}),
+      text,
+      blocks: blocks as never,
+    });
+
+    if (!result.ok || !result.ts) {
+      throw new Error(result.error ?? "Failed to post Slack message");
+    }
+
+    return { channelId, messageTs: result.ts };
+  } catch (error) {
+    const retryAfter = extractRetryAfter(error);
+    if (retryAfter) {
+      await sleep(retryAfter * 1000);
+      return postThreadMessage(client, channelId, threadTs, text, blocks);
+    }
+    throw error;
   }
-
-  return { channelId, messageTs: result.ts };
 }
 
 export async function updateMessage(

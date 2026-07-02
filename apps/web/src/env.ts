@@ -46,6 +46,14 @@ const envSchema = z
           message: "Required in production",
         });
       }
+      if (data.NEXT_PUBLIC_APP_URL === "http://localhost:3000") {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["NEXT_PUBLIC_APP_URL"],
+          message:
+            "Must be your public Railway URL in production (run links and schedules depend on it)",
+        });
+      }
     }
   });
 

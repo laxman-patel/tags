@@ -18,7 +18,7 @@ export type ScheduleTickResult = {
 export async function evaluateAndFireSchedules(): Promise<ScheduleTickResult> {
   const secrets = loadRuntimeSecrets();
   const db = createDb(secrets.databaseUrl);
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+  const appUrl = secrets.appUrl;
   const now = new Date();
   const allSchedules = await listEnabledSchedules(db);
   const fired: string[] = [];

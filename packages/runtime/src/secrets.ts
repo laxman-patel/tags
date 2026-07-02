@@ -7,6 +7,7 @@ const runtimeSecretsSchema = z.object({
   DATABASE_URL: z.string().min(1),
   FIREWORKS_API_KEY: z.string().min(1),
   SLACK_BOT_TOKEN: z.string().min(1),
+  NEXT_PUBLIC_APP_URL: z.string().url().default("http://localhost:3000"),
   E2B_API_KEY: z.string().optional(),
   E2B_OPENCODE_TEMPLATE: z.string().optional(),
   GITHUB_TOKEN: z.string().optional(),
@@ -18,6 +19,7 @@ export type RuntimeSecrets = {
   databaseUrl: string;
   fireworksApiKey: string;
   slackBotToken: string;
+  appUrl: string;
   e2bApiKey?: string;
   e2bOpencodeTemplate?: string;
   githubToken?: string;
@@ -42,6 +44,7 @@ export function loadRuntimeSecrets(): RuntimeSecrets {
     databaseUrl: env.DATABASE_URL,
     fireworksApiKey: env.FIREWORKS_API_KEY,
     slackBotToken: env.SLACK_BOT_TOKEN,
+    appUrl: env.NEXT_PUBLIC_APP_URL,
     e2bApiKey: env.E2B_API_KEY,
     e2bOpencodeTemplate: env.E2B_OPENCODE_TEMPLATE,
     githubToken: env.GITHUB_TOKEN,
