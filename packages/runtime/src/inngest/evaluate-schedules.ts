@@ -40,7 +40,6 @@ export async function evaluateAndFireSchedules(): Promise<ScheduleTickResult> {
       .limit(1);
     const teamId = ws[0]?.externalWorkspaceId ?? "";
 
-    const scheduleThreadTs = `${Date.now()}.000000`;
     const data: TagsRunInput = {
       organizationId: space.organizationId,
       workspaceId: space.workspaceId,
@@ -48,14 +47,15 @@ export async function evaluateAndFireSchedules(): Promise<ScheduleTickResult> {
       spaceName: space.name,
       channelId: space.externalSpaceId,
       teamId,
-      threadTs: scheduleThreadTs,
-      rootMessageTs: scheduleThreadTs,
+      threadTs: "",
+      rootMessageTs: "",
       triggerText: schedule.prompt,
-      triggerMessageTs: scheduleThreadTs,
+      triggerMessageTs: "",
       actorSlackUserId: "schedule",
       idempotencyKey: `schedule:${schedule.id}:${now.toISOString()}`,
       appUrl,
       trigger: "schedule",
+      isScheduled: true,
     };
 
     await inngest.send({ name: RUN_REQUESTED_EVENT, data });
