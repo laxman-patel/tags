@@ -48,7 +48,8 @@ export function wrapComposioToolsWithApproval(
           threadId: ctx.args.threadId,
           toolName: gatedName,
           toolInput: input,
-          approvedRequestId: ctx.args.approvedRequestId,
+          actorUserId: ctx.args.actorUserId,
+          approvedTool: ctx.args.approvedTool,
           emit: ctx.emit,
         });
 

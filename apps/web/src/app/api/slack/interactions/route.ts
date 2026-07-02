@@ -1,4 +1,4 @@
-import { resolveApprovalByRequestId } from "@tags/core/runs";
+import { expireApprovalByRequestId, resolveApprovalByRequestId } from "@tags/core/runs";
 import { canApprove } from "@tags/core/policies";
 import { recordAuditEvent } from "@tags/core/audit";
 import { inngest, APPROVAL_RESOLVED_EVENT } from "@tags/runtime";
@@ -62,10 +62,26 @@ export async function POST(request: Request) {
     return Response.json({ response_type: "ephemeral", text: "Approval not found." });
   }
 
+  if (approval.status !== "pending") {
+    return Response.json({
+      response_type: "ephemeral",
+      text: "This approval was already resolved.",
+    });
+  }
+
+  if (approval.expiresAt && approval.expiresAt < new Date()) {
+    await expireApprovalByRequestId(db, requestId);
+    return Response.json({
+      response_type: "ephemeral",
+      text: "This approval has expired.",
+    });
+  }
+
   const allowed = await canApprove(db, {
     spaceId: approval.spaceId,
     organizationId: approval.organizationId,
     slackUserId: payload.user.id,
+    requesterSlackUserId: approval.requestedBySlackUserId ?? undefined,
   });
 
   if (!allowed) {

@@ -20,7 +20,7 @@ import { buildThreadContext } from "../context/builder";
 import { createRuntimeProviders, type RuntimeProviderConfig } from "../providers";
 import { loadComposioTools, type ComposioToolsHandle } from "../tools/composio";
 import { wrapComposioToolsWithApproval } from "../tools/composio-governance";
-import { gateSideEffectingTool } from "../tools/approval-gate";
+import { gateSideEffectingTool, isApprovedToolMatch } from "../tools/approval-gate";
 import { resolveTools, type ToolRegistryOptions } from "../tools/registry";
 import { toolIdempotencyKey, type TagsTool, type ToolContext } from "../tools/types";
 
@@ -41,8 +41,12 @@ export type AgentLoopArgs = {
   spaceName: string;
   appUrl: string;
   providerConfig: RuntimeProviderConfig;
-  /** When set, the matching approval was granted and the gated tool may execute. */
-  approvedRequestId?: string;
+  /** When set, allows executing exactly one gated tool matched by name and input. */
+  approvedTool?: {
+    requestId: string;
+    toolName: string;
+    idempotencyKey: string;
+  };
   /** After an approved side effect, inject tool output so the agent can reply naturally. */
   approvedToolContinuation?: {
     toolName: string;
@@ -326,10 +330,12 @@ function buildAiTools(
           inputPreview: input,
         });
 
+        const idempotencyKey = toolIdempotencyKey(args.runId, tagsTool.name, input);
+
         if (
           tagsTool.sideEffecting &&
           needsApproval(tagsTool.approval, input) &&
-          !args.approvedRequestId
+          !isApprovedToolMatch(args.approvedTool, tagsTool.name, idempotencyKey)
         ) {
           const gate = await gateSideEffectingTool({
             db: args.db,
@@ -339,6 +345,8 @@ function buildAiTools(
             threadId: args.threadId,
             toolName: tagsTool.name,
             toolInput: input,
+            actorUserId: args.actorUserId,
+            approvedTool: args.approvedTool,
             emit,
           });
           if (gate.cachedResult !== undefined) {
@@ -346,14 +354,18 @@ function buildAiTools(
           }
         }
 
-        if (args.approvedRequestId && tagsTool.sideEffecting) {
+        if (
+          args.approvedTool &&
+          tagsTool.sideEffecting &&
+          isApprovedToolMatch(args.approvedTool, tagsTool.name, idempotencyKey)
+        ) {
           const invocation = await createToolInvocation(args.db, {
             runId: args.runId,
             organizationId: args.organizationId,
             spaceId: args.spaceId,
             toolName: tagsTool.name,
             toolInput: input,
-            idempotencyKey: toolIdempotencyKey(args.runId, tagsTool.name, input),
+            idempotencyKey,
           });
           if (invocation.status === "succeeded" && invocation.result != null) {
             return invocation.result;
@@ -377,14 +389,14 @@ function buildAiTools(
         const toolCtx = buildToolContext(args, toolOptions, emit);
 
         const toolResult = await tagsTool.execute(input, toolCtx);
-        const idempotencyKey = toolIdempotencyKey(args.runId, tagsTool.name, input);
+        const invocationIdempotencyKey = toolIdempotencyKey(args.runId, tagsTool.name, input);
         const invocation = await createToolInvocation(args.db, {
           runId: args.runId,
           organizationId: args.organizationId,
           spaceId: args.spaceId,
           toolName: tagsTool.name,
           toolInput: input,
-          idempotencyKey,
+          idempotencyKey: invocationIdempotencyKey,
         });
 
         await completeToolInvocation(args.db, invocation.id, {

@@ -200,6 +200,7 @@ export async function createApprovalRequest(
     requestText: string;
     expiresAt: Date;
     requestedByUserId?: string;
+    requestedBySlackUserId?: string;
   },
 ): Promise<typeof approvalRequests.$inferSelect> {
   const id = newId();
@@ -219,6 +220,7 @@ export async function createApprovalRequest(
       requestText: args.requestText,
       expiresAt: args.expiresAt,
       requestedByUserId: args.requestedByUserId,
+      requestedBySlackUserId: args.requestedBySlackUserId,
       status: "pending",
     })
     .returning();
@@ -257,6 +259,24 @@ export async function resolveApprovalByRequestId(
     .set({
       status: decision,
       resolvedByUserId,
+      resolvedAt: new Date(),
+    })
+    .where(
+      and(eq(approvalRequests.requestId, requestId), eq(approvalRequests.status, "pending")),
+    )
+    .returning();
+
+  return row ?? null;
+}
+
+export async function expireApprovalByRequestId(
+  db: Db,
+  requestId: string,
+): Promise<typeof approvalRequests.$inferSelect | null> {
+  const [row] = await db
+    .update(approvalRequests)
+    .set({
+      status: "expired",
       resolvedAt: new Date(),
     })
     .where(

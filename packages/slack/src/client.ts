@@ -13,14 +13,14 @@ export type SlackMessageRef = {
 export async function postThreadMessage(
   client: WebClient,
   channelId: string,
-  threadTs: string,
+  threadTs: string | undefined,
   text: string,
   blocks?: unknown[],
 ): Promise<SlackMessageRef> {
   await globalSlackRateLimiter.acquire(channelId);
   const result = await client.chat.postMessage({
     channel: channelId,
-    thread_ts: threadTs,
+    ...(threadTs ? { thread_ts: threadTs } : {}),
     text,
     blocks: blocks as never,
   });
