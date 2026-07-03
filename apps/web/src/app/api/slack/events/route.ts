@@ -1,6 +1,6 @@
 import { getEnv } from "@/env";
 import { startRunFromSlack } from "@/lib/slack-run";
-import { addReaction, createSlackClient, postThreadMessage } from "@tags/slack";
+import { addReaction, createSlackClient, postThreadMessage, startStream } from "@tags/slack";
 
 export const runtime = "nodejs";
 
@@ -54,7 +54,12 @@ export async function POST(request: Request) {
   const rootTs = event.thread_ts ?? event.ts;
   const eventId = payload.event_id ?? event.event_ts ?? event.ts;
 
-  if (event.subtype && event.subtype !== "thread_broadcast") {
+  // file_share is how Slack marks messages with uploads — those must still trigger.
+  if (
+    event.subtype &&
+    event.subtype !== "thread_broadcast" &&
+    event.subtype !== "file_share"
+  ) {
     return new Response("ok");
   }
 
@@ -72,16 +77,35 @@ export async function POST(request: Request) {
 
   const ack = addReaction(slack, channelId, event.ts, "eyes").catch(() => {});
 
+  // Open a native streaming message so Slack immediately shows the animated
+  // "Tags is thinking…" indicator. Falls back to a plain placeholder message
+  // (e.g. workspace/plan doesn't support streaming yet).
   let placeholderMessageTs: string | undefined;
-  try {
-    const placeholder = await postThreadMessage(
-      slack,
-      channelId,
-      threadTs,
-      "Tags is working…",
-    );
-    placeholderMessageTs = placeholder.messageTs;
-  } catch {
+  let placeholderIsStream = false;
+  if (event.user) {
+    try {
+      const stream = await startStream(slack, {
+        channelId,
+        threadTs,
+        recipientTeamId: teamId,
+        recipientUserId: event.user,
+      });
+      placeholderMessageTs = stream.messageTs;
+      placeholderIsStream = true;
+    } catch {
+    }
+  }
+  if (!placeholderMessageTs) {
+    try {
+      const placeholder = await postThreadMessage(
+        slack,
+        channelId,
+        threadTs,
+        "Tags is working…",
+      );
+      placeholderMessageTs = placeholder.messageTs;
+    } catch {
+    }
   }
 
   await startRunFromSlack(env, {
@@ -95,6 +119,7 @@ export async function POST(request: Request) {
     eventId,
     trigger: isMention ? "mention" : "reply",
     placeholderMessageTs,
+    placeholderIsStream,
   });
 
   await ack;

@@ -67,7 +67,9 @@ In your Slack app settings (production domain `https://<your-domain>`):
 | Event Subscriptions | `https://<your-domain>/api/slack/events` |
 | Interactivity | `https://<your-domain>/api/slack/interactions` |
 
-**Bot token scopes:** `app_mentions:read`, `channels:history`, `chat:write`.
+**Bot token scopes:** `app_mentions:read`, `channels:history`, `chat:write`, `reactions:write` (👀/✅ acknowledgment reactions), `files:read` (read documents attached in threads). After adding scopes, reinstall the app to the workspace.
+
+Streaming replies use Slack's native `chat.startStream`/`chat.appendStream`/`chat.stopStream` APIs (animated "Tags is thinking…" indicator, markdown rendering, task timeline). These need `chat:write` only; if streaming is unavailable the bot falls back to posting and editing a regular message.
 
 **Event subscriptions:** `app_mention` (add `message.channels` only if you need thread-reply triggers — bot messages are ignored).
 

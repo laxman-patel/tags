@@ -10,6 +10,122 @@ export type SlackMessageRef = {
   messageTs: string;
 };
 
+/** Chunk objects accepted by chat.appendStream / chat.stopStream. */
+export type SlackStreamChunk =
+  | { type: "markdown_text"; text: string }
+  | {
+      type: "task_update";
+      id: string;
+      title: string;
+      status: "pending" | "in_progress" | "complete" | "error";
+      details?: string;
+      output?: string;
+    }
+  | { type: "plan_update"; title: string }
+  | { type: "blocks"; blocks: Array<Record<string, unknown>> };
+
+/**
+ * Start a native Slack streaming message (chat.startStream). Shows the animated
+ * "<App> is thinking…" indicator in the thread until content is appended.
+ * Requires recipient team + user ids when streaming to channels.
+ */
+export async function startStream(
+  client: WebClient,
+  args: {
+    channelId: string;
+    threadTs: string;
+    recipientTeamId: string;
+    recipientUserId: string;
+  },
+): Promise<SlackMessageRef> {
+  await globalSlackRateLimiter.acquire(args.channelId);
+
+  try {
+    const result = await client.chat.startStream({
+      channel: args.channelId,
+      thread_ts: args.threadTs,
+      recipient_team_id: args.recipientTeamId,
+      recipient_user_id: args.recipientUserId,
+    });
+
+    if (!result.ok || !result.ts) {
+      throw new Error(result.error ?? "Failed to start Slack stream");
+    }
+
+    return { channelId: args.channelId, messageTs: result.ts };
+  } catch (error) {
+    const retryAfter = extractRetryAfter(error);
+    if (retryAfter) {
+      await sleep(retryAfter * 1000);
+      return startStream(client, args);
+    }
+    throw error;
+  }
+}
+
+export async function appendStream(
+  client: WebClient,
+  channelId: string,
+  messageTs: string,
+  chunks: SlackStreamChunk[],
+): Promise<void> {
+  await globalSlackRateLimiter.acquire(channelId);
+
+  try {
+    const result = await client.chat.appendStream({
+      channel: channelId,
+      ts: messageTs,
+      chunks: chunks as never,
+    });
+
+    if (!result.ok) {
+      throw new Error(result.error ?? "Failed to append Slack stream");
+    }
+  } catch (error) {
+    const retryAfter = extractRetryAfter(error);
+    if (retryAfter) {
+      await sleep(retryAfter * 1000);
+      await appendStream(client, channelId, messageTs, chunks);
+      return;
+    }
+    throw error;
+  }
+}
+
+export async function stopStream(
+  client: WebClient,
+  channelId: string,
+  messageTs: string,
+  args?: {
+    chunks?: SlackStreamChunk[];
+    /** Rendered at the bottom of the finalized message. */
+    blocks?: unknown[];
+  },
+): Promise<void> {
+  await globalSlackRateLimiter.acquire(channelId);
+
+  try {
+    const result = await client.chat.stopStream({
+      channel: channelId,
+      ts: messageTs,
+      ...(args?.chunks ? { chunks: args.chunks as never } : {}),
+      ...(args?.blocks ? { blocks: args.blocks as never } : {}),
+    });
+
+    if (!result.ok) {
+      throw new Error(result.error ?? "Failed to stop Slack stream");
+    }
+  } catch (error) {
+    const retryAfter = extractRetryAfter(error);
+    if (retryAfter) {
+      await sleep(retryAfter * 1000);
+      await stopStream(client, channelId, messageTs, args);
+      return;
+    }
+    throw error;
+  }
+}
+
 export async function postThreadMessage(
   client: WebClient,
   channelId: string,
@@ -73,11 +189,30 @@ export async function updateMessage(
   }
 }
 
+export type SlackFileRef = {
+  id: string;
+  name?: string;
+  title?: string;
+  mimetype?: string;
+  filetype?: string;
+  size?: number;
+  url_private?: string;
+  url_private_download?: string;
+};
+
+export type SlackThreadMessage = {
+  ts: string;
+  user?: string;
+  text?: string;
+  bot_id?: string;
+  files?: SlackFileRef[];
+};
+
 export async function fetchThreadReplies(
   client: WebClient,
   channelId: string,
   threadTs: string,
-): Promise<Array<{ ts: string; user?: string; text?: string; bot_id?: string }>> {
+): Promise<SlackThreadMessage[]> {
   await globalSlackRateLimiter.acquire(channelId);
   const result = await client.conversations.replies({
     channel: channelId,
@@ -89,12 +224,7 @@ export async function fetchThreadReplies(
     throw new Error(result.error ?? "Failed to fetch thread replies");
   }
 
-  return result.messages as Array<{
-    ts: string;
-    user?: string;
-    text?: string;
-    bot_id?: string;
-  }>;
+  return result.messages as SlackThreadMessage[];
 }
 
 export async function addReaction(

@@ -13,7 +13,7 @@ import {
 import { loadActiveSpaceConfig } from "@tags/core/spaces";
 import { recordUsage } from "@tags/core/usage";
 import type { Db } from "@tags/db";
-import { SlackStreamAdapter, buildRunLinkBlock, updateMessage } from "@tags/slack";
+import { SlackStreamAdapter, buildRunLinkBlock } from "@tags/slack";
 import { ApprovalPauseError, QuestionPauseError, type AgentSegmentResult } from "./types";
 import { buildSystemPrompt, reasoningEffortFor } from "./prompt";
 import { buildThreadContext } from "../context/builder";
@@ -37,6 +37,8 @@ export type AgentLoopArgs = {
   channelId: string;
   threadTs: string;
   slackMessageTs: string;
+  /** Whether slackMessageTs is a native Slack stream (chat.startStream). */
+  slackStream: boolean;
   triggerText: string;
   actorUserId: string | null;
   spaceName: string;
@@ -68,6 +70,7 @@ export async function runAgentSegment(args: AgentLoopArgs): Promise<AgentSegment
     args.slack,
     args.channelId,
     args.slackMessageTs,
+    { native: args.slackStream },
   );
 
   const emit = async (event: TagsEvent) => {
@@ -173,14 +176,7 @@ export async function runAgentSegment(args: AgentLoopArgs): Promise<AgentSegment
 
     const usage = await result.usage;
 
-    await stream.finalize(fullText || "Done.");
-    await updateMessage(
-      args.slack,
-      args.channelId,
-      args.slackMessageTs,
-      fullText || "Done.",
-      [...buildRunLinkBlock(args.appUrl, args.runId)],
-    );
+    await stream.finalize(fullText || "Done.", buildRunLinkBlock(args.appUrl, args.runId));
     await emit({ type: "run.finished" });
     await updateRunStatus(args.db, args.runId, "done", {
       tokenUsage: {

@@ -5,11 +5,7 @@ import { appendRunEvent, updateRunStatus } from "@tags/core/runs";
 import { loadActiveSpaceConfig } from "@tags/core/spaces";
 import { recordUsage } from "@tags/core/usage";
 import type { Db } from "@tags/db";
-import {
-  buildRunLinkBlock,
-  SlackStreamAdapter,
-  updateMessage,
-} from "@tags/slack";
+import { buildRunLinkBlock, SlackStreamAdapter } from "@tags/slack";
 import type { AgentSegmentResult } from "./types";
 import { buildOpencodePrompt } from "./prompt";
 import { buildThreadContext } from "../context/builder";
@@ -18,6 +14,30 @@ import {
   createRuntimeProviders,
   type RuntimeProviderConfig,
 } from "../providers";
+
+/**
+ * The final Slack reply should be the agent's answer, not the opencode CLI
+ * chrome. Strips the logo banner, the "build · <model>" header, share links,
+ * and the appended git-diff section (still available in the run timeline).
+ */
+export function cleanOpencodeReply(raw: string): string {
+  const withoutDiff = raw.split("\n--- git diff ---\n")[0] ?? raw;
+  const cleaned = withoutDiff
+    .split("\n")
+    .filter((line) => {
+      const trimmed = line.trim();
+      if (trimmed.length === 0) return true;
+      // Logo / banner art made of block-drawing glyphs.
+      if (/^[█▀▄▌▐░▒▓─│┌┐└┘|>\s]+$/.test(trimmed)) return false;
+      // "build · accounts/fireworks/routers/…" model header (optionally piped).
+      if (/^[|│>]?\s*\w+\s+·\s+\S+/.test(trimmed) && trimmed.includes("·")) return false;
+      // Share footer, e.g. "~ https://opencode.ai/s/…".
+      if (/^~\s+https?:\/\//.test(trimmed)) return false;
+      return true;
+    })
+    .join("\n");
+  return cleaned.replace(/\n{3,}/g, "\n\n").trim();
+}
 
 export type OpencodeSegmentArgs = {
   db: Db;
@@ -28,6 +48,8 @@ export type OpencodeSegmentArgs = {
   organizationId: string;
   channelId: string;
   slackMessageTs: string;
+  /** Whether slackMessageTs is a native Slack stream (chat.startStream). */
+  slackStream: boolean;
   triggerText: string;
   spaceName: string;
   appUrl: string;
@@ -51,6 +73,7 @@ export async function runOpencodeSegment(
     args.slack,
     args.channelId,
     args.slackMessageTs,
+    { native: args.slackStream },
   );
 
   const emit = async (event: TagsEvent) => {
@@ -96,8 +119,10 @@ export async function runOpencodeSegment(
       prompt,
       model: config.modelId,
       repoUrl: config.repoUrl ?? undefined,
+      // Raw opencode stdout is TUI noise (banner, "build · model" header) —
+      // keep it in the run timeline (DB) but never stream it into Slack.
       onOutput: async (chunk) => {
-        await emit({ type: "text.delta", text: chunk });
+        await appendRunEvent(args.db, args.runId, { type: "text.delta", text: chunk });
       },
     });
 
@@ -119,17 +144,10 @@ export async function runOpencodeSegment(
     });
 
     const replyText =
-      result.output.trim() ||
+      cleanOpencodeReply(result.output) ||
       (result.exitCode === 0 ? "Done." : `opencode exited with code ${result.exitCode}.`);
 
-    await stream.finalize(replyText);
-    await updateMessage(
-      args.slack,
-      args.channelId,
-      args.slackMessageTs,
-      replyText,
-      [...buildRunLinkBlock(args.appUrl, args.runId)],
-    );
+    await stream.finalize(replyText, buildRunLinkBlock(args.appUrl, args.runId));
     await emit({ type: "run.finished" });
 
     const promptTokens = Math.ceil(prompt.length / 4);

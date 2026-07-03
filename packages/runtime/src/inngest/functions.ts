@@ -18,6 +18,7 @@ import {
   removeReaction,
   SlackStreamAdapter,
   buildRunLinkBlock,
+  stopStream,
   updateMessage,
 } from "@tags/slack";
 import { parseRememberCommand } from "../context/builder";
@@ -64,12 +65,16 @@ export type TagsRunInput = {
   isScheduled?: boolean;
   /** ts of the "Tags is working…" placeholder if the webhook already posted it. */
   placeholderMessageTs?: string;
+  /** True when the placeholder is a native Slack stream (chat.startStream). */
+  placeholderIsStream?: boolean;
 };
 
 type RunSetup = {
   runId: string;
   threadId: string;
   slackMessageTs: string;
+  /** Whether slackMessageTs is a native Slack stream (append/stop) vs a plain message (update). */
+  slackStream: boolean;
   threadTs: string;
   skipped?: boolean;
 };
@@ -138,6 +143,7 @@ export const tagsRunFunction: InngestFunction.Any = inngest.createFunction(
                   runId: setup.runId,
                   channelId: input.channelId,
                   slackMessageTs: setup.slackMessageTs,
+                  slackStream: setup.slackStream,
                   summaryText: resolved
                     ? `Rejected ${pendingApproval.toolName}.`
                     : `Approval for ${pendingApproval.toolName} timed out.`,
@@ -184,6 +190,7 @@ export const tagsRunFunction: InngestFunction.Any = inngest.createFunction(
                   runId: setup.runId,
                   channelId: input.channelId,
                   slackMessageTs: setup.slackMessageTs,
+                  slackStream: setup.slackStream,
                   summaryText: "Question timed out without an answer.",
                   appUrl: input.appUrl,
                 }),
@@ -273,6 +280,16 @@ async function ingestStep(input: TagsRunInput): Promise<RunSetup> {
   }
 
   if (!input.isScheduled) {
+    // Sync first so the trigger message is stored with any file attachments
+    // inlined; the explicit upsert below is a fallback (no-op if synced).
+    await syncSlackThreadToDb(slack, db, {
+      organizationId: input.organizationId,
+      spaceId: input.spaceId,
+      threadId: thread.id,
+      channelId: input.channelId,
+      threadTs,
+    });
+
     await upsertMessage(db, {
       organizationId: input.organizationId,
       spaceId: input.spaceId,
@@ -281,16 +298,6 @@ async function ingestStep(input: TagsRunInput): Promise<RunSetup> {
       authorType: "human",
       authorId: input.actorSlackUserId,
       text: input.triggerText,
-    });
-  }
-
-  if (!input.isScheduled) {
-    await syncSlackThreadToDb(slack, db, {
-      organizationId: input.organizationId,
-      spaceId: input.spaceId,
-      threadId: thread.id,
-      channelId: input.channelId,
-      threadTs,
     });
   }
 
@@ -320,20 +327,15 @@ async function ingestStep(input: TagsRunInput): Promise<RunSetup> {
 
   if (!claimed[0]) {
     await updateRunStatus(db, run.id, "cancelled", { finishedAt: new Date() });
-    if (input.placeholderMessageTs) {
-      await updateMessage(
-        slack,
-        input.channelId,
-        input.placeholderMessageTs,
-        "Still working on the previous request in this thread.",
-      );
+    const busyText = "Still working on the previous request in this thread.";
+    if (input.placeholderMessageTs && input.placeholderIsStream) {
+      await stopStream(slack, input.channelId, input.placeholderMessageTs, {
+        chunks: [{ type: "markdown_text", text: busyText }],
+      }).catch(() => {});
+    } else if (input.placeholderMessageTs) {
+      await updateMessage(slack, input.channelId, input.placeholderMessageTs, busyText);
     } else {
-      await postThreadMessage(
-        slack,
-        input.channelId,
-        threadTs,
-        "Still working on the previous request in this thread.",
-      );
+      await postThreadMessage(slack, input.channelId, threadTs, busyText);
     }
     if (!input.isScheduled) {
       await removeReaction(slack, input.channelId, input.triggerMessageTs, "eyes").catch(() => {});
@@ -342,6 +344,7 @@ async function ingestStep(input: TagsRunInput): Promise<RunSetup> {
       runId: run.id,
       threadId: thread.id,
       slackMessageTs: "",
+      slackStream: false,
       threadTs,
       skipped: true,
     };
@@ -350,6 +353,7 @@ async function ingestStep(input: TagsRunInput): Promise<RunSetup> {
   const slackRef = input.placeholderMessageTs
     ? { channelId: input.channelId, messageTs: input.placeholderMessageTs }
     : await postThreadMessage(slack, input.channelId, threadTs, "Tags is working…");
+  const slackStream = Boolean(input.placeholderMessageTs && input.placeholderIsStream);
 
   setSentryRunContext({
     organizationId: input.organizationId,
@@ -361,6 +365,7 @@ async function ingestStep(input: TagsRunInput): Promise<RunSetup> {
     runId: run.id,
     threadId: thread.id,
     slackMessageTs: slackRef.messageTs,
+    slackStream,
     threadTs,
   };
 }
@@ -385,6 +390,7 @@ async function agentSegmentStep(input: TagsRunInput, setup: RunSetup) {
       channelId: input.channelId,
       threadTs: setup.threadTs,
       slackMessageTs: setup.slackMessageTs,
+      slackStream: setup.slackStream,
       triggerText: input.triggerText,
       actorUserId: input.actorSlackUserId,
       spaceName: input.spaceName,
@@ -404,6 +410,7 @@ async function agentSegmentStep(input: TagsRunInput, setup: RunSetup) {
     organizationId: input.organizationId,
     channelId: input.channelId,
     slackMessageTs: setup.slackMessageTs,
+    slackStream: setup.slackStream,
     triggerText: input.triggerText,
     spaceName: input.spaceName,
     appUrl: input.appUrl,
@@ -419,7 +426,9 @@ async function executeApprovedToolStep(
   const secrets = loadRuntimeSecrets();
   const db = createDb(secrets.databaseUrl);
   const slack = createSlackClient(secrets.slackBotToken);
-  const stream = new SlackStreamAdapter(slack, input.channelId, setup.slackMessageTs);
+  const stream = new SlackStreamAdapter(slack, input.channelId, setup.slackMessageTs, {
+    native: setup.slackStream,
+  });
   const emit = async (event: TagsEvent) => {
     await appendRunEvent(db, setup.runId, event);
     await stream.pushEvent(event);
@@ -515,6 +524,7 @@ async function resumeAfterApprovalStep(
     channelId: input.channelId,
     threadTs: setup.threadTs,
     slackMessageTs: setup.slackMessageTs,
+    slackStream: setup.slackStream,
     triggerText: input.triggerText,
     actorUserId: input.actorSlackUserId,
     spaceName: input.spaceName,
@@ -553,6 +563,7 @@ async function resumeAfterQuestionStep(
     channelId: input.channelId,
     threadTs: setup.threadTs,
     slackMessageTs: setup.slackMessageTs,
+    slackStream: setup.slackStream,
     triggerText: input.triggerText,
     actorUserId: input.actorSlackUserId,
     spaceName: input.spaceName,
@@ -600,6 +611,7 @@ async function finalizeRunStep(args: {
   runId: string;
   channelId: string;
   slackMessageTs: string;
+  slackStream: boolean;
   summaryText: string;
   appUrl?: string;
 }) {
@@ -607,13 +619,11 @@ async function finalizeRunStep(args: {
   const db = createDb(secrets.databaseUrl);
 
   const slack = createSlackClient(secrets.slackBotToken);
-  const stream = new SlackStreamAdapter(slack, args.channelId, args.slackMessageTs);
-  await stream.finalize(args.summaryText);
-
-  if (args.appUrl) {
-    const blocks = buildRunLinkBlock(args.appUrl, args.runId);
-    await updateMessage(slack, args.channelId, args.slackMessageTs, args.summaryText, blocks);
-  }
+  const stream = new SlackStreamAdapter(slack, args.channelId, args.slackMessageTs, {
+    native: args.slackStream,
+  });
+  const blocks = args.appUrl ? buildRunLinkBlock(args.appUrl, args.runId) : undefined;
+  await stream.finalize(args.summaryText, blocks);
 
   await appendRunEvent(db, args.runId, { type: "run.finished" });
   await updateRunStatus(db, args.runId, "done", { finishedAt: new Date() });

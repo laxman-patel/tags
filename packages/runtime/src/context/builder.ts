@@ -60,7 +60,15 @@ export async function buildThreadContext(
     content: m.text,
   }));
 
-  if (!history.some((m) => m.role === "user" && m.content === triggerText)) {
+  // Stored trigger may carry inlined file attachments appended to the text,
+  // so match by prefix rather than strict equality.
+  const hasTrigger = history.some(
+    (m) =>
+      m.role === "user" &&
+      typeof m.content === "string" &&
+      m.content.startsWith(triggerText),
+  );
+  if (!hasTrigger) {
     history.push({ role: "user", content: triggerText });
   }
 

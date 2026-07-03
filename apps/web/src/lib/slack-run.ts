@@ -14,6 +14,7 @@ export type SlackTrigger = {
   eventId: string;
   trigger: "mention" | "reply" | "schedule";
   placeholderMessageTs?: string;
+  placeholderIsStream?: boolean;
 };
 
 export async function startRunFromSlack(env: Env, trigger: SlackTrigger) {
@@ -39,6 +40,7 @@ export async function startRunFromSlack(env: Env, trigger: SlackTrigger) {
     appUrl: env.NEXT_PUBLIC_APP_URL,
     trigger: trigger.trigger,
     placeholderMessageTs: trigger.placeholderMessageTs,
+    placeholderIsStream: trigger.placeholderIsStream,
   };
 
   await inngest.send({ name: RUN_REQUESTED_EVENT, data });

@@ -227,12 +227,8 @@ export function renderSlackBlocks(event: TagsEvent): SlackBlock[] {
         },
       ];
     case "run.finished":
-      return [
-        {
-          type: "context",
-          elements: [{ type: "mrkdwn", text: "_Run complete._" }],
-        },
-      ];
+      // The final reply itself is the completion signal; no footer noise.
+      return [];
     case "run.failed":
       return [
         {
