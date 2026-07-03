@@ -7,6 +7,7 @@ export const DEFAULT_OPENCODE_TEMPLATE = "opencode";
 export const REPO_PATH = "/home/user/repo";
 export const WORKDIR = "/home/user/workspace";
 const OPENCODE_CONFIG_PATH = "/tmp/tags/opencode.json";
+const TAGS_AGENT_NAME = "tags";
 
 export type SandboxProviderConfig = {
   /** E2B API key. */
@@ -117,15 +118,36 @@ async function writeOpencodeConfig(
   sandbox: SandboxInstance,
   request: CodingAgentRequest,
 ): Promise<string | undefined> {
-  if (!request.mcpServers || Object.keys(request.mcpServers).length === 0) {
+  const hasMcpServers = request.mcpServers && Object.keys(request.mcpServers).length > 0;
+  const systemPrompt = request.systemPrompt?.trim();
+
+  if (!hasMcpServers && !systemPrompt) {
     return undefined;
   }
 
+  const opencodeConfig: {
+    $schema: string;
+    agent?: Record<string, { mode: "primary"; prompt: string }>;
+    mcp?: CodingAgentRequest["mcpServers"];
+  } = {
+    $schema: "https://opencode.ai/config.json",
+  };
+
+  if (systemPrompt) {
+    opencodeConfig.agent = {
+      [TAGS_AGENT_NAME]: {
+        mode: "primary",
+        prompt: systemPrompt,
+      },
+    };
+  }
+
+  if (hasMcpServers) {
+    opencodeConfig.mcp = request.mcpServers;
+  }
+
   const config = JSON.stringify(
-    {
-      $schema: "https://opencode.ai/config.json",
-      mcp: request.mcpServers,
-    },
+    opencodeConfig,
     null,
     2,
   );
@@ -180,7 +202,10 @@ export function createSandboxProvider(config: SandboxProviderConfig = {}): Sandb
         const model = toOpencodeModelId(
           request.model ?? config.model ?? "accounts/fireworks/routers/glm-5p2-fast",
         );
-        const command = `${opencodeConfigPath ? `OPENCODE_CONFIG=${shellQuote(opencodeConfigPath)} ` : ""}opencode run --model ${shellQuote(model)} ${shellQuote(request.prompt)}`;
+        const agentFlag = request.systemPrompt?.trim()
+          ? ` --agent ${shellQuote(TAGS_AGENT_NAME)}`
+          : "";
+        const command = `${opencodeConfigPath ? `OPENCODE_CONFIG=${shellQuote(opencodeConfigPath)} ` : ""}opencode run${agentFlag} --model ${shellQuote(model)} ${shellQuote(request.prompt)}`;
 
         const appendStream = async (chunk: string) => {
           const clean = stripAnsi(chunk);

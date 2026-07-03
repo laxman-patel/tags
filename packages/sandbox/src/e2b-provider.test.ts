@@ -115,4 +115,25 @@ describe("createSandboxProvider", () => {
     expect(commands.some((command) => command.includes('"composio"'))).toBe(true);
     expect(commands.some((command) => command.includes("OPENCODE_CONFIG="))).toBe(true);
   });
+
+  it("runs opencode with the Tags agent when a system prompt is provided", async () => {
+    const sandbox = createMockSandbox("new-sandbox");
+    mocks.create.mockResolvedValue(sandbox);
+
+    const provider = createSandboxProvider();
+    await provider.runCodingAgent({
+      prompt: "# Task thread\n[user]\n@tags what changed?",
+      systemPrompt: "You are Tags for the #dev Space.",
+    });
+
+    const commands = sandbox.commands.run.mock.calls.map((call) => String(call[0]));
+    expect(commands.some((command) => command.includes('"agent"'))).toBe(true);
+    expect(commands.some((command) => command.includes('"tags"'))).toBe(true);
+    expect(commands.some((command) => command.includes("You are Tags for the #dev Space."))).toBe(
+      true,
+    );
+    expect(commands.some((command) => command.includes("opencode run --agent 'tags'"))).toBe(
+      true,
+    );
+  });
 });

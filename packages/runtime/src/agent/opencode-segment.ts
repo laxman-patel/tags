@@ -15,7 +15,8 @@ import type { Db } from "@tags/db";
 import { DEFAULT_OPENCODE_TEMPLATE, REPO_PATH, WORKDIR } from "@tags/sandbox";
 import { buildRunLinkBlock, SlackStreamAdapter } from "@tags/slack";
 import type { AgentSegmentResult } from "./types";
-import { buildOpencodePrompt } from "./prompt";
+import { buildCapabilitiesReply, isCapabilityInventoryQuestion } from "./capabilities";
+import { buildOpencodeSystemPrompt, buildOpencodeUserPrompt } from "./prompt";
 import { buildThreadContext } from "../context/builder";
 import { maybeExtractMemories, maybeSummarizeThread } from "../context/post-run";
 import {
@@ -103,6 +104,27 @@ export async function runOpencodeSegment(
   }
 
   await updateRunStatus(args.db, args.runId, "streaming");
+
+  if (isCapabilityInventoryQuestion(args.triggerText)) {
+    await emit({ type: "status", label: "Reading Space capabilities" });
+
+    const replyText = buildCapabilitiesReply({
+      spaceName: args.spaceName,
+      enabledTools: config.enabledTools,
+      enabledConnections: config.enabledConnections,
+      hasComposioApiKey: Boolean(args.providerConfig.composioApiKey),
+    });
+
+    await stream.finalize(replyText, buildRunLinkBlock(args.appUrl, args.runId));
+    await emit({ type: "run.finished" });
+    await updateRunStatus(args.db, args.runId, "done", {
+      tokenUsage: { prompt: 0, completion: 0, total: 0 },
+      finishedAt: new Date(),
+    });
+
+    return { kind: "complete", text: replyText };
+  }
+
   await emit({ type: "status", label: "Reading thread context" });
 
   const messages = await buildThreadContext(
@@ -112,9 +134,12 @@ export async function runOpencodeSegment(
     args.spaceId,
     args.triggerText,
   );
-  const prompt = buildOpencodePrompt(config.instructions, args.spaceName, messages, {
+  const systemPrompt = buildOpencodeSystemPrompt(config.instructions, args.spaceName, {
+    enabledTools: config.enabledTools,
     connectedToolkits: config.enabledConnections,
+    hasComposioApiKey: Boolean(args.providerConfig.composioApiKey),
   });
+  const prompt = buildOpencodeUserPrompt(messages);
 
   const providers = await createRuntimeProviders(args.providerConfig);
   let composioMcp: Awaited<ReturnType<typeof createComposioMcpServer>> = null;
@@ -156,7 +181,11 @@ export async function runOpencodeSegment(
   await emit({
     type: "tool.started",
     toolName: "opencode",
-    inputPreview: { promptLength: prompt.length, sandboxSessionId: sandboxSession.id },
+    inputPreview: {
+      promptLength: prompt.length,
+      systemPromptLength: systemPrompt.length,
+      sandboxSessionId: sandboxSession.id,
+    },
   });
 
   let releaseStatus: SpaceSandboxStatus = "ready";
@@ -164,6 +193,7 @@ export async function runOpencodeSegment(
   try {
     const result = await providers.sandbox.runCodingAgent({
       prompt,
+      systemPrompt,
       model: config.modelId,
       repoUrl: config.repoUrl ?? undefined,
       session: {

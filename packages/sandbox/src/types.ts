@@ -1,6 +1,8 @@
 export interface CodingAgentRequest {
   /** Natural-language coding task for the opencode agent to perform. */
   prompt: string;
+  /** Optional opencode agent prompt. Use this for higher-priority harness instructions. */
+  systemPrompt?: string;
   /** Optional git repository to clone into the sandbox before running. */
   repoUrl?: string;
   /** opencode `--model` override for this run (falls back to provider config). */
