@@ -5,6 +5,11 @@ export const NATIVE_TOOLS = [
     description: "Read recent conversation context in the current Slack thread.",
   },
   {
+    id: "search_channel",
+    label: "Search channel",
+    description: "Read recent top-level messages in this Slack channel.",
+  },
+  {
     id: "search_memory",
     label: "Search memory",
     description: "Search long-term Space memory.",

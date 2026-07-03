@@ -7,6 +7,7 @@ export type SpaceCapabilities = {
 
 const NATIVE_TOOL_DESCRIPTIONS: Record<string, string> = {
   search_thread: "read recent conversation context in the current Slack thread",
+  search_channel: "read recent top-level messages in this Slack channel",
   search_memory: "search long-term Space memory",
   save_memory: "store channel-scoped facts and preferences",
   create_artifact: "publish durable markdown, JSON, HTML, links, and diffs",
@@ -72,7 +73,7 @@ export function buildCapabilitiesReply(capabilities: SpaceCapabilities): string 
         : "Configured Composio toolkits (currently unavailable because COMPOSIO_API_KEY is missing):";
 
   return [
-    `I'm Tags for the #${capabilities.spaceName} Space. I can read and reply in this Slack thread, use this Space's memory/context, and run approved coding work in the persistent Space sandbox through opencode.`,
+    `I'm Tags for the #${capabilities.spaceName} Space. I can read and reply in this Slack thread, use this Space's memory/context, call native Tags tools through the tags MCP server, and run approved coding work in the persistent Space sandbox through opencode.`,
     "",
     "Enabled native tools:",
     formatList(capabilities.enabledTools, formatNativeTool),

@@ -8,3 +8,9 @@ export { tagsRunFunction, type TagsRunInput } from "./inngest/functions";
 export { scheduleTickFunction } from "./inngest/schedule-tick";
 export { evaluateAndFireSchedules, type ScheduleTickResult } from "./inngest/evaluate-schedules";
 export { createRuntimeProviders, type RuntimeProviderConfig, type RuntimeProviders } from "./providers";
+export { loadRuntimeSecrets, buildRuntimeProviderConfig } from "./secrets";
+export {
+  buildTagsMcpRunToken,
+  createTagsMcpServerConfig,
+  handleTagsMcpRequest,
+} from "./tools/tags-mcp";

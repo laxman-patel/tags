@@ -16,6 +16,8 @@ export type RuntimeProviderConfig = {
   /** Optional GitHub token for private repo clones in the sandbox. */
   githubToken?: string;
   r2?: R2Config;
+  /** Signs short-lived run tokens for the Tags MCP bridge used by opencode. */
+  mcpSigningKey?: string;
 };
 
 export type RuntimeProviders = {

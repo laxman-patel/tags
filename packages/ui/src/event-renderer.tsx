@@ -50,6 +50,14 @@ function UiCardView(props: { card: UICard }) {
           <pre className={preClass}>{ui.preview}</pre>
         </div>
       );
+    case "channel-search":
+      return (
+        <div className={cardClass}>
+          <span className="font-medium">Channel search</span>
+          <p className={`mt-1 mb-0 ${mutedClass}`}>{ui.messageCount} message(s)</p>
+          <pre className={preClass}>{ui.preview}</pre>
+        </div>
+      );
     case "coding-agent":
       return (
         <div className={cardClass}>

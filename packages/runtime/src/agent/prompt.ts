@@ -38,7 +38,7 @@ export function buildOpencodeSystemPrompt(
   const system = buildSystemPrompt(instructions, spaceName);
   const enabledTools = options?.enabledTools ?? [];
   const connectedToolkits = options?.connectedToolkits ?? [];
-  const nativeToolContext = `\n# Native Tags tools\n${formatInventory("Enabled native tools", enabledTools)}. These are Tags runtime capabilities for this Space; mention them honestly if asked, even though opencode only executes sandbox work directly.`;
+  const nativeToolContext = `\n# Native Tags tools\n${formatInventory("Enabled native tools", enabledTools)}. These are exposed to opencode through the MCP server named \"tags\". Use search_thread for the current thread and search_channel for recent channel history before answering.`;
   const connectionStatus =
     connectedToolkits.length > 0 && options?.hasComposioApiKey === false
       ? " These toolkits are configured but currently unavailable because COMPOSIO_API_KEY is missing."

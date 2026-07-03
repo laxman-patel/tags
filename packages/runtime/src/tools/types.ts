@@ -15,6 +15,7 @@ export interface ToolContext extends RuntimeProviders {
   organizationId: string;
   workspaceId: string;
   spaceId: string;
+  channelId: string;
   threadId: string;
   runId: string;
   actorUserId: string | null;

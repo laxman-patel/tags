@@ -2,6 +2,7 @@ export {
   addReaction,
   appendStream,
   createSlackClient,
+  fetchChannelHistory,
   fetchThreadReplies,
   postThreadMessage,
   removeReaction,
@@ -9,7 +10,20 @@ export {
   stopStream,
   updateMessage,
 } from "./client";
-export type { SlackFileRef, SlackMessageRef, SlackStreamChunk, SlackThreadMessage } from "./client";
+export {
+  buildChannelContextBlock,
+  formatChannelContext,
+  isChannelContextRequest,
+  isTopLevelChannelMessage,
+  packChannelContext,
+} from "./channel-context";
+export type {
+  SlackChannelMessage,
+  SlackFileRef,
+  SlackMessageRef,
+  SlackStreamChunk,
+  SlackThreadMessage,
+} from "./client";
 export { buildWorkingMessage, buildRunLinkBlock, renderSlackBlocks } from "./blocks/render";
 export { SlackStreamAdapter } from "./stream-adapter";
 export { verifySlackSignature } from "./verify";

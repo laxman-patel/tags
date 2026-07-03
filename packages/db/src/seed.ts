@@ -95,7 +95,7 @@ async function seed() {
       'provider-default',
       ${defaultInstructions(channelName)},
       '[]'::jsonb,
-      ${JSON.stringify(["search_thread", "create_artifact"])}::jsonb,
+      ${JSON.stringify(["search_thread", "search_channel", "create_artifact"])}::jsonb,
       '[]'::jsonb,
       12,
       'opencode',

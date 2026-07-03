@@ -208,6 +208,33 @@ export type SlackThreadMessage = {
   files?: SlackFileRef[];
 };
 
+export type SlackChannelMessage = SlackThreadMessage & {
+  reply_count?: number;
+  thread_ts?: string;
+  subtype?: string;
+};
+
+export async function fetchChannelHistory(
+  client: WebClient,
+  channelId: string,
+  options?: { limit?: number },
+): Promise<SlackChannelMessage[]> {
+  const { isTopLevelChannelMessage } = await import("./channel-context");
+  await globalSlackRateLimiter.acquire(channelId);
+  const result = await client.conversations.history({
+    channel: channelId,
+    limit: options?.limit ?? 50,
+  });
+
+  if (!result.ok || !result.messages) {
+    throw new Error(result.error ?? "Failed to fetch channel history");
+  }
+
+  return (result.messages as SlackChannelMessage[])
+    .filter(isTopLevelChannelMessage)
+    .reverse();
+}
+
 export async function fetchThreadReplies(
   client: WebClient,
   channelId: string,

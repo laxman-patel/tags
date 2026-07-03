@@ -61,6 +61,16 @@ function renderUiCardBlocks(card: UICard): SlackBlock[] {
           },
         },
       ];
+    case "channel-search":
+      return [
+        {
+          type: "section",
+          text: {
+            type: "mrkdwn",
+            text: `*Channel search* — ${card.messageCount} message(s)\n\`\`\`${card.preview.slice(0, 400)}\`\`\``,
+          },
+        },
+      ];
     case "coding-agent":
       const diffBlock =
         card.gitDiffPreview

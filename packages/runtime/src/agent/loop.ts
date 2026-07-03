@@ -13,7 +13,7 @@ import {
 import { loadActiveSpaceConfig } from "@tags/core/spaces";
 import { recordUsage } from "@tags/core/usage";
 import type { Db } from "@tags/db";
-import { SlackStreamAdapter, buildRunLinkBlock } from "@tags/slack";
+import { SlackStreamAdapter, buildRunLinkBlock, buildChannelContextBlock, isChannelContextRequest } from "@tags/slack";
 import { ApprovalPauseError, QuestionPauseError, type AgentSegmentResult } from "./types";
 import { buildSystemPrompt, reasoningEffortFor } from "./prompt";
 import { buildThreadContext } from "../context/builder";
@@ -101,6 +101,23 @@ export async function runAgentSegment(args: AgentLoopArgs): Promise<AgentSegment
   await emit({ type: "status", label: "Reading thread context" });
 
   const messages = await buildThreadContext(args.db, args.threadId, args.organizationId, args.spaceId, args.triggerText);
+
+  if (isChannelContextRequest(args.triggerText)) {
+    await emit({ type: "status", label: "Reading channel context" });
+    try {
+      const channelBlock = await buildChannelContextBlock(args.slack, args.channelId);
+      messages.unshift({
+        role: "user",
+        content: channelBlock,
+      });
+    } catch (error) {
+      await emit({
+        type: "status",
+        label: "Channel context unavailable",
+        detail: error instanceof Error ? error.message : "Failed to fetch channel history",
+      });
+    }
+  }
 
   if (args.approvedToolContinuation) {
     const cont = args.approvedToolContinuation;
@@ -252,6 +269,7 @@ export async function executeApprovedTool(
     organizationId: string;
     workspaceId: string;
     spaceId: string;
+    channelId: string;
     threadId: string;
     actorUserId: string | null;
     appUrl: string;
@@ -311,6 +329,7 @@ function buildToolContext(
     organizationId: string;
     workspaceId: string;
     spaceId: string;
+    channelId: string;
     threadId: string;
     runId: string;
     actorUserId: string | null;
@@ -325,6 +344,7 @@ function buildToolContext(
     organizationId: args.organizationId,
     workspaceId: args.workspaceId,
     spaceId: args.spaceId,
+    channelId: args.channelId,
     threadId: args.threadId,
     runId: args.runId,
     actorUserId: args.actorUserId,
@@ -397,6 +417,7 @@ function buildAiTools(
             organizationId: args.organizationId,
             workspaceId: args.workspaceId,
             spaceId: args.spaceId,
+            channelId: args.channelId,
             threadId: args.threadId,
             actorUserId: args.actorUserId,
             appUrl: args.appUrl,

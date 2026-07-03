@@ -23,6 +23,11 @@ export type UICard =
       preview: string;
     }
   | {
+      kind: "channel-search";
+      messageCount: number;
+      preview: string;
+    }
+  | {
       kind: "coding-agent";
       exitCode: number;
       outputPreview: string;
@@ -63,6 +68,8 @@ export function formatUiCardPreview(card: UICard): string {
     case "memory-saved":
       return card.content;
     case "thread-search":
+      return card.preview;
+    case "channel-search":
       return card.preview;
     case "coding-agent":
       return card.gitDiffPreview

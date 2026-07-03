@@ -13,7 +13,7 @@ import { loadActiveSpaceConfig } from "@tags/core/spaces";
 import { recordUsage } from "@tags/core/usage";
 import type { Db } from "@tags/db";
 import { DEFAULT_OPENCODE_TEMPLATE, REPO_PATH, WORKDIR } from "@tags/sandbox";
-import { buildRunLinkBlock, SlackStreamAdapter } from "@tags/slack";
+import { buildChannelContextBlock, buildRunLinkBlock, isChannelContextRequest, SlackStreamAdapter } from "@tags/slack";
 import type { AgentSegmentResult } from "./types";
 import { buildCapabilitiesReply, isCapabilityInventoryQuestion } from "./capabilities";
 import { buildOpencodeSystemPrompt, buildOpencodeUserPrompt } from "./prompt";
@@ -24,6 +24,11 @@ import {
   type RuntimeProviderConfig,
 } from "../providers";
 import { createComposioMcpServer } from "../tools/composio";
+import {
+  buildTagsMcpRunToken,
+  createTagsMcpServerConfig,
+  type TagsMcpServerConfig,
+} from "../tools/tags-mcp";
 
 /**
  * The final Slack reply should be the agent's answer, not the opencode CLI
@@ -54,6 +59,7 @@ export type OpencodeSegmentArgs = {
   slack: import("@slack/web-api").WebClient;
   runId: string;
   spaceId: string;
+  workspaceId: string;
   threadId: string;
   organizationId: string;
   channelId: string;
@@ -61,6 +67,7 @@ export type OpencodeSegmentArgs = {
   /** Whether slackMessageTs is a native Slack stream (chat.startStream). */
   slackStream: boolean;
   triggerText: string;
+  actorSlackUserId: string;
   spaceName: string;
   appUrl: string;
   providerConfig: RuntimeProviderConfig;
@@ -134,6 +141,24 @@ export async function runOpencodeSegment(
     args.spaceId,
     args.triggerText,
   );
+
+  if (isChannelContextRequest(args.triggerText)) {
+    await emit({ type: "status", label: "Reading channel context" });
+    try {
+      const channelBlock = await buildChannelContextBlock(args.slack, args.channelId);
+      messages.unshift({
+        role: "user",
+        content: channelBlock,
+      });
+    } catch (error) {
+      await emit({
+        type: "status",
+        label: "Channel context unavailable",
+        detail: error instanceof Error ? error.message : "Failed to fetch channel history",
+      });
+    }
+  }
+
   const systemPrompt = buildOpencodeSystemPrompt(config.instructions, args.spaceName, {
     enabledTools: config.enabledTools,
     connectedToolkits: config.enabledConnections,
@@ -142,6 +167,28 @@ export async function runOpencodeSegment(
   const prompt = buildOpencodeUserPrompt(messages);
 
   const providers = await createRuntimeProviders(args.providerConfig);
+  const mcpServers: Record<string, TagsMcpServerConfig> = {};
+
+  const tagsMcpToken = buildTagsMcpRunToken(
+    {
+      runId: args.runId,
+      organizationId: args.organizationId,
+      workspaceId: args.workspaceId,
+      spaceId: args.spaceId,
+      channelId: args.channelId,
+      threadId: args.threadId,
+      actorSlackUserId: args.actorSlackUserId,
+      enabledTools: config.enabledTools,
+    },
+    args.providerConfig.mcpSigningKey ?? "",
+  );
+  if (tagsMcpToken) {
+    mcpServers.tags = createTagsMcpServerConfig({
+      appUrl: args.appUrl,
+      token: tagsMcpToken,
+    });
+  }
+
   let composioMcp: Awaited<ReturnType<typeof createComposioMcpServer>> = null;
   try {
     composioMcp = await createComposioMcpServer({
@@ -149,6 +196,9 @@ export async function runOpencodeSegment(
       entityId: args.spaceId,
       toolkits: config.enabledConnections,
     });
+    if (composioMcp) {
+      mcpServers.composio = composioMcp;
+    }
   } catch (error) {
     await emit({
       type: "status",
@@ -200,7 +250,7 @@ export async function runOpencodeSegment(
         sandboxId: sandboxLease.externalSandboxId,
         keepAlive: true,
       },
-      mcpServers: composioMcp ? { composio: composioMcp } : undefined,
+      mcpServers: Object.keys(mcpServers).length > 0 ? mcpServers : undefined,
       // Raw opencode stdout is TUI noise (banner, "build · model" header) —
       // keep it in the run timeline (DB) but never stream it into Slack.
       onOutput: async (chunk) => {

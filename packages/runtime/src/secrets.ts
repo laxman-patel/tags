@@ -13,6 +13,7 @@ const runtimeSecretsSchema = z.object({
   GITHUB_TOKEN: z.string().optional(),
   COMPOSIO_API_KEY: z.string().optional(),
   OPENCODE_MODEL: z.string().optional(),
+  INNGEST_SIGNING_KEY: z.string().optional(),
 });
 
 export type RuntimeSecrets = {
@@ -25,6 +26,7 @@ export type RuntimeSecrets = {
   githubToken?: string;
   composioApiKey?: string;
   opencodeModel?: string;
+  mcpSigningKey?: string;
   r2?: R2Config;
 };
 
@@ -50,6 +52,7 @@ export function loadRuntimeSecrets(): RuntimeSecrets {
     githubToken: env.GITHUB_TOKEN,
     composioApiKey: env.COMPOSIO_API_KEY,
     opencodeModel: env.OPENCODE_MODEL,
+    mcpSigningKey: env.INNGEST_SIGNING_KEY,
     ...(r2 ? { r2 } : {}),
   };
 }
@@ -63,6 +66,7 @@ export function buildRuntimeProviderConfig(secrets: RuntimeSecrets): RuntimeProv
     githubToken: secrets.githubToken,
     fireworksApiKey: secrets.fireworksApiKey,
     opencodeModel: secrets.opencodeModel,
+    mcpSigningKey: secrets.mcpSigningKey,
   };
 
   if (secrets.r2) {
