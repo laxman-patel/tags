@@ -97,6 +97,52 @@ export async function fetchThreadReplies(
   }>;
 }
 
+export async function addReaction(
+  client: WebClient,
+  channelId: string,
+  messageTs: string,
+  emoji: string,
+): Promise<void> {
+  await globalSlackRateLimiter.acquire(channelId);
+  try {
+    await client.reactions.add({ channel: channelId, timestamp: messageTs, name: emoji });
+  } catch (error) {
+    if (isIgnorableReactionError(error, "already_reacted")) return;
+    const retryAfter = extractRetryAfter(error);
+    if (retryAfter) {
+      await sleep(retryAfter * 1000);
+      return addReaction(client, channelId, messageTs, emoji);
+    }
+    throw error;
+  }
+}
+
+export async function removeReaction(
+  client: WebClient,
+  channelId: string,
+  messageTs: string,
+  emoji: string,
+): Promise<void> {
+  await globalSlackRateLimiter.acquire(channelId);
+  try {
+    await client.reactions.remove({ channel: channelId, timestamp: messageTs, name: emoji });
+  } catch (error) {
+    if (isIgnorableReactionError(error, "no_reaction")) return;
+    const retryAfter = extractRetryAfter(error);
+    if (retryAfter) {
+      await sleep(retryAfter * 1000);
+      return removeReaction(client, channelId, messageTs, emoji);
+    }
+    throw error;
+  }
+}
+
+function isIgnorableReactionError(error: unknown, code: string): boolean {
+  if (typeof error !== "object" || error === null) return false;
+  const data = (error as { data?: { error?: string } }).data;
+  return data?.error === code;
+}
+
 function extractRetryAfter(error: unknown): number | null {
   if (typeof error !== "object" || error === null) return null;
   const data = (error as { data?: { retryAfter?: number } }).data;
