@@ -18,7 +18,8 @@
     "./policies": "./src/policies.ts",
     "./schedules": "./src/schedules.ts",
     "./questions": "./src/questions.ts",
-    "./space-sandboxes": "./src/space-sandboxes.ts"
+    "./space-sandboxes": "./src/space-sandboxes.ts",
+    "./model-labels": "./src/model-labels.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"

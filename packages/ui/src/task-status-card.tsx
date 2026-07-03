@@ -1,3 +1,5 @@
+import { formatModelLabel } from "@tags/core/model-labels";
+
 export function TaskStatusCard(props: {
   status: string;
   modelId: string;
@@ -15,7 +17,7 @@ export function TaskStatusCard(props: {
       <dl className="mt-3 grid gap-1.5 text-muted-foreground">
         <div className="flex gap-2">
           <dt className="w-16 shrink-0 text-xs leading-5">Model</dt>
-          <dd className="m-0 font-mono text-xs leading-5 text-foreground">{props.modelId}</dd>
+          <dd className="m-0 text-xs leading-5 text-foreground">{formatModelLabel(props.modelId)}</dd>
         </div>
         {props.startedAt && (
           <div className="flex gap-2">

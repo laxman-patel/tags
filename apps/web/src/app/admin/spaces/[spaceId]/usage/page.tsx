@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { AnimatedNumber } from "@/components/ui/animated-number";
 import { Card, CardContent } from "@/components/ui/card";
 import { EmptyState } from "@/components/empty-state";
+import { formatModelLabel } from "@tags/core/model-labels";
 
 type Usage = {
   summary: {
@@ -89,7 +90,7 @@ export default function SpaceUsagePage() {
                 <tbody>
                   {usage.recent.map((r) => (
                     <tr key={r.id} className="border-t border-border/60">
-                      <td className="px-3 py-2.5 font-mono text-xs">{r.modelId}</td>
+                      <td className="px-3 py-2.5 text-sm">{formatModelLabel(r.modelId)}</td>
                       <td className="px-3 py-2.5 text-right tabular-nums">
                         {r.promptTokens.toLocaleString()}
                       </td>
