@@ -50,6 +50,7 @@ export async function createRun(
       workflowRunId: args.workflowRunId,
       status: "queued",
     })
+    .onConflictDoNothing({ target: runs.idempotencyKey })
     .returning();
 
   return row ?? null;

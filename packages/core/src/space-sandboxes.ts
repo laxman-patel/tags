@@ -1,4 +1,5 @@
-import { and, eq, isNull, or, sql } from "@tags/db";
+import { lt } from "drizzle-orm";
+import { and, eq, isNull, or } from "@tags/db";
 import type { Db } from "@tags/db";
 import { newId, spaceSandboxSessions } from "@tags/db";
 
@@ -140,7 +141,7 @@ export async function acquireSpaceSandboxLease(
         or(
           isNull(spaceSandboxSessions.activeRunId),
           eq(spaceSandboxSessions.activeRunId, args.runId),
-          sql`${spaceSandboxSessions.leaseExpiresAt} < ${now}`,
+          lt(spaceSandboxSessions.leaseExpiresAt, now),
         ),
       ),
     )
