@@ -20,6 +20,7 @@ export type ActiveSpaceConfig = {
   /** opencode = E2B harness (default); orchestrator = AI SDK outer loop + Composio. */
   runtimeMode: RuntimeMode;
   repoUrl?: string | null;
+  repoUrls?: string[];
 };
 
 export function parseRuntimeMode(value: string | null | undefined): RuntimeMode {
@@ -80,5 +81,11 @@ export async function loadActiveSpaceConfig(
     maxSteps: row.maxSteps,
     runtimeMode: parseRuntimeMode(row.runtimeMode),
     repoUrl: row.repoUrl,
+    repoUrls:
+      (row.repoUrls ?? []).length > 0
+        ? row.repoUrls ?? []
+        : row.repoUrl
+          ? [row.repoUrl]
+          : [],
   };
 }

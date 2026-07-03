@@ -4,17 +4,9 @@ import { getSpaceById } from "@tags/core/spaces-admin";
 import { adminUnauthorizedResponse, isAdminAuthorized } from "@/lib/admin-auth";
 import { getEnv } from "@/env";
 import { getDb } from "@/lib/db";
+import { parseGitHubRepo } from "@/lib/github-repo";
 
 export const runtime = "nodejs";
-
-function parseGitHubRepo(repoUrl: string | null | undefined): { owner: string; repo: string } | null {
-  if (!repoUrl) return null;
-  const httpsMatch = repoUrl.match(/^https:\/\/github\.com\/([^/]+)\/([^/.]+)(?:\.git)?\/?$/);
-  if (httpsMatch?.[1] && httpsMatch[2]) return { owner: httpsMatch[1], repo: httpsMatch[2] };
-  const sshMatch = repoUrl.match(/^git@github\.com:([^/]+)\/([^/.]+)(?:\.git)?$/);
-  if (sshMatch?.[1] && sshMatch[2]) return { owner: sshMatch[1], repo: sshMatch[2] };
-  return null;
-}
 
 async function testGitHubRepo(repoUrl: string | null | undefined, token?: string) {
   const parsed = parseGitHubRepo(repoUrl);
@@ -55,6 +47,15 @@ async function testGitHubRepo(repoUrl: string | null | undefined, token?: string
   };
 }
 
+function resolveRepoUrls(config: Awaited<ReturnType<typeof loadActiveSpaceConfig>>) {
+  if (!config) return [];
+  return config.repoUrls?.length
+    ? config.repoUrls
+    : config.repoUrl
+      ? [config.repoUrl]
+      : [];
+}
+
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ spaceId: string }> },
@@ -67,10 +68,15 @@ export async function GET(
   if (!space) return Response.json({ error: "Not found" }, { status: 404 });
 
   const config = await loadActiveSpaceConfig(db, spaceId);
+  const repoUrls = resolveRepoUrls(config);
   const env = getEnv();
   return Response.json({
-    repoUrl: config?.repoUrl ?? null,
-    parsedGitHubRepo: parseGitHubRepo(config?.repoUrl),
+    repoUrl: repoUrls[0] ?? null,
+    repoUrls,
+    repos: repoUrls.map((url) => ({
+      url,
+      parsedGitHubRepo: parseGitHubRepo(url),
+    })),
     hasGlobalGitHubToken: Boolean(env.GITHUB_TOKEN),
   });
 }
@@ -86,20 +92,26 @@ export async function POST(
   const space = await getSpaceById(db, spaceId);
   if (!space) return Response.json({ error: "Not found" }, { status: 404 });
 
+  const body = (await request.json().catch(() => ({}))) as { repoUrl?: string };
   const config = await loadActiveSpaceConfig(db, spaceId);
+  const repoUrls = resolveRepoUrls(config);
+  const repoUrl = body.repoUrl?.trim() || repoUrls[0] || null;
   const env = getEnv();
-  const result = await testGitHubRepo(config?.repoUrl, env.GITHUB_TOKEN);
+  const result = await testGitHubRepo(repoUrl, env.GITHUB_TOKEN);
 
   await recordAuditEvent(db, {
     organizationId: space.organizationId,
     spaceId,
     actorType: "human",
     eventType: "codebase.access_tested",
-    payload: { repoUrl: config?.repoUrl ?? null, ok: result.ok, status: result.status },
+    payload: { repoUrl, ok: result.ok, status: result.status },
   });
 
   return Response.json({
-    repoUrl: config?.repoUrl ?? null,
+    repoUrl,
+    repoUrls,
+    testedRepoUrl: repoUrl,
+    parsedGitHubRepo: parseGitHubRepo(repoUrl),
     hasGlobalGitHubToken: Boolean(env.GITHUB_TOKEN),
     result,
   });

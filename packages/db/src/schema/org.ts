@@ -110,6 +110,7 @@ export const spaceConfigs = pgTable(
     maxSteps: integer("max_steps").notNull().default(12),
     runtimeMode: text("runtime_mode").notNull().default("opencode"),
     repoUrl: text("repo_url"),
+    repoUrls: jsonb("repo_urls").$type<string[]>().notNull().default([]),
     isActive: boolean("is_active").notNull().default(false),
     createdByUserId: uuid("created_by_user_id").references(() => users.id),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),

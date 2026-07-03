@@ -73,6 +73,7 @@ export type UpdateSpaceConfigInput = {
   maxSteps?: number;
   runtimeMode?: RuntimeMode;
   repoUrl?: string | null;
+  repoUrls?: string[];
 };
 
 export async function createSpaceConfigVersion(db: Db, input: UpdateSpaceConfigInput) {
@@ -83,13 +84,22 @@ export async function createSpaceConfigVersion(db: Db, input: UpdateSpaceConfigI
 
   const nextVersion = (Number(latest[0]?.version) || 0) + 1;
   const configId = newId();
+  const previous = await loadActiveSpaceConfig(db, input.spaceId);
 
   await db
     .update(spaceConfigs)
     .set({ isActive: false })
     .where(eq(spaceConfigs.spaceId, input.spaceId));
 
-  const active = await loadActiveSpaceConfig(db, input.spaceId);
+  let repoUrls: string[];
+  if (input.repoUrls !== undefined) {
+    repoUrls = input.repoUrls.map((url) => url.trim()).filter(Boolean);
+  } else if (input.repoUrl !== undefined) {
+    repoUrls = input.repoUrl ? [input.repoUrl.trim()] : [];
+  } else {
+    repoUrls = previous?.repoUrls ?? (previous?.repoUrl ? [previous.repoUrl] : []);
+  }
+  const repoUrl = repoUrls[0] ?? null;
 
   await db.insert(spaceConfigs).values({
     id: configId,
@@ -97,14 +107,15 @@ export async function createSpaceConfigVersion(db: Db, input: UpdateSpaceConfigI
     spaceId: input.spaceId,
     version: nextVersion,
     modelId: input.modelId,
-    reasoning: input.reasoning ?? active?.reasoning ?? "provider-default",
+    reasoning: input.reasoning ?? previous?.reasoning ?? "provider-default",
     instructions: input.instructions,
-    enabledSkills: input.enabledSkills ?? active?.enabledSkills ?? [],
+    enabledSkills: input.enabledSkills ?? previous?.enabledSkills ?? [],
     enabledTools: input.enabledTools,
-    enabledConnections: input.enabledConnections ?? active?.enabledConnections ?? [],
-    maxSteps: input.maxSteps ?? active?.maxSteps ?? 12,
-    runtimeMode: input.runtimeMode ?? active?.runtimeMode ?? "opencode",
-    repoUrl: input.repoUrl !== undefined ? input.repoUrl : (active?.repoUrl ?? null),
+    enabledConnections: input.enabledConnections ?? previous?.enabledConnections ?? [],
+    maxSteps: input.maxSteps ?? previous?.maxSteps ?? 12,
+    runtimeMode: input.runtimeMode ?? previous?.runtimeMode ?? "opencode",
+    repoUrl,
+    repoUrls,
     isActive: true,
   });
 

@@ -45,7 +45,6 @@ function SpaceChrome({ children }: { children: ReactNode }) {
             className="-ml-3"
             tabs={[
               { href: base, label: "Overview" },
-              { href: `${base}/agent`, label: "Agent" },
               { href: `${base}/tools`, label: "Tools" },
               { href: `${base}/codebase`, label: "Codebase" },
               { href: `${base}/memory`, label: "Memory" },

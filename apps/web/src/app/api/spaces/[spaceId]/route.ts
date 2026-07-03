@@ -51,6 +51,7 @@ export async function PATCH(
     maxSteps?: number;
     runtimeMode?: string;
     repoUrl?: string | null;
+    repoUrls?: string[];
   };
 
   const db = getDb();
@@ -69,6 +70,7 @@ export async function PATCH(
     maxSteps: body.maxSteps,
     runtimeMode: "opencode",
     repoUrl: body.repoUrl,
+    repoUrls: body.repoUrls !== undefined ? stringArray(body.repoUrls) : undefined,
   });
 
   await recordAuditEvent(db, {

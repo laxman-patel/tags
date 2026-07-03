@@ -10,6 +10,7 @@ import {
   type ReactNode,
   type SetStateAction,
 } from "react";
+import { normalizeRepoUrls } from "@/lib/github-repo";
 
 export type Space = {
   id: string;
@@ -30,6 +31,7 @@ type ActiveConfig = {
   maxSteps: number;
   runtimeMode: string;
   repoUrl?: string | null;
+  repoUrls?: string[];
 };
 
 export type ConnectionInfo = {
@@ -45,10 +47,18 @@ export type ConnectionInfo = {
   }>;
 };
 
+export type CodebaseRepoInfo = {
+  url: string;
+  parsedGitHubRepo: { owner: string; repo: string } | null;
+};
+
 export type CodebaseInfo = {
   repoUrl: string | null;
-  parsedGitHubRepo: { owner: string; repo: string } | null;
+  repoUrls: string[];
+  repos: CodebaseRepoInfo[];
   hasGlobalGitHubToken: boolean;
+  testedRepoUrl?: string | null;
+  parsedGitHubRepo?: { owner: string; repo: string } | null;
   result?: {
     ok: boolean;
     status: string;
@@ -86,8 +96,8 @@ type SpaceConfigContextValue = {
   setReasoning: Dispatch<SetStateAction<string>>;
   maxSteps: number;
   setMaxSteps: Dispatch<SetStateAction<number>>;
-  repoUrl: string;
-  setRepoUrl: Dispatch<SetStateAction<string>>;
+  repoUrls: string[];
+  setRepoUrls: Dispatch<SetStateAction<string[]>>;
   enabledTools: string[];
   setEnabledTools: Dispatch<SetStateAction<string[]>>;
   enabledConnections: string[];
@@ -98,8 +108,9 @@ type SpaceConfigContextValue = {
   message: string;
   busy: boolean;
   save: () => Promise<void>;
+  saveCodebases: () => Promise<void>;
   connectToolkit: (toolkit: string) => Promise<void>;
-  testRepoAccess: () => Promise<void>;
+  testRepoAccess: (repoUrl?: string) => Promise<void>;
   resetSandbox: () => Promise<void>;
 };
 
@@ -124,7 +135,7 @@ export function SpaceConfigProvider({
   const [instructions, setInstructions] = useState("");
   const [reasoning, setReasoning] = useState("provider-default");
   const [maxSteps, setMaxSteps] = useState(12);
-  const [repoUrl, setRepoUrl] = useState("");
+  const [repoUrls, setRepoUrls] = useState<string[]>([]);
   const [enabledTools, setEnabledTools] = useState<string[]>([]);
   const [enabledConnections, setEnabledConnections] = useState<string[]>([]);
   const [connections, setConnections] = useState<ConnectionInfo | null>(null);
@@ -152,7 +163,13 @@ export function SpaceConfigProvider({
       setEnabledConnections(activeConfig.enabledConnections ?? []);
       setReasoning(activeConfig.reasoning ?? "provider-default");
       setMaxSteps(activeConfig.maxSteps ?? 12);
-      setRepoUrl(activeConfig.repoUrl ?? "");
+      const urls =
+        activeConfig.repoUrls?.length
+          ? activeConfig.repoUrls
+          : activeConfig.repoUrl
+            ? [activeConfig.repoUrl]
+            : [];
+      setRepoUrls(urls);
     }
     setConnections(await connectionsRes.json());
     setCodebase(await codebaseRes.json());
@@ -166,6 +183,7 @@ export function SpaceConfigProvider({
   async function save() {
     setBusyAction("save");
     try {
+      const normalized = normalizeRepoUrls(repoUrls);
       const res = await fetch(`/api/spaces/${spaceId}`, {
         method: "PATCH",
         headers: { "content-type": "application/json" },
@@ -177,13 +195,43 @@ export function SpaceConfigProvider({
           runtimeMode: "opencode",
           reasoning,
           maxSteps,
-          repoUrl: repoUrl.trim() || null,
+          repoUrls: normalized,
         }),
       });
       const data = await res.json();
       setMessage(res.ok ? `Saved config v${data.version}` : data.error ?? "Error saving config");
       if (res.ok) {
         setConfigVersion(data.version);
+        await load();
+      }
+    } finally {
+      setBusyAction(null);
+    }
+  }
+
+  async function saveCodebases() {
+    setBusyAction("save-codebases");
+    try {
+      const normalized = normalizeRepoUrls(repoUrls);
+      const res = await fetch(`/api/spaces/${spaceId}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          modelId,
+          instructions,
+          enabledTools,
+          enabledConnections,
+          runtimeMode: "opencode",
+          reasoning,
+          maxSteps,
+          repoUrls: normalized,
+        }),
+      });
+      const data = await res.json();
+      setMessage(res.ok ? `Saved ${normalized.length} codebase(s)` : data.error ?? "Error saving codebases");
+      if (res.ok) {
+        setConfigVersion(data.version);
+        setRepoUrls(normalized);
         await load();
       }
     } finally {
@@ -213,10 +261,14 @@ export function SpaceConfigProvider({
     }
   }
 
-  async function testRepoAccess() {
-    setBusyAction("repo-test");
+  async function testRepoAccess(repoUrl?: string) {
+    setBusyAction(repoUrl ? `repo-test:${repoUrl}` : "repo-test");
     try {
-      const res = await fetch(`/api/spaces/${spaceId}/codebase`, { method: "POST" });
+      const res = await fetch(`/api/spaces/${spaceId}/codebase`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(repoUrl ? { repoUrl } : {}),
+      });
       const data = await res.json();
       setCodebase(data);
       setMessage(data.result?.message ?? "Repo access test complete");
@@ -255,8 +307,8 @@ export function SpaceConfigProvider({
         setReasoning,
         maxSteps,
         setMaxSteps,
-        repoUrl,
-        setRepoUrl,
+        repoUrls,
+        setRepoUrls,
         enabledTools,
         setEnabledTools,
         enabledConnections,
@@ -267,6 +319,7 @@ export function SpaceConfigProvider({
         message,
         busy: busyAction !== null,
         save,
+        saveCodebases,
         connectToolkit,
         testRepoAccess,
         resetSandbox,
