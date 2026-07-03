@@ -12,8 +12,10 @@ import { findOrCreateThread, upsertMessage } from "@tags/core/threads";
 import type { TagsEvent } from "@tags/core/events";
 import { createDb, runs, threads } from "@tags/db";
 import {
+  addReaction,
   createSlackClient,
   postThreadMessage,
+  removeReaction,
   SlackStreamAdapter,
   buildRunLinkBlock,
   updateMessage,
@@ -60,6 +62,8 @@ export type TagsRunInput = {
   appUrl: string;
   trigger: "mention" | "reply" | "schedule" | "approval_response";
   isScheduled?: boolean;
+  /** ts of the "Tags is working…" placeholder if the webhook already posted it. */
+  placeholderMessageTs?: string;
 };
 
 type RunSetup = {
@@ -208,6 +212,11 @@ export const tagsRunFunction: InngestFunction.Any = inngest.createFunction(
       await step.run("release-thread", () =>
         releaseThreadStep(setup.threadId, setup.runId, threadStatus),
       );
+      if (!input.isScheduled) {
+        await step.run("finalize-reaction", () =>
+          finalizeReactionStep(input.channelId, input.triggerMessageTs, threadStatus),
+        );
+      }
     }
 
     return { runId: setup.runId };
@@ -311,12 +320,24 @@ async function ingestStep(input: TagsRunInput): Promise<RunSetup> {
 
   if (!claimed[0]) {
     await updateRunStatus(db, run.id, "cancelled", { finishedAt: new Date() });
-    await postThreadMessage(
-      slack,
-      input.channelId,
-      threadTs,
-      "Still working on the previous request in this thread.",
-    );
+    if (input.placeholderMessageTs) {
+      await updateMessage(
+        slack,
+        input.channelId,
+        input.placeholderMessageTs,
+        "Still working on the previous request in this thread.",
+      );
+    } else {
+      await postThreadMessage(
+        slack,
+        input.channelId,
+        threadTs,
+        "Still working on the previous request in this thread.",
+      );
+    }
+    if (!input.isScheduled) {
+      await removeReaction(slack, input.channelId, input.triggerMessageTs, "eyes").catch(() => {});
+    }
     return {
       runId: run.id,
       threadId: thread.id,
@@ -326,12 +347,9 @@ async function ingestStep(input: TagsRunInput): Promise<RunSetup> {
     };
   }
 
-  const slackRef = await postThreadMessage(
-    slack,
-    input.channelId,
-    threadTs,
-    "Tags is working…",
-  );
+  const slackRef = input.placeholderMessageTs
+    ? { channelId: input.channelId, messageTs: input.placeholderMessageTs }
+    : await postThreadMessage(slack, input.channelId, threadTs, "Tags is working…");
 
   setSentryRunContext({
     organizationId: input.organizationId,
@@ -627,4 +645,20 @@ async function releaseThreadStep(
     .update(threads)
     .set({ activeRunId: null, status, updatedAt: new Date() })
     .where(and(eq(threads.id, threadId), eq(threads.activeRunId, runId)));
+}
+
+async function finalizeReactionStep(
+  channelId: string,
+  triggerMessageTs: string,
+  status: "done" | "failed",
+) {
+  const secrets = loadRuntimeSecrets();
+  const slack = createSlackClient(secrets.slackBotToken);
+  await removeReaction(slack, channelId, triggerMessageTs, "eyes").catch(() => {});
+  await addReaction(
+    slack,
+    channelId,
+    triggerMessageTs,
+    status === "done" ? "white_check_mark" : "x",
+  ).catch(() => {});
 }

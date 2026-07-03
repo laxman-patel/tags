@@ -11,6 +11,7 @@ export class SlackStreamAdapter {
   private pendingBlocks: Array<Record<string, unknown>> = [];
   private lastFlush = 0;
   private flushTimer: ReturnType<typeof setTimeout> | null = null;
+  private statusLabel: string | null = null;
 
   constructor(
     private client: WebClient,
@@ -23,6 +24,16 @@ export class SlackStreamAdapter {
       this.buffer += event.text;
       await this.scheduleFlush();
       return;
+    }
+
+    if (event.type === "status") {
+      this.statusLabel = event.detail ? `${event.label} — ${event.detail}` : event.label;
+      await this.flush(true);
+      return;
+    }
+
+    if (event.type === "run.finished" || event.type === "run.failed") {
+      this.statusLabel = null;
     }
 
     await this.flush();
@@ -51,7 +62,12 @@ export class SlackStreamAdapter {
         ? `${this.buffer.slice(0, MAX_TEXT_LENGTH)}…`
         : this.buffer;
 
+    const headline = this.statusLabel
+      ? [{ type: "context", elements: [{ type: "mrkdwn", text: `⏳ ${this.statusLabel}` }] }]
+      : [];
+
     const blocks = [
+      ...headline,
       ...buildWorkingMessage(text || "_Tags is working…_"),
       ...this.pendingBlocks,
     ];
@@ -75,6 +91,7 @@ export class SlackStreamAdapter {
       clearTimeout(this.flushTimer);
       this.flushTimer = null;
     }
+    this.statusLabel = null;
     this.buffer = finalText;
     await this.flush(true);
   }

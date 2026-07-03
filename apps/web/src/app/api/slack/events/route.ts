@@ -1,5 +1,6 @@
 import { getEnv } from "@/env";
 import { startRunFromSlack } from "@/lib/slack-run";
+import { addReaction, createSlackClient, postThreadMessage } from "@tags/slack";
 
 export const runtime = "nodejs";
 
@@ -67,6 +68,22 @@ export async function POST(request: Request) {
     return new Response("ok");
   }
 
+  const slack = createSlackClient(env.SLACK_BOT_TOKEN);
+
+  const ack = addReaction(slack, channelId, event.ts, "eyes").catch(() => {});
+
+  let placeholderMessageTs: string | undefined;
+  try {
+    const placeholder = await postThreadMessage(
+      slack,
+      channelId,
+      threadTs,
+      "Tags is working…",
+    );
+    placeholderMessageTs = placeholder.messageTs;
+  } catch {
+  }
+
   await startRunFromSlack(env, {
     teamId,
     channelId,
@@ -77,7 +94,10 @@ export async function POST(request: Request) {
     actorSlackUserId: event.user ?? "unknown",
     eventId,
     trigger: isMention ? "mention" : "reply",
+    placeholderMessageTs,
   });
+
+  await ack;
 
   return new Response("ok");
 }
