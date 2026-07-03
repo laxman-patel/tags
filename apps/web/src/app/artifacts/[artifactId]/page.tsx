@@ -18,7 +18,7 @@ export default async function ArtifactPage({
 
   if (!artifact) {
     return (
-      <main className="mx-auto w-full max-w-[800px] px-4 py-10">
+      <main className="mx-auto w-full max-w-[800px] px-6 py-8">
         <PageHeader title="Artifact not found" backHref="/" backLabel="Home" />
       </main>
     );
@@ -30,7 +30,7 @@ export default async function ArtifactPage({
   });
 
   return (
-    <main className="mx-auto w-full max-w-[800px] px-4 py-10">
+    <main className="mx-auto w-full max-w-[800px] px-6 py-8">
       <PageHeader title={artifact.title} description={artifact.kind} backHref="/" backLabel="Home" />
       <ArtifactCard
         title={artifact.title}

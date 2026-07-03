@@ -1,43 +1,21 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
 import { SignInButton, Show, UserButton } from "@clerk/nextjs";
 import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
-
-const NAV_LINKS = [
-  { href: "/admin/spaces", label: "Spaces" },
-  { href: "/admin/approvals", label: "Approvals" },
-  { href: "/admin/audit", label: "Audit" },
-] as const;
+import { TabNav } from "@/components/tab-nav";
 
 export function SiteHeader() {
-  const pathname = usePathname();
-
   return (
-    <header className="sticky top-0 z-40 border-b border-border bg-background/80 backdrop-blur">
-      <div className="mx-auto flex h-14 w-full max-w-[1100px] items-center gap-6 px-4">
-        <Link href="/" className="text-sm font-semibold tracking-tight">
+    <header className="border-b border-border bg-background">
+      <div className="mx-auto flex h-12 w-full max-w-[1200px] items-center justify-between px-6">
+        <Link href="/" className="flex items-center gap-2 text-sm font-semibold tracking-tight">
+          <span className="flex size-5 items-center justify-center rounded bg-foreground font-mono text-[11px] font-bold text-background">
+            t
+          </span>
           Tags
         </Link>
-        <nav className="flex items-center gap-1">
-          {NAV_LINKS.map((link) => (
-            <Link
-              key={link.href}
-              href={link.href}
-              className={cn(
-                "rounded-md px-2.5 py-1.5 text-sm transition-colors",
-                pathname.startsWith(link.href)
-                  ? "bg-muted text-foreground"
-                  : "text-muted-foreground hover:text-foreground",
-              )}
-            >
-              {link.label}
-            </Link>
-          ))}
-        </nav>
-        <div className="ml-auto flex items-center gap-2">
+        <div className="flex items-center gap-2">
           <Show when="signed-out">
             <SignInButton mode="modal">
               <Button variant="outline" size="sm">
@@ -49,6 +27,15 @@ export function SiteHeader() {
             <UserButton />
           </Show>
         </div>
+      </div>
+      <div className="mx-auto w-full max-w-[1200px] px-6">
+        <TabNav
+          tabs={[
+            { href: "/", label: "Spaces", also: ["/admin/spaces"] },
+            { href: "/admin/approvals", label: "Approvals", prefix: true },
+            { href: "/admin/audit", label: "Audit", prefix: true },
+          ]}
+        />
       </div>
     </header>
   );

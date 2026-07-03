@@ -20,7 +20,7 @@ export default async function RunDetailPage({
 
   if (!run) {
     return (
-      <main className="mx-auto w-full max-w-[900px] px-4 py-10">
+      <main className="mx-auto w-full max-w-[900px] px-6 py-8">
         <PageHeader title="Run not found" backHref="/" backLabel="Home" />
       </main>
     );
@@ -47,7 +47,7 @@ export default async function RunDetailPage({
     });
 
   return (
-    <main className="mx-auto w-full max-w-[900px] px-4 py-10">
+    <main className="mx-auto w-full max-w-[900px] px-6 py-8">
       <PageHeader
         title="Run timeline"
         description="Status, tool calls, and streamed events for this run."

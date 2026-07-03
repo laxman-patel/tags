@@ -125,7 +125,7 @@ export function CodeBlock({
   return (
     <div
       className={cn(
-        "group relative overflow-hidden rounded-2xl border p-0.5",
+        "group relative overflow-hidden rounded-lg border p-0.5",
         "border-zinc-950/10 dark:border-white/10",
         "bg-zinc-50 dark:bg-white/5",
         "text-zinc-950 dark:text-zinc-50",
@@ -244,7 +244,7 @@ export function CodeBlock({
           className={cn(
             "p-4 text-sm leading-relaxed m-0",
             "bg-white dark:bg-zinc-950/50",
-            codeContent.length > 1 ? "rounded-b-2xl" : "rounded-2xl",
+            codeContent.length > 1 ? "rounded-b-md" : "rounded-md",
             hasOverflow ? "overflow-x-auto" : "overflow-x-hidden",
             hasOverflow && "scrollbar-thin scrollbar-thumb-rounded",
             hasOverflow &&

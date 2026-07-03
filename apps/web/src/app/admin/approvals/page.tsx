@@ -3,12 +3,7 @@
 import { useEffect, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  MinimalCard,
-  MinimalCardDescription,
-  MinimalCardTitle,
-} from "@/components/ui/minimal-card";
-import { PageHeader } from "@/components/page-header";
+import { Card, CardContent } from "@/components/ui/card";
 
 type ApprovalRow = {
   id: string;
@@ -43,52 +38,60 @@ export default function ApprovalsPage() {
   }
 
   return (
-    <main className="mx-auto w-full max-w-[720px] px-4 py-10">
-      <PageHeader
-        title="Approval inbox"
-        description="Pending human-in-the-loop requests from agent runs."
-        backHref="/admin/spaces"
-        backLabel="Admin"
-      />
+    <main className="mx-auto w-full max-w-[1200px] px-6 py-8">
+      <div className="mb-6">
+        <h1 className="text-xl font-semibold tracking-tight">Approvals</h1>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Pending human-in-the-loop requests from agent runs.
+        </p>
+      </div>
 
       {approvals === null && (
-        <div className="grid gap-3">
+        <div className="grid max-w-3xl gap-3">
           {[0, 1].map((i) => (
-            <div key={i} className="h-24 animate-pulse rounded-[24px] bg-neutral-900" />
+            <div key={i} className="h-24 animate-pulse rounded-lg border border-border bg-card" />
           ))}
         </div>
       )}
 
       {approvals !== null && approvals.length === 0 && (
-        <MinimalCard className="p-8 text-center">
-          <MinimalCardTitle className="mt-0 text-base">Inbox zero</MinimalCardTitle>
-          <MinimalCardDescription className="mt-1 pb-0">
-            No pending approvals. Requests appear here when a run needs a human decision.
-          </MinimalCardDescription>
-        </MinimalCard>
+        <Card className="max-w-3xl">
+          <CardContent className="py-10 text-center">
+            <p className="text-sm font-medium">Inbox zero</p>
+            <p className="mt-1 mb-0 text-sm text-muted-foreground">
+              No pending approvals. Requests appear here when a run needs a human decision.
+            </p>
+          </CardContent>
+        </Card>
       )}
 
-      <div className="grid gap-3">
+      <div className="grid max-w-3xl gap-3">
         {approvals?.map((a) => (
-          <MinimalCard key={a.id} className="p-4">
-            <div className="flex items-center gap-2">
-              <span className="font-mono text-sm font-medium">{a.toolName}</span>
-              <Badge variant={riskVariant(a.riskLevel)}>{a.riskLevel} risk</Badge>
-            </div>
-            <p className="mt-2 mb-0 text-sm leading-relaxed text-muted-foreground">
-              {a.requestText}
-            </p>
-            {a.status === "pending" && (
-              <div className="mt-4 flex gap-2">
-                <Button size="sm" onClick={() => respond(a.id, "approved")}>
-                  Approve
-                </Button>
-                <Button variant="destructive" size="sm" onClick={() => respond(a.id, "rejected")}>
-                  Reject
-                </Button>
+          <Card key={a.id} size="sm">
+            <CardContent>
+              <div className="flex items-center gap-2">
+                <span className="font-mono text-sm font-medium">{a.toolName}</span>
+                <Badge variant={riskVariant(a.riskLevel)}>{a.riskLevel} risk</Badge>
               </div>
-            )}
-          </MinimalCard>
+              <p className="mt-2 mb-0 text-sm leading-relaxed text-muted-foreground">
+                {a.requestText}
+              </p>
+              {a.status === "pending" && (
+                <div className="mt-4 flex gap-2">
+                  <Button size="sm" onClick={() => respond(a.id, "approved")}>
+                    Approve
+                  </Button>
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    onClick={() => respond(a.id, "rejected")}
+                  >
+                    Reject
+                  </Button>
+                </div>
+              )}
+            </CardContent>
+          </Card>
         ))}
       </div>
     </main>

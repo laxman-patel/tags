@@ -1,62 +1,117 @@
+"use client";
+
 import Link from "next/link";
-import { ArrowUpRight } from "lucide-react";
-import { CodeBlock } from "@/components/ui/code-block";
+import { useEffect, useState } from "react";
+import { Hash, Plus } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { buttonVariants } from "@/components/ui/button";
 import {
-  MinimalCard,
-  MinimalCardDescription,
-  MinimalCardTitle,
-} from "@/components/ui/minimal-card";
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 
-const ADMIN_LINKS = [
-  {
-    href: "/admin/spaces",
-    title: "Spaces",
-    description: "Map Slack channels to scoped agents and configure their tools.",
-  },
-  {
-    href: "/admin/approvals",
-    title: "Approvals",
-    description: "Review and respond to pending human-in-the-loop requests.",
-  },
-  {
-    href: "/admin/audit",
-    title: "Audit",
-    description: "Inspect every governed event across your organization.",
-  },
-] as const;
+type SpaceRow = {
+  id: string;
+  name: string;
+  slug: string;
+  externalSpaceId: string;
+  workspaceName: string | null;
+  workspaceTeamId: string;
+};
 
-export default function HomePage() {
+export default function SpacesDashboard() {
+  const [spaces, setSpaces] = useState<SpaceRow[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch("/api/spaces")
+      .then(async (r) => {
+        const data = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(data.error ?? `Request failed with ${r.status}`);
+        return data;
+      })
+      .then((data) => setSpaces(data.spaces ?? []))
+      .catch((err) => setError(err instanceof Error ? err.message : "Failed to load"));
+  }, []);
+
   return (
-    <main className="mx-auto w-full max-w-[720px] px-4 py-16">
-      <h1 className="text-2xl font-semibold tracking-tight">Tags</h1>
-      <p className="mt-2 max-w-lg text-sm leading-relaxed text-muted-foreground">
-        Channel-native agent for Slack. Mention the bot in a mapped channel to start a run, then
-        follow it live from the Slack link or its run page.
-      </p>
-
-      <div className="mt-8">
-        <CodeBlock
-          code={`@tags summarize the open threads in this channel`}
-          language="slack"
-        />
+    <main className="mx-auto w-full max-w-[1200px] px-6 py-8">
+      <div className="mb-6 flex items-center justify-between gap-4">
+        <div>
+          <h1 className="text-xl font-semibold tracking-tight">Spaces</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Each Space is one Slack channel with its own scoped agent.
+          </p>
+        </div>
+        <Link className={buttonVariants({ size: "sm" })} href="/admin/spaces/new">
+          <Plus data-icon="inline-start" />
+          New space
+        </Link>
       </div>
 
-      <h2 className="mt-12 text-sm font-medium text-muted-foreground">Admin</h2>
-      <div className="mt-3 grid gap-3">
-        {ADMIN_LINKS.map((link) => (
-          <Link key={link.href} href={link.href} className="group">
-            <MinimalCard className="p-4 transition-colors hover:dark:bg-neutral-800/60">
-              <div className="flex items-center justify-between">
-                <MinimalCardTitle className="mt-0 text-base">{link.title}</MinimalCardTitle>
-                <ArrowUpRight className="size-4 text-muted-foreground transition-colors group-hover:text-foreground" />
-              </div>
-              <MinimalCardDescription className="mt-1 pb-0">
-                {link.description}
-              </MinimalCardDescription>
-            </MinimalCard>
-          </Link>
-        ))}
-      </div>
+      {error && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Cannot load Spaces</CardTitle>
+            <CardDescription>
+              {error === "Unauthorized"
+                ? "Sign in from the top-right corner. If you are already signed in, your account is not on the Tags admin allowlist."
+                : error}
+            </CardDescription>
+          </CardHeader>
+        </Card>
+      )}
+
+      {!error && spaces === null && (
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {[0, 1, 2].map((i) => (
+            <div key={i} className="h-32 animate-pulse rounded-lg border border-border bg-card" />
+          ))}
+        </div>
+      )}
+
+      {!error && spaces !== null && spaces.length === 0 && (
+        <Card>
+          <CardContent className="py-12 text-center">
+            <p className="text-sm font-medium">No spaces yet</p>
+            <p className="mt-1 mb-4 text-sm text-muted-foreground">
+              Create your first Space to connect a Slack channel.
+            </p>
+            <Link className={buttonVariants({ size: "sm" })} href="/admin/spaces/new">
+              Create space
+            </Link>
+          </CardContent>
+        </Card>
+      )}
+
+      {!error && spaces !== null && spaces.length > 0 && (
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {spaces.map((s) => (
+            <Link key={s.id} href={`/admin/spaces/${s.id}`}>
+              <Card className="h-full transition-colors hover:ring-foreground/25">
+                <CardHeader>
+                  <CardTitle className="flex items-center justify-between gap-2">
+                    {s.name}
+                    <Badge variant="outline">{s.slug}</Badge>
+                  </CardTitle>
+                  <CardDescription className="flex items-center gap-1.5 font-mono text-xs">
+                    <Hash className="size-3" />
+                    {s.externalSpaceId}
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <p className="m-0 text-xs text-muted-foreground">
+                    {s.workspaceName ?? s.workspaceTeamId}
+                  </p>
+                </CardContent>
+              </Card>
+            </Link>
+          ))}
+        </div>
+      )}
     </main>
   );
 }
