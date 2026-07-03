@@ -1,6 +1,6 @@
 import { listSpaces, createSpaceWithConfig } from "@tags/core/spaces-admin";
 import { parseRuntimeMode } from "@tags/core/spaces";
-import { eq, organizations, workspaces } from "@tags/db";
+import { eq, organizations, spaces, workspaces } from "@tags/db";
 import { adminUnauthorizedResponse, isAdminAuthorized } from "@/lib/admin-auth";
 import { getDb } from "@/lib/db";
 
@@ -65,6 +65,13 @@ export async function POST(request: Request) {
 }
 
 async function getDefaultOrgId(db: ReturnType<typeof getDb>) {
+  const orgsWithSpaces = await db
+    .select({ id: organizations.id })
+    .from(organizations)
+    .innerJoin(spaces, eq(spaces.organizationId, organizations.id))
+    .limit(1);
+  if (orgsWithSpaces[0]?.id) return orgsWithSpaces[0].id;
+
   const rows = await db.select().from(organizations).limit(1);
   return rows[0]?.id ?? "";
 }
