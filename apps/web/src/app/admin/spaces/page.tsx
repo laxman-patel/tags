@@ -3,7 +3,9 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { buttonVariants } from "@/components/ui/button";
+import { MinimalCard, MinimalCardDescription, MinimalCardTitle } from "@/components/ui/minimal-card";
+import { PageHeader } from "@/components/page-header";
 
 type SpaceRow = {
   id: string;
@@ -15,7 +17,7 @@ type SpaceRow = {
 };
 
 export default function AdminSpacesPage() {
-  const [spaces, setSpaces] = useState<SpaceRow[]>([]);
+  const [spaces, setSpaces] = useState<SpaceRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -35,74 +37,85 @@ export default function AdminSpacesPage() {
   }, []);
 
   return (
-    <main className="admin-shell">
-      <p className="muted"><Link href="/">← Home</Link></p>
-      <div style={{ display: "flex", justifyContent: "space-between", gap: 16, alignItems: "center" }}>
-        <div>
-          <h1 style={{ margin: 0, fontSize: 34, letterSpacing: "-0.04em" }}>Spaces</h1>
-          <p className="muted" style={{ marginTop: 8 }}>
-            Configure each Slack channel as a scoped Tags teammate.
-          </p>
-        </div>
-        <Link className="ui-button ui-button-primary" href="/admin/spaces/new">Create space</Link>
-      </div>
+    <main className="mx-auto w-full max-w-[1100px] px-4 py-10">
+      <PageHeader
+        title="Spaces"
+        description="Each Space maps one Slack channel to a scoped Tags teammate."
+        actions={
+          <Link className={buttonVariants({ size: "sm" })} href="/admin/spaces/new">
+            New space
+          </Link>
+        }
+      />
 
       {error && (
-        <Card style={{ marginTop: 18 }}>
-          <CardHeader>
-            <CardTitle>Cannot load Spaces</CardTitle>
-            <CardDescription>
-              {error === "Unauthorized"
-                ? "You are signed out or your Clerk account is not authorized as a Tags admin."
-                : error}
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <p className="muted" style={{ margin: 0 }}>
-              Use the sign-in control in the top-right. If you are already signed in, add your email
-              or Clerk user id to the admin allowlist.
-            </p>
-          </CardContent>
-        </Card>
+        <MinimalCard className="p-4">
+          <MinimalCardTitle className="mt-0 text-base">Cannot load Spaces</MinimalCardTitle>
+          <MinimalCardDescription className="mt-1 pb-0">
+            {error === "Unauthorized"
+              ? "You are signed out or your Clerk account is not on the Tags admin allowlist. Sign in from the top-right corner."
+              : error}
+          </MinimalCardDescription>
+        </MinimalCard>
       )}
 
-      <Card style={{ marginTop: 18 }}>
-        <CardHeader>
-          <CardTitle>Configured Spaces</CardTitle>
-          <CardDescription>{spaces.length} channel{spaces.length === 1 ? "" : "s"}</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div style={{ overflowX: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse" }}>
-              <thead>
-                <tr>
-                  <th align="left" style={{ padding: "10px 8px", color: "var(--muted)" }}>Name</th>
-                  <th align="left" style={{ padding: "10px 8px", color: "var(--muted)" }}>Slug</th>
-                  <th align="left" style={{ padding: "10px 8px", color: "var(--muted)" }}>Channel</th>
-                  <th align="left" style={{ padding: "10px 8px", color: "var(--muted)" }}>Workspace</th>
+      {!error && spaces === null && (
+        <div className="grid gap-3">
+          {[0, 1, 2].map((i) => (
+            <div key={i} className="h-16 animate-pulse rounded-[24px] bg-neutral-900" />
+          ))}
+        </div>
+      )}
+
+      {!error && spaces !== null && spaces.length === 0 && (
+        <MinimalCard className="p-8 text-center">
+          <MinimalCardTitle className="mt-0 text-base">No spaces yet</MinimalCardTitle>
+          <MinimalCardDescription className="mt-1 pb-4">
+            Create your first Space to connect a Slack channel.
+          </MinimalCardDescription>
+          <Link className={buttonVariants({ size: "sm" })} href="/admin/spaces/new">
+            Create space
+          </Link>
+        </MinimalCard>
+      )}
+
+      {!error && spaces !== null && spaces.length > 0 && (
+        <MinimalCard className="p-2">
+          <table className="w-full border-collapse text-sm">
+            <thead>
+              <tr className="text-left text-xs text-muted-foreground">
+                <th className="px-3 py-2.5 font-medium">Name</th>
+                <th className="px-3 py-2.5 font-medium">Slug</th>
+                <th className="px-3 py-2.5 font-medium">Channel</th>
+                <th className="px-3 py-2.5 font-medium">Workspace</th>
+              </tr>
+            </thead>
+            <tbody>
+              {spaces.map((s) => (
+                <tr
+                  key={s.id}
+                  className="border-t border-border/60 transition-colors hover:bg-neutral-800/40"
+                >
+                  <td className="px-3 py-3">
+                    <Link href={`/admin/spaces/${s.id}`} className="font-medium hover:underline">
+                      {s.name}
+                    </Link>
+                  </td>
+                  <td className="px-3 py-3">
+                    <Badge variant="outline">{s.slug}</Badge>
+                  </td>
+                  <td className="px-3 py-3 font-mono text-xs text-muted-foreground">
+                    {s.externalSpaceId}
+                  </td>
+                  <td className="px-3 py-3 text-muted-foreground">
+                    {s.workspaceName ?? s.workspaceTeamId}
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {spaces.map((s) => (
-                  <tr key={s.id} style={{ borderTop: "1px solid rgb(255 255 255 / 0.06)" }}>
-                    <td style={{ padding: "12px 8px" }}>
-                      <Link href={`/admin/spaces/${s.id}`} style={{ fontWeight: 650 }}>
-                        {s.name}
-                      </Link>
-                    </td>
-                    <td style={{ padding: "12px 8px" }}>
-                      <Badge>{s.slug}</Badge>
-                    </td>
-                    <td style={{ padding: "12px 8px" }}><code>{s.externalSpaceId}</code></td>
-                    <td style={{ padding: "12px 8px" }}>{s.workspaceName ?? s.workspaceTeamId}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </CardContent>
-      </Card>
+              ))}
+            </tbody>
+          </table>
+        </MinimalCard>
+      )}
     </main>
   );
 }
-

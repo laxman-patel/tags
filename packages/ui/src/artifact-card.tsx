@@ -1,12 +1,3 @@
-import type { CSSProperties } from "react";
-
-const card: CSSProperties = {
-  border: "1px solid #e4e4e7",
-  borderRadius: 8,
-  padding: 16,
-  background: "#fafafa",
-};
-
 export function ArtifactCard(props: {
   title: string;
   kind: string;
@@ -14,13 +5,23 @@ export function ArtifactCard(props: {
   preview?: string;
 }) {
   return (
-    <div style={card}>
-      <strong>{props.title}</strong>
-      <p style={{ fontSize: 13, color: "#666" }}>{props.kind}</p>
+    <div className="rounded-xl border border-border bg-card p-4 text-sm text-card-foreground">
+      <div className="flex items-center justify-between gap-3">
+        <span className="font-medium">{props.title}</span>
+        <span className="inline-flex h-5 items-center rounded-full border border-border px-2 text-xs text-muted-foreground">
+          {props.kind}
+        </span>
+      </div>
       {props.preview && (
-        <pre style={{ whiteSpace: "pre-wrap", fontSize: 13, marginTop: 8 }}>{props.preview.slice(0, 2000)}</pre>
+        <pre className="mt-3 max-h-64 overflow-auto rounded-lg border border-border/60 bg-background p-3 font-mono text-xs leading-relaxed whitespace-pre-wrap">
+          {props.preview.slice(0, 2000)}
+        </pre>
       )}
-      <p><a href={props.url}>Open artifact</a></p>
+      <p className="mt-3 mb-0">
+        <a href={props.url} className="text-sm underline-offset-4 hover:underline">
+          Open artifact
+        </a>
+      </p>
     </div>
   );
 }

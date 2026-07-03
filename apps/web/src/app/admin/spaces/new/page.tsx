@@ -1,52 +1,103 @@
 "use client";
 
-import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { MinimalCard } from "@/components/ui/minimal-card";
+import { Textarea } from "@/components/ui/textarea";
+import { PageHeader } from "@/components/page-header";
 
 export default function NewSpacePage() {
-  const [status, setStatus] = useState("");
+  const router = useRouter();
+  const [error, setError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    setError("");
+    setSubmitting(true);
     const form = new FormData(e.currentTarget);
-    const res = await fetch("/api/spaces", {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-      },
-      body: JSON.stringify({
-        name: form.get("name"),
-        slug: form.get("slug"),
-        externalSpaceId: form.get("channelId"),
-        modelId: form.get("modelId"),
-        instructions: form.get("instructions"),
-        enabledTools: [
-          "search_thread",
-          "search_memory",
-          "save_memory",
-          "create_artifact",
-        ],
-        runtimeMode: "opencode",
-      }),
-    });
-    const data = await res.json();
-    setStatus(res.ok ? `Created space ${data.spaceId}` : data.error ?? "Error");
+    try {
+      const res = await fetch("/api/spaces", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          name: form.get("name"),
+          slug: form.get("slug"),
+          externalSpaceId: form.get("channelId"),
+          modelId: form.get("modelId"),
+          instructions: form.get("instructions"),
+          enabledTools: [
+            "search_thread",
+            "search_memory",
+            "save_memory",
+            "create_artifact",
+          ],
+          runtimeMode: "opencode",
+        }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        router.push(`/admin/spaces/${data.spaceId}`);
+      } else {
+        setError(data.error ?? "Failed to create space");
+      }
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   return (
-    <main style={{ padding: 24, maxWidth: 640, margin: "0 auto", fontFamily: "system-ui" }}>
-      <p><Link href="/admin/spaces">← Spaces</Link></p>
-      <h1>Create Space</h1>
-      <form onSubmit={onSubmit} style={{ display: "grid", gap: 12 }}>
-        <label>Name<input name="name" required style={{ width: "100%" }} /></label>
-        <label>Slug<input name="slug" required style={{ width: "100%" }} /></label>
-        <label>Slack channel ID<input name="channelId" required placeholder="C..." style={{ width: "100%" }} /></label>
-        <label>Model ID<input name="modelId" required value="openai/gpt-4o-mini" style={{ width: "100%" }} /></label>
-        <label>Instructions<textarea name="instructions" rows={6} required style={{ width: "100%" }} /></label>
-        <button type="submit">Create</button>
-      </form>
-      {status && <p>{status}</p>}
+    <main className="mx-auto w-full max-w-[640px] px-4 py-10">
+      <PageHeader
+        title="Create Space"
+        description="Connect a Slack channel to a new scoped agent."
+        backHref="/admin/spaces"
+        backLabel="Spaces"
+      />
+
+      <MinimalCard className="p-5">
+        <form onSubmit={onSubmit} className="grid gap-4">
+          <div className="grid gap-2">
+            <Label htmlFor="name">Name</Label>
+            <Input id="name" name="name" required placeholder="Growth team" />
+          </div>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div className="grid gap-2">
+              <Label htmlFor="slug">Slug</Label>
+              <Input id="slug" name="slug" required placeholder="growth" />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="channelId">Slack channel ID</Label>
+              <Input id="channelId" name="channelId" required placeholder="C0123456789" />
+            </div>
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="modelId">Model ID</Label>
+            <Input id="modelId" name="modelId" required defaultValue="openai/gpt-4o-mini" />
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="instructions">Instructions</Label>
+            <Textarea
+              id="instructions"
+              name="instructions"
+              rows={6}
+              required
+              placeholder="You are the channel agent for..."
+            />
+          </div>
+          {error && <p className="text-sm text-destructive">{error}</p>}
+          <div>
+            <Button type="submit" disabled={submitting}>
+              {submitting ? "Creating…" : "Create space"}
+            </Button>
+          </div>
+        </form>
+      </MinimalCard>
     </main>
   );
 }
-

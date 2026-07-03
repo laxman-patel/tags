@@ -4,9 +4,7 @@
       "command": "npx",
       "args": [
         "shadcn@latest",
-        "mcp",
-        "-c",
-        "apps/web"
+        "mcp"
       ]
     }
   }

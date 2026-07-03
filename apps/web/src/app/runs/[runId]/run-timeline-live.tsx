@@ -70,7 +70,8 @@ export function RunTimelineLive(props: {
   return (
     <div>
       {ACTIVE_STATUSES.has(status) && (
-        <p style={{ fontSize: 13, color: "#71717a", marginBottom: 12 }}>
+        <p className="mb-3 flex items-center gap-2 text-xs text-muted-foreground">
+          <span className="size-1.5 animate-pulse rounded-full bg-foreground" />
           Live — updating every 2s
         </p>
       )}

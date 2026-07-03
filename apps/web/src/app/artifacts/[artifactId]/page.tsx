@@ -1,9 +1,9 @@
 import { getArtifactById, resolveArtifactBody } from "@tags/core/artifacts";
 import { ArtifactCard } from "@tags/ui";
-import Link from "next/link";
 import { getEnv } from "@/env";
 import { getDb } from "@/lib/db";
 import { fetchArtifactBodyFromR2 } from "@/lib/r2";
+import { PageHeader } from "@/components/page-header";
 
 export const runtime = "nodejs";
 
@@ -17,7 +17,11 @@ export default async function ArtifactPage({
   const artifact = await getArtifactById(db, artifactId);
 
   if (!artifact) {
-    return <main style={{ padding: 24 }}>Artifact not found</main>;
+    return (
+      <main className="mx-auto w-full max-w-[800px] px-4 py-10">
+        <PageHeader title="Artifact not found" backHref="/" backLabel="Home" />
+      </main>
+    );
   }
 
   const env = getEnv();
@@ -26,8 +30,8 @@ export default async function ArtifactPage({
   });
 
   return (
-    <main style={{ padding: 24, maxWidth: 800, margin: "0 auto", fontFamily: "system-ui" }}>
-      <p><Link href="/">← Home</Link></p>
+    <main className="mx-auto w-full max-w-[800px] px-4 py-10">
+      <PageHeader title={artifact.title} description={artifact.kind} backHref="/" backLabel="Home" />
       <ArtifactCard
         title={artifact.title}
         kind={artifact.kind}
@@ -35,11 +39,11 @@ export default async function ArtifactPage({
         preview={body ?? undefined}
       />
       {body != null && (
-        <article style={{ marginTop: 24, whiteSpace: "pre-wrap" }}>{body}</article>
+        <article className="mt-6 rounded-xl border border-border bg-card p-5 text-sm leading-relaxed whitespace-pre-wrap">
+          {body}
+        </article>
       )}
-      {unavailable && (
-        <p style={{ marginTop: 24, color: "#666" }}>Body unavailable</p>
-      )}
+      {unavailable && <p className="mt-6 text-sm text-muted-foreground">Body unavailable</p>}
     </main>
   );
 }

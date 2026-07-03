@@ -6,27 +6,19 @@ export function RunTimeline(props: {
   events: Array<{ seq: number; eventType: string; payload: unknown; createdAt?: string }>;
 }) {
   return (
-    <ol style={{ lineHeight: 1.6, listStyle: "none", padding: 0 }}>
+    <ol className="m-0 grid list-none gap-4 p-0">
       {props.events.map((row) => {
         const event = parseTagsEvent(row.eventType, row.payload);
         return (
-          <li key={row.seq} style={{ marginBottom: 16 }}>
-            <div style={{ fontSize: 12, color: "#71717a", marginBottom: 4 }}>
+          <li key={row.seq}>
+            <div className="mb-1.5 font-mono text-xs text-muted-foreground">
               #{row.seq} · {row.eventType}
               {row.createdAt && ` · ${row.createdAt}`}
             </div>
             {event ? (
               <EventRenderer event={event} />
             ) : (
-              <pre
-                style={{
-                  background: "#f4f4f5",
-                  padding: 12,
-                  borderRadius: 8,
-                  overflow: "auto",
-                  fontSize: 13,
-                }}
-              >
+              <pre className="overflow-auto rounded-xl border border-border bg-card p-3 font-mono text-xs leading-relaxed">
                 {JSON.stringify(row.payload, null, 2)}
               </pre>
             )}

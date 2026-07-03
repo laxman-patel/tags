@@ -1,18 +1,12 @@
-import type { CSSProperties } from "react";
 import type { TagsEvent } from "@tags/core/events";
 import type { UICard } from "@tags/core/ui-cards";
 import { ArtifactCard } from "./artifact-card";
 import { ApprovalCard } from "./approval-card";
 
-const card: CSSProperties = {
-  border: "1px solid #e4e4e7",
-  borderRadius: 8,
-  padding: 12,
-  marginBottom: 8,
-  background: "#fff",
-};
-
-const muted: CSSProperties = { fontSize: 13, color: "#71717a" };
+const cardClass = "rounded-xl border border-border bg-card p-3 text-sm text-card-foreground";
+const mutedClass = "text-xs text-muted-foreground";
+const preClass =
+  "mt-2 overflow-auto rounded-lg border border-border/60 bg-background p-3 font-mono text-xs leading-relaxed whitespace-pre-wrap";
 
 function UiCardView(props: { card: UICard }) {
   const { card: ui } = props;
@@ -28,13 +22,13 @@ function UiCardView(props: { card: UICard }) {
       );
     case "memory-search":
       return (
-        <div style={card}>
-          <strong>Memory search</strong>
-          <p style={muted}>Query: {ui.query}</p>
-          <ul style={{ marginTop: 8, paddingLeft: 20 }}>
+        <div className={cardClass}>
+          <span className="font-medium">Memory search</span>
+          <p className={`mt-1 mb-0 ${mutedClass}`}>Query: {ui.query}</p>
+          <ul className="mt-2 mb-0 grid gap-1 pl-5">
             {ui.items.map((item, i) => (
-              <li key={i} style={{ marginBottom: 4 }}>
-                <code>{item.kind}</code> — {item.content}
+              <li key={i}>
+                <code className="text-xs">{item.kind}</code> — {item.content}
               </li>
             ))}
           </ul>
@@ -42,47 +36,47 @@ function UiCardView(props: { card: UICard }) {
       );
     case "memory-saved":
       return (
-        <div style={card}>
-          <strong>Saved to memory</strong>
-          <p style={muted}>{ui.memoryKind}</p>
-          <p>{ui.content}</p>
+        <div className={cardClass}>
+          <span className="font-medium">Saved to memory</span>
+          <p className={`mt-1 mb-0 ${mutedClass}`}>{ui.memoryKind}</p>
+          <p className="mt-1 mb-0">{ui.content}</p>
         </div>
       );
     case "thread-search":
       return (
-        <div style={card}>
-          <strong>Thread search</strong>
-          <p style={muted}>{ui.messageCount} message(s)</p>
-          <pre style={{ whiteSpace: "pre-wrap", fontSize: 13 }}>{ui.preview}</pre>
+        <div className={cardClass}>
+          <span className="font-medium">Thread search</span>
+          <p className={`mt-1 mb-0 ${mutedClass}`}>{ui.messageCount} message(s)</p>
+          <pre className={preClass}>{ui.preview}</pre>
         </div>
       );
     case "coding-agent":
       return (
-        <div style={card}>
-          <strong>Coding agent</strong>
-          <p style={muted}>Exit code: {ui.exitCode}</p>
-          <pre style={{ whiteSpace: "pre-wrap", fontSize: 13 }}>{ui.outputPreview}</pre>
+        <div className={cardClass}>
+          <span className="font-medium">Coding agent</span>
+          <p className={`mt-1 mb-0 ${mutedClass}`}>Exit code: {ui.exitCode}</p>
+          <pre className={preClass}>{ui.outputPreview}</pre>
           {ui.gitDiffPreview ? (
             <>
-              <p style={muted}>Git diff</p>
-              <pre style={{ whiteSpace: "pre-wrap", fontSize: 13 }}>{ui.gitDiffPreview}</pre>
+              <p className={`mt-2 mb-0 ${mutedClass}`}>Git diff</p>
+              <pre className={preClass}>{ui.gitDiffPreview}</pre>
             </>
           ) : null}
         </div>
       );
     case "schedule-created":
       return (
-        <div style={card}>
-          <strong>Schedule created</strong>
-          <p style={muted}>Cron: {ui.cron}</p>
-          <p>{ui.promptPreview}</p>
+        <div className={cardClass}>
+          <span className="font-medium">Schedule created</span>
+          <p className={`mt-1 mb-0 ${mutedClass}`}>Cron: {ui.cron}</p>
+          <p className="mt-1 mb-0">{ui.promptPreview}</p>
         </div>
       );
     case "generic":
       return (
-        <div style={card}>
-          <strong>{ui.title}</strong>
-          <p>{ui.body}</p>
+        <div className={cardClass}>
+          <span className="font-medium">{ui.title}</span>
+          <p className="mt-1 mb-0">{ui.body}</p>
         </div>
       );
     default: {
@@ -98,32 +92,33 @@ export function EventRenderer(props: { event: TagsEvent }) {
   switch (event.type) {
     case "text.delta":
       return (
-        <div style={card}>
-          <p style={{ whiteSpace: "pre-wrap" }}>{event.text}</p>
+        <div className={cardClass}>
+          <p className="m-0 leading-relaxed whitespace-pre-wrap">{event.text}</p>
         </div>
       );
     case "status":
       return (
-        <div style={{ ...card, background: "#f4f4f5" }}>
-          <strong>{event.label}</strong>
-          {event.detail && <p style={muted}>{event.detail}</p>}
+        <div className={`${cardClass} bg-muted/40`}>
+          <span className="font-medium">{event.label}</span>
+          {event.detail && <p className={`mt-1 mb-0 ${mutedClass}`}>{event.detail}</p>}
         </div>
       );
     case "tool.started":
       return (
-        <div style={card}>
-          <span style={muted}>🔧 Running</span> <code>{event.toolName}</code>
+        <div className={cardClass}>
+          <span className={mutedClass}>Running</span> <code className="text-xs">{event.toolName}</code>
         </div>
       );
     case "tool.finished":
       return (
-        <div>
-          <div style={card}>
-            <span style={muted}>✓ Finished</span> <code>{event.toolName}</code>
+        <div className="grid gap-2">
+          <div className={cardClass}>
+            <span className={mutedClass}>Finished</span>{" "}
+            <code className="text-xs">{event.toolName}</code>
           </div>
           {event.uiCard && <UiCardView card={event.uiCard} />}
           {!event.uiCard && event.outputPreview != null && (
-            <pre style={{ ...card, fontSize: 12, overflow: "auto" }}>
+            <pre className={`${preClass} mt-0`}>
               {JSON.stringify(event.outputPreview, null, 2).slice(0, 2000)}
             </pre>
           )}
@@ -140,10 +135,10 @@ export function EventRenderer(props: { event: TagsEvent }) {
       );
     case "question.requested":
       return (
-        <div style={card}>
-          <strong>Question requested</strong>
-          {event.questionText ? <p>{event.questionText}</p> : null}
-          <p style={muted}>ID: {event.questionId}</p>
+        <div className={cardClass}>
+          <span className="font-medium">Question requested</span>
+          {event.questionText ? <p className="mt-1 mb-0">{event.questionText}</p> : null}
+          <p className={`mt-1 mb-0 ${mutedClass}`}>ID: {event.questionId}</p>
         </div>
       );
     case "artifact.created":
@@ -156,15 +151,15 @@ export function EventRenderer(props: { event: TagsEvent }) {
       );
     case "run.finished":
       return (
-        <div style={{ ...card, background: "#ecfdf5" }}>
-          <strong>Run complete</strong>
+        <div className={cardClass}>
+          <span className="font-medium">Run complete</span>
         </div>
       );
     case "run.failed":
       return (
-        <div style={{ ...card, borderColor: "#fca5a5", background: "#fef2f2" }}>
-          <strong>Run failed</strong>
-          <p>{event.error}</p>
+        <div className="rounded-xl border border-destructive/40 bg-destructive/10 p-3 text-sm">
+          <span className="font-medium text-destructive">Run failed</span>
+          <p className="mt-1 mb-0 text-destructive/90">{event.error}</p>
         </div>
       );
     default: {

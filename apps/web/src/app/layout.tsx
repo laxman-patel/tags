@@ -1,6 +1,11 @@
 import { ClerkProvider } from "@clerk/nextjs";
-import { AuthHeader } from "@/components/auth-header";
+import { SiteHeader } from "@/components/site-header";
 import "./globals.css";
+import { Geist, Geist_Mono } from "next/font/google";
+import { cn } from "@/lib/utils";
+
+const geist = Geist({ subsets: ["latin"], variable: "--font-sans" });
+const geistMono = Geist_Mono({ subsets: ["latin"], variable: "--font-mono" });
 
 export const metadata = {
   title: "Tags",
@@ -9,10 +14,10 @@ export const metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="en" className={cn("dark font-sans", geist.variable, geistMono.variable)}>
       <body>
         <ClerkProvider>
-          <AuthHeader />
+          <SiteHeader />
           {children}
         </ClerkProvider>
       </body>
