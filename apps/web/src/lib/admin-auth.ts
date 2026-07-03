@@ -30,5 +30,5 @@ export async function isAdminAuthorized(): Promise<boolean> {
 }
 
 export function adminUnauthorizedResponse() {
-  return new Response("Unauthorized", { status: 401 });
+  return Response.json({ error: "Unauthorized" }, { status: 401 });
 }

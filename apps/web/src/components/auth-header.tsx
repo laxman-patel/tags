@@ -16,7 +16,9 @@ export function AuthHeader() {
         alignItems: "center",
         gap: 12,
         padding: "12px 24px",
-        borderBottom: "1px solid #eee",
+        borderBottom: "1px solid var(--border)",
+        background: "rgb(9 9 11 / 0.72)",
+        color: "var(--text)",
         fontFamily: "system-ui",
       }}
     >
