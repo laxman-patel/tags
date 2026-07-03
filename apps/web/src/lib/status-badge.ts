@@ -5,8 +5,8 @@ import { badgeVariants } from "@/components/ui/badge";
 export type StatusTone = "default" | "success" | "warning" | "danger";
 
 export function statusTone(status: string): StatusTone {
-  if (["ready", "enabled", "reachable", "success"].includes(status)) return "success";
-  if (["leased", "available", "missing_api_key"].includes(status)) return "warning";
+  if (["ready", "enabled", "reachable", "success", "connected"].includes(status)) return "success";
+  if (["leased", "available", "missing_api_key", "needs_auth"].includes(status)) return "warning";
   if (["failed", "expired", "not_found_or_no_access", "request_failed"].includes(status)) {
     return "danger";
   }

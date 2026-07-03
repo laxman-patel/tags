@@ -2,6 +2,65 @@ import { createMCPClient } from "@ai-sdk/mcp";
 import { Composio } from "@composio/core";
 import type { ToolSet } from "ai";
 
+export type ComposioToolkitConnectionStatus =
+  | "missing_api_key"
+  | "available"
+  | "enabled"
+  | "needs_auth"
+  | "connected";
+
+export function resolveToolkitConnectionStatus(args: {
+  hasApiKey: boolean;
+  enabled: boolean;
+  accountStatus?: string | null;
+}): ComposioToolkitConnectionStatus {
+  if (!args.hasApiKey) return "missing_api_key";
+  if (!args.enabled) return "available";
+  if (args.accountStatus === "ACTIVE") return "connected";
+  if (args.accountStatus) return "needs_auth";
+  return "needs_auth";
+}
+
+/**
+ * Starts Composio OAuth for a toolkit scoped to the Space entity id.
+ * Returns the hosted connect URL from `session.authorize()`.
+ */
+export async function authorizeComposioToolkit(args: {
+  apiKey: string;
+  entityId: string;
+  toolkit: string;
+}): Promise<{ connectUrl: string | null }> {
+  if (!args.apiKey) return { connectUrl: null };
+
+  const composio = new Composio({ apiKey: args.apiKey });
+  const session = await composio.create(args.entityId, {
+    mcp: true,
+    toolkits: [args.toolkit],
+  });
+  const connection = await session.authorize(args.toolkit);
+
+  return { connectUrl: connection.redirectUrl ?? null };
+}
+
+export async function listComposioConnectedAccountStatuses(args: {
+  apiKey: string;
+  entityId: string;
+}): Promise<Record<string, string>> {
+  if (!args.apiKey) return {};
+
+  const composio = new Composio({ apiKey: args.apiKey });
+  const { items } = await composio.connectedAccounts.list({ userIds: [args.entityId] });
+  const statuses: Record<string, string> = {};
+
+  for (const item of items) {
+    const slug = item.toolkit?.slug;
+    if (!slug) continue;
+    statuses[slug] = item.status;
+  }
+
+  return statuses;
+}
+
 export type ComposioToolsHandle = {
   tools: ToolSet;
   /** Closes the underlying MCP transport. Always call this when the run segment ends. */

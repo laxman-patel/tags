@@ -5,7 +5,8 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./observability/sentry": "./src/observability/sentry.ts"
+    "./observability/sentry": "./src/observability/sentry.ts",
+    "./tools/composio": "./src/tools/composio.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"

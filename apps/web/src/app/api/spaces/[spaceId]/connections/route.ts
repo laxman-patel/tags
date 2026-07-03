@@ -1,5 +1,9 @@
 import { loadActiveSpaceConfig } from "@tags/core/spaces";
 import { getSpaceById } from "@tags/core/spaces-admin";
+import {
+  listComposioConnectedAccountStatuses,
+  resolveToolkitConnectionStatus,
+} from "@tags/runtime/tools/composio";
 import { adminUnauthorizedResponse, isAdminAuthorized } from "@/lib/admin-auth";
 import { getEnv } from "@/env";
 import { getDb } from "@/lib/db";
@@ -20,7 +24,14 @@ export async function GET(
 
   const config = await loadActiveSpaceConfig(db, spaceId);
   const enabled = new Set(config?.enabledConnections ?? []);
-  const hasComposioApiKey = Boolean(getEnv().COMPOSIO_API_KEY);
+  const env = getEnv();
+  const hasComposioApiKey = Boolean(env.COMPOSIO_API_KEY);
+  const accountStatuses = hasComposioApiKey
+    ? await listComposioConnectedAccountStatuses({
+        apiKey: env.COMPOSIO_API_KEY!,
+        entityId: spaceId,
+      })
+    : {};
 
   return Response.json({
     entityId: spaceId,
@@ -29,7 +40,11 @@ export async function GET(
     toolkits: COMPOSIO_TOOLKITS.map((toolkit) => ({
       ...toolkit,
       enabled: enabled.has(toolkit.id),
-      status: !hasComposioApiKey ? "missing_api_key" : enabled.has(toolkit.id) ? "enabled" : "available",
+      status: resolveToolkitConnectionStatus({
+        hasApiKey: hasComposioApiKey,
+        enabled: enabled.has(toolkit.id),
+        accountStatus: accountStatuses[toolkit.id],
+      }),
     })),
   });
 }
