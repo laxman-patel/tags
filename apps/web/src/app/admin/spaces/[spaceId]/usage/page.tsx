@@ -4,6 +4,7 @@ import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { AnimatedNumber } from "@/components/ui/animated-number";
 import { Card, CardContent } from "@/components/ui/card";
+import { EmptyState } from "@/components/empty-state";
 
 type Usage = {
   summary: {
@@ -65,14 +66,10 @@ export default function SpaceUsagePage() {
 
       <div className="mt-6">
         {usage !== null && usage.recent.length === 0 && (
-          <Card>
-            <CardContent className="py-10 text-center">
-              <p className="text-sm font-medium">No usage yet</p>
-              <p className="mt-1 mb-0 text-sm text-muted-foreground">
-                Usage records appear after the first run in this Space.
-              </p>
-            </CardContent>
-          </Card>
+          <EmptyState
+            title="No usage yet"
+            description="Usage records appear after the first run in this Space."
+          />
         )}
 
         {usage !== null && usage.recent.length > 0 && (

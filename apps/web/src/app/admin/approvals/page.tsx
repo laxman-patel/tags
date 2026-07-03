@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { EmptyState } from "@/components/empty-state";
 
 type ApprovalRow = {
   id: string;
@@ -47,53 +48,51 @@ export default function ApprovalsPage() {
       </div>
 
       {approvals === null && (
-        <div className="grid max-w-3xl gap-3">
-          {[0, 1].map((i) => (
-            <div key={i} className="h-24 animate-pulse rounded-lg border border-border bg-card" />
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          {[0, 1, 2].map((i) => (
+            <div key={i} className="h-32 animate-pulse rounded-lg border border-border bg-card" />
           ))}
         </div>
       )}
 
       {approvals !== null && approvals.length === 0 && (
-        <Card className="max-w-3xl">
-          <CardContent className="py-10 text-center">
-            <p className="text-sm font-medium">Inbox zero</p>
-            <p className="mt-1 mb-0 text-sm text-muted-foreground">
-              No pending approvals. Requests appear here when a run needs a human decision.
-            </p>
-          </CardContent>
-        </Card>
+        <EmptyState
+          title="Inbox zero"
+          description="No pending approvals. Requests appear here when a run needs a human decision."
+        />
       )}
 
-      <div className="grid max-w-3xl gap-3">
-        {approvals?.map((a) => (
-          <Card key={a.id} size="sm">
-            <CardContent>
-              <div className="flex items-center gap-2">
-                <span className="font-mono text-sm font-medium">{a.toolName}</span>
-                <Badge variant={riskVariant(a.riskLevel)}>{a.riskLevel} risk</Badge>
-              </div>
-              <p className="mt-2 mb-0 text-sm leading-relaxed text-muted-foreground">
-                {a.requestText}
-              </p>
-              {a.status === "pending" && (
-                <div className="mt-4 flex gap-2">
-                  <Button size="sm" onClick={() => respond(a.id, "approved")}>
-                    Approve
-                  </Button>
-                  <Button
-                    variant="destructive"
-                    size="sm"
-                    onClick={() => respond(a.id, "rejected")}
-                  >
-                    Reject
-                  </Button>
+      {approvals !== null && approvals.length > 0 && (
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          {approvals.map((a) => (
+            <Card key={a.id} className="flex flex-col">
+              <CardContent className="flex flex-1 flex-col">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="truncate font-mono text-sm font-medium">{a.toolName}</span>
+                  <Badge variant={riskVariant(a.riskLevel)}>{a.riskLevel}</Badge>
                 </div>
-              )}
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+                <p className="mt-2 mb-0 flex-1 text-sm leading-relaxed text-muted-foreground">
+                  {a.requestText}
+                </p>
+                {a.status === "pending" && (
+                  <div className="mt-4 flex gap-2">
+                    <Button size="sm" onClick={() => respond(a.id, "approved")}>
+                      Approve
+                    </Button>
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      onClick={() => respond(a.id, "rejected")}
+                    >
+                      Reject
+                    </Button>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
     </main>
   );
 }

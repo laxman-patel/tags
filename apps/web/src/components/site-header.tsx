@@ -30,6 +30,7 @@ export function SiteHeader() {
       </div>
       <div className="mx-auto w-full max-w-[1200px] px-6">
         <TabNav
+          className="-ml-3"
           tabs={[
             { href: "/", label: "Spaces", also: ["/admin/spaces"] },
             { href: "/admin/approvals", label: "Approvals", prefix: true },

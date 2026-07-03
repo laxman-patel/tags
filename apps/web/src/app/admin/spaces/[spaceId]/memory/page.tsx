@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { EmptyState } from "@/components/empty-state";
 
 type MemoryRow = {
   id: string;
@@ -30,45 +31,43 @@ export default function SpaceMemoryPage() {
   }
 
   return (
-    <div className="max-w-3xl">
-      <p className="mb-4 text-sm text-muted-foreground">
+    <div>
+      <p className="mb-5 text-sm text-muted-foreground">
         Channel-scoped facts and preferences the agent has saved.
       </p>
 
       {memories === null && (
-        <div className="grid gap-3">
+        <div className="grid gap-4 md:grid-cols-2">
           {[0, 1].map((i) => (
-            <div key={i} className="h-20 animate-pulse rounded-lg border border-border bg-card" />
+            <div key={i} className="h-24 animate-pulse rounded-lg border border-border bg-card" />
           ))}
         </div>
       )}
 
       {memories !== null && memories.length === 0 && (
-        <Card>
-          <CardContent className="py-10 text-center">
-            <p className="text-sm font-medium">No memories yet</p>
-            <p className="mt-1 mb-0 text-sm text-muted-foreground">
-              Ask the agent to remember something in Slack and it will show up here.
-            </p>
-          </CardContent>
-        </Card>
+        <EmptyState
+          title="No memories yet"
+          description="Ask the agent to remember something in Slack and it will show up here."
+        />
       )}
 
-      <div className="grid gap-3">
-        {memories?.map((m) => (
-          <Card key={m.id} size="sm">
-            <CardContent className="flex items-start justify-between gap-4">
-              <div>
-                <Badge variant="outline">{m.kind}</Badge>
-                <p className="mt-2 mb-0 text-sm leading-relaxed">{m.content}</p>
-              </div>
-              <Button variant="destructive" size="sm" onClick={() => forget(m.id)}>
-                Forget
-              </Button>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+      {memories !== null && memories.length > 0 && (
+        <div className="grid gap-4 md:grid-cols-2">
+          {memories.map((m) => (
+            <Card key={m.id} size="sm">
+              <CardContent className="flex items-start justify-between gap-4">
+                <div className="min-w-0">
+                  <Badge variant="outline">{m.kind}</Badge>
+                  <p className="mt-2 mb-0 text-sm leading-relaxed">{m.content}</p>
+                </div>
+                <Button variant="destructive" size="sm" onClick={() => forget(m.id)}>
+                  Forget
+                </Button>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

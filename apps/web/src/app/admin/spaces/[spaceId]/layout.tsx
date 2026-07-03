@@ -13,18 +13,19 @@ function SpaceChrome({ children }: { children: ReactNode }) {
 
   return (
     <>
-      <div className="border-b border-border">
+      <div className="border-b border-border bg-card/40">
         <div className="mx-auto w-full max-w-[1200px] px-6">
-          <div className="flex flex-wrap items-center justify-between gap-3 py-5">
+          <div className="flex flex-wrap items-center justify-between gap-3 pb-6 pt-6">
             <div>
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <Link href="/" className="hover:text-foreground">
+              <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <Link href="/" className="transition-colors hover:text-foreground">
                   Spaces
                 </Link>
                 <span>/</span>
+                <span className="text-foreground">{space?.slug ?? "…"}</span>
               </div>
-              <div className="mt-0.5 flex items-center gap-3">
-                <h1 className="text-xl font-semibold tracking-tight">
+              <div className="mt-1.5 flex items-center gap-3">
+                <h1 className="text-2xl font-semibold tracking-tight">
                   {space?.name ?? "…"}
                 </h1>
                 {space && (
@@ -41,6 +42,7 @@ function SpaceChrome({ children }: { children: ReactNode }) {
             </div>
           </div>
           <TabNav
+            className="-ml-3"
             tabs={[
               { href: base, label: "Overview" },
               { href: `${base}/agent`, label: "Agent" },

@@ -12,6 +12,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { EmptyState } from "@/components/empty-state";
 
 type SpaceRow = {
   id: string;
@@ -74,17 +75,15 @@ export default function SpacesDashboard() {
       )}
 
       {!error && spaces !== null && spaces.length === 0 && (
-        <Card>
-          <CardContent className="py-12 text-center">
-            <p className="text-sm font-medium">No spaces yet</p>
-            <p className="mt-1 mb-4 text-sm text-muted-foreground">
-              Create your first Space to connect a Slack channel.
-            </p>
+        <EmptyState
+          title="No spaces yet"
+          description="Create your first Space to connect a Slack channel."
+          action={
             <Link className={buttonVariants({ size: "sm" })} href="/admin/spaces/new">
               Create space
             </Link>
-          </CardContent>
-        </Card>
+          }
+        />
       )}
 
       {!error && spaces !== null && spaces.length > 0 && (
