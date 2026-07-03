@@ -22,6 +22,7 @@ import {
   createRuntimeProviders,
   type RuntimeProviderConfig,
 } from "../providers";
+import { createComposioMcpServer } from "../tools/composio";
 
 /**
  * The final Slack reply should be the agent's answer, not the opencode CLI
@@ -67,7 +68,7 @@ export type OpencodeSegmentArgs = {
 /**
  * opencode-primary run path: thin Tags shell around opencode in E2B.
  * No outer AI SDK streamText loop — opencode IS the agent harness.
- * Composio MCP tools are not loaded on this path (see agent/loop.ts).
+ * Space Composio connections are exposed to opencode as a remote MCP server.
  */
 export async function runOpencodeSegment(
   args: OpencodeSegmentArgs,
@@ -111,9 +112,25 @@ export async function runOpencodeSegment(
     args.spaceId,
     args.triggerText,
   );
-  const prompt = buildOpencodePrompt(config.instructions, args.spaceName, messages);
+  const prompt = buildOpencodePrompt(config.instructions, args.spaceName, messages, {
+    connectedToolkits: config.enabledConnections,
+  });
 
   const providers = await createRuntimeProviders(args.providerConfig);
+  let composioMcp: Awaited<ReturnType<typeof createComposioMcpServer>> = null;
+  try {
+    composioMcp = await createComposioMcpServer({
+      apiKey: args.providerConfig.composioApiKey ?? "",
+      entityId: args.spaceId,
+      toolkits: config.enabledConnections,
+    });
+  } catch (error) {
+    await emit({
+      type: "status",
+      label: "Composio tools unavailable",
+      detail: error instanceof Error ? error.message : "Failed to create MCP session",
+    });
+  }
   const sandboxSession = await getOrCreateSpaceSandboxSession(args.db, {
     organizationId: args.organizationId,
     spaceId: args.spaceId,
@@ -153,6 +170,7 @@ export async function runOpencodeSegment(
         sandboxId: sandboxLease.externalSandboxId,
         keepAlive: true,
       },
+      mcpServers: composioMcp ? { composio: composioMcp } : undefined,
       // Raw opencode stdout is TUI noise (banner, "build · model" header) —
       // keep it in the run timeline (DB) but never stream it into Slack.
       onOutput: async (chunk) => {

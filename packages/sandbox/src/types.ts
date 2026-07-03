@@ -10,6 +10,17 @@ export interface CodingAgentRequest {
     sandboxId?: string | null;
     keepAlive: boolean;
   };
+  /** Remote MCP servers exposed to opencode for this run. */
+  mcpServers?: Record<
+    string,
+    {
+      type: "remote";
+      url: string;
+      enabled?: boolean;
+      headers?: Record<string, string>;
+      timeout?: number;
+    }
+  >;
   /** Live opencode CLI output (E2B `onStdout` / `onStderr`). */
   onOutput?: (chunk: string) => void | Promise<void>;
 }

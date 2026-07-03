@@ -3,7 +3,7 @@ import {
   getSpaceById,
   listSpaceConfigVersions,
 } from "@tags/core/spaces-admin";
-import { loadActiveSpaceConfig, parseRuntimeMode } from "@tags/core/spaces";
+import { loadActiveSpaceConfig } from "@tags/core/spaces";
 import { recordAuditEvent } from "@tags/core/audit";
 import { adminUnauthorizedResponse, isAdminAuthorized } from "@/lib/admin-auth";
 import { getDb } from "@/lib/db";
@@ -67,7 +67,7 @@ export async function PATCH(
     enabledConnections: stringArray(body.enabledConnections),
     reasoning: body.reasoning,
     maxSteps: body.maxSteps,
-    runtimeMode: parseRuntimeMode(body.runtimeMode),
+    runtimeMode: "opencode",
     repoUrl: body.repoUrl,
   });
 
@@ -79,7 +79,7 @@ export async function PATCH(
     payload: {
       version: result.version,
       modelId: body.modelId,
-      runtimeMode: body.runtimeMode,
+      runtimeMode: "opencode",
       enabledTools: stringArray(body.enabledTools),
       enabledConnections: stringArray(body.enabledConnections),
     },

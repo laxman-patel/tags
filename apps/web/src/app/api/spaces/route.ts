@@ -1,5 +1,4 @@
 import { listSpaces, createSpaceWithConfig } from "@tags/core/spaces-admin";
-import { parseRuntimeMode } from "@tags/core/spaces";
 import { eq, organizations, spaces, workspaces } from "@tags/db";
 import { adminUnauthorizedResponse, isAdminAuthorized } from "@/lib/admin-auth";
 import { getDb } from "@/lib/db";
@@ -58,7 +57,7 @@ export async function POST(request: Request) {
     modelId: body.modelId,
     instructions: body.instructions,
     enabledTools: body.enabledTools,
-    runtimeMode: parseRuntimeMode(body.runtimeMode),
+    runtimeMode: "opencode",
   });
 
   return Response.json(result, { status: 201 });

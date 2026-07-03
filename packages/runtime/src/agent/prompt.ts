@@ -23,8 +23,14 @@ export function buildOpencodePrompt(
   instructions: string,
   spaceName: string,
   messages: ModelMessage[],
+  options?: { connectedToolkits?: string[] },
 ): string {
   const system = buildSystemPrompt(instructions, spaceName);
+  const connectedToolkits = options?.connectedToolkits ?? [];
+  const toolContext =
+    connectedToolkits.length > 0
+      ? `\n# Connected tools\nThe Space has these Composio toolkits exposed through the opencode MCP server named \"composio\": ${connectedToolkits.join(", ")}. Use them when the task clearly requires external tool access. Ask before high-impact external side effects.`
+      : "";
   const thread = messages
     .map((message) => {
       const body =
@@ -35,7 +41,7 @@ export function buildOpencodePrompt(
     })
     .join("\n\n");
 
-  return `${system}
+  return `${system}${toolContext}
 
 # Task thread
 ${thread}

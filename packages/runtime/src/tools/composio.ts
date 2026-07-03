@@ -8,6 +8,14 @@ export type ComposioToolsHandle = {
   close: () => Promise<void>;
 };
 
+export type ComposioMcpServerConfig = {
+  type: "remote";
+  url: string;
+  enabled: true;
+  headers?: Record<string, string>;
+  timeout: number;
+};
+
 /**
  * Loads Composio tools for a Space via the Tool Router session + MCP transport.
  *
@@ -18,16 +26,12 @@ export type ComposioToolsHandle = {
  *
  * The entity (`entityId`) is the Space id, so connected accounts are scoped per
  * channel. Toolkits come from the Space config's `enabledConnections`.
- *
- * NOTE: Composio tools are only loaded in orchestrator mode (`runtimeMode`).
- * On opencode-primary runs they are disabled entirely. In orchestrator mode,
- * each MCP tool is wrapped with Tags approval gating (see composio-governance.ts).
  */
-export async function loadComposioTools(args: {
+export async function createComposioMcpServer(args: {
   apiKey: string;
   entityId: string;
   toolkits: string[];
-}): Promise<ComposioToolsHandle | null> {
+}): Promise<ComposioMcpServerConfig | null> {
   if (!args.apiKey || args.toolkits.length === 0) {
     return null;
   }
@@ -38,11 +42,32 @@ export async function loadComposioTools(args: {
     toolkits: args.toolkits,
   });
 
+  return {
+    type: "remote",
+    url: session.mcp.url,
+    enabled: true,
+    headers: session.mcp.headers,
+    timeout: 30_000,
+  };
+}
+
+export async function loadComposioTools(args: {
+  apiKey: string;
+  entityId: string;
+  toolkits: string[];
+}): Promise<ComposioToolsHandle | null> {
+  if (!args.apiKey || args.toolkits.length === 0) {
+    return null;
+  }
+
+  const session = await createComposioMcpServer(args);
+  if (!session) return null;
+
   const mcpClient = await createMCPClient({
     transport: {
       type: "http",
-      url: session.mcp.url,
-      headers: session.mcp.headers,
+      url: session.url,
+      headers: session.headers,
     },
   });
 

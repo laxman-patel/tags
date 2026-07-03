@@ -92,4 +92,27 @@ describe("createSandboxProvider", () => {
       exitCode: 0,
     });
   });
+
+  it("writes opencode MCP config when remote servers are provided", async () => {
+    const sandbox = createMockSandbox("new-sandbox");
+    mocks.create.mockResolvedValue(sandbox);
+
+    const provider = createSandboxProvider();
+    await provider.runCodingAgent({
+      prompt: "list issues",
+      mcpServers: {
+        composio: {
+          type: "remote",
+          url: "https://mcp.example.test",
+          enabled: true,
+          headers: { Authorization: "Bearer token" },
+        },
+      },
+    });
+
+    const commands = sandbox.commands.run.mock.calls.map((call) => String(call[0]));
+    expect(commands.some((command) => command.includes('"mcp"'))).toBe(true);
+    expect(commands.some((command) => command.includes('"composio"'))).toBe(true);
+    expect(commands.some((command) => command.includes("OPENCODE_CONFIG="))).toBe(true);
+  });
 });

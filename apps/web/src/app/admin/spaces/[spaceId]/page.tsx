@@ -34,7 +34,7 @@ type ActiveConfig = {
   enabledTools: string[];
   enabledConnections: string[];
   maxSteps: number;
-  runtimeMode: "opencode" | "orchestrator";
+  runtimeMode: string;
   repoUrl?: string | null;
 };
 
@@ -78,12 +78,6 @@ type SandboxInfo = {
     repoUrl: string | null;
     workdir: string;
   };
-};
-
-const runtimeCopy = {
-  opencode: "Coding-first. Uses the persistent E2B/opencode sandbox. Composio tools are not loaded on this path yet.",
-  orchestrator:
-    "Tool-first. Loads native and Composio tools; coding runs through the approved run_coding_agent tool.",
 };
 
 function toggle(list: string[], value: string, enabled: boolean) {
@@ -157,7 +151,6 @@ export default function SpaceDetailPage() {
   const [instructions, setInstructions] = useState("");
   const [enabledTools, setEnabledTools] = useState<string[]>([]);
   const [enabledConnections, setEnabledConnections] = useState<string[]>([]);
-  const [runtimeMode, setRuntimeMode] = useState<"opencode" | "orchestrator">("opencode");
   const [repoUrl, setRepoUrl] = useState("");
   const [reasoning, setReasoning] = useState("provider-default");
   const [maxSteps, setMaxSteps] = useState(12);
@@ -188,7 +181,6 @@ export default function SpaceDetailPage() {
       setEnabledConnections(activeConfig.enabledConnections ?? []);
       setReasoning(activeConfig.reasoning ?? "provider-default");
       setMaxSteps(activeConfig.maxSteps ?? 12);
-      setRuntimeMode(activeConfig.runtimeMode === "orchestrator" ? "orchestrator" : "opencode");
       setRepoUrl(activeConfig.repoUrl ?? "");
     }
     setConnections(await connectionsRes.json());
@@ -211,7 +203,7 @@ export default function SpaceDetailPage() {
         instructions,
         enabledTools,
         enabledConnections,
-        runtimeMode,
+        runtimeMode: "opencode",
         reasoning,
         maxSteps,
         repoUrl: repoUrl.trim() || null,
@@ -286,7 +278,7 @@ export default function SpaceDetailPage() {
           </p>
         </div>
         <div style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
-          <Badge tone={runtimeMode === "opencode" ? "success" : "warning"}>{runtimeMode}</Badge>
+          <Badge tone="success">opencode harness</Badge>
           {configVersion && <Badge>v{configVersion}</Badge>}
         </div>
       </div>
@@ -315,20 +307,18 @@ export default function SpaceDetailPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Runtime mode</CardTitle>
-            <CardDescription>{runtimeCopy[runtimeMode]}</CardDescription>
+            <CardTitle>Agent runtime</CardTitle>
+            <CardDescription>
+              opencode is the single harness. Enabled Composio toolkits are exposed to it through
+              the Space MCP server.
+            </CardDescription>
           </CardHeader>
-          <CardContent>
-            <Label>
-              Mode
-              <Select
-                value={runtimeMode}
-                onChange={(e) => setRuntimeMode(e.target.value as "opencode" | "orchestrator")}
-              >
-                <option value="opencode">opencode</option>
-                <option value="orchestrator">orchestrator</option>
-              </Select>
-            </Label>
+          <CardContent style={{ display: "grid", gap: 12 }}>
+            <Badge tone="success">persistent sandbox</Badge>
+            <p className="muted" style={{ margin: 0, fontSize: 13, lineHeight: 1.45 }}>
+              There is no separate tools runtime. Tool access is configured below and made available
+              to opencode for every normal Space run.
+            </p>
           </CardContent>
         </Card>
 
@@ -478,7 +468,7 @@ export default function SpaceDetailPage() {
           <CardHeader>
             <CardTitle>Composio connections</CardTitle>
             <CardDescription>
-              Entity ID is the Space ID. Toolkits only load in orchestrator mode today.
+              Entity ID is the Space ID. Enabled toolkits are passed into opencode through MCP.
             </CardDescription>
           </CardHeader>
           <CardContent>

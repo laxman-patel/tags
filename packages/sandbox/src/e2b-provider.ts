@@ -6,6 +6,7 @@ export const DEFAULT_OPENCODE_TEMPLATE = "opencode";
 
 export const REPO_PATH = "/home/user/repo";
 export const WORKDIR = "/home/user/workspace";
+const OPENCODE_CONFIG_PATH = "/tmp/tags/opencode.json";
 
 export type SandboxProviderConfig = {
   /** E2B API key. */
@@ -112,6 +113,30 @@ async function ensureWorkspace(
   return REPO_PATH;
 }
 
+async function writeOpencodeConfig(
+  sandbox: SandboxInstance,
+  request: CodingAgentRequest,
+): Promise<string | undefined> {
+  if (!request.mcpServers || Object.keys(request.mcpServers).length === 0) {
+    return undefined;
+  }
+
+  const config = JSON.stringify(
+    {
+      $schema: "https://opencode.ai/config.json",
+      mcp: request.mcpServers,
+    },
+    null,
+    2,
+  );
+
+  await sandbox.commands.run(
+    `mkdir -p ${shellQuote("/tmp/tags")} && cat > ${shellQuote(OPENCODE_CONFIG_PATH)} <<'EOF'\n${config}\nEOF`,
+  );
+
+  return OPENCODE_CONFIG_PATH;
+}
+
 export function createSandboxProvider(config: SandboxProviderConfig = {}): SandboxProvider {
   const template = config.template ?? DEFAULT_OPENCODE_TEMPLATE;
 
@@ -151,10 +176,11 @@ export function createSandboxProvider(config: SandboxProviderConfig = {}): Sandb
 
       try {
         const cwd = await ensureWorkspace(sandbox, request, config);
+        const opencodeConfigPath = await writeOpencodeConfig(sandbox, request);
         const model = toOpencodeModelId(
           request.model ?? config.model ?? "accounts/fireworks/routers/glm-5p2-fast",
         );
-        const command = `opencode run --model ${shellQuote(model)} ${shellQuote(request.prompt)}`;
+        const command = `${opencodeConfigPath ? `OPENCODE_CONFIG=${shellQuote(opencodeConfigPath)} ` : ""}opencode run --model ${shellQuote(model)} ${shellQuote(request.prompt)}`;
 
         const appendStream = async (chunk: string) => {
           const clean = stripAnsi(chunk);

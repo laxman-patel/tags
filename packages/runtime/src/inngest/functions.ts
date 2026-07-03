@@ -374,32 +374,7 @@ async function agentSegmentStep(input: TagsRunInput, setup: RunSetup) {
   const secrets = loadRuntimeSecrets();
   const db = createDb(secrets.databaseUrl);
   const slack = createSlackClient(secrets.slackBotToken);
-  const config = await loadActiveSpaceConfig(db, input.spaceId);
   const providerConfig = buildRuntimeProviderConfig(secrets);
-
-  if (config?.runtimeMode === "orchestrator") {
-    const loopArgs: AgentLoopArgs = {
-      db,
-      slack,
-      fireworksApiKey: secrets.fireworksApiKey,
-      runId: setup.runId,
-      spaceId: input.spaceId,
-      workspaceId: input.workspaceId,
-      threadId: setup.threadId,
-      organizationId: input.organizationId,
-      channelId: input.channelId,
-      threadTs: setup.threadTs,
-      slackMessageTs: setup.slackMessageTs,
-      slackStream: setup.slackStream,
-      triggerText: input.triggerText,
-      actorUserId: input.actorSlackUserId,
-      spaceName: input.spaceName,
-      appUrl: input.appUrl,
-      providerConfig,
-    };
-
-    return runAgentSegment(loopArgs);
-  }
 
   return runOpencodeSegment({
     db,
