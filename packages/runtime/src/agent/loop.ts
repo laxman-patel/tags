@@ -91,7 +91,11 @@ export async function runAgentSegment(args: AgentLoopArgs): Promise<AgentSegment
   }
 
   const providers = await createRuntimeProviders(args.providerConfig);
-  const toolOptions: ToolRegistryOptions = { appUrl: args.appUrl, ...providers };
+  const toolOptions: ToolRegistryOptions = {
+    appUrl: args.appUrl,
+    providerConfig: args.providerConfig,
+    ...providers,
+  };
 
   await updateRunStatus(args.db, args.runId, "streaming");
   await emit({ type: "status", label: "Reading thread context" });
@@ -315,7 +319,7 @@ function buildToolContext(
   toolOptions: ToolRegistryOptions,
   emit: (event: TagsEvent) => Promise<void>,
 ): ToolContext {
-  const { appUrl: _appUrl, ...providers } = toolOptions;
+  const { appUrl: _appUrl, providerConfig: _providerConfig, ...providers } = toolOptions;
   return {
     ...providers,
     organizationId: args.organizationId,

@@ -4,8 +4,8 @@ import type { CodingAgentRequest, CodingAgentResult, SandboxProvider } from "./t
 /** E2B pre-built template with opencode installed (see e2b.dev/docs/agents/opencode). */
 export const DEFAULT_OPENCODE_TEMPLATE = "opencode";
 
-const REPO_PATH = "/home/user/repo";
-const WORKDIR = "/home/user/workspace";
+export const REPO_PATH = "/home/user/repo";
+export const WORKDIR = "/home/user/workspace";
 
 export type SandboxProviderConfig = {
   /** E2B API key. */
@@ -39,6 +39,17 @@ export function toOpencodeModelId(model: string): string {
 }
 
 type CommandLike = { stdout?: string; stderr?: string; exitCode?: number };
+type SandboxInstance = Awaited<ReturnType<typeof Sandbox.create>>;
+type SandboxConstructor = typeof Sandbox & {
+  connect?: (
+    sandboxId: string,
+    options?: {
+      apiKey?: string;
+      timeoutMs?: number;
+      envs?: Record<string, string>;
+    },
+  ) => Promise<SandboxInstance>;
+};
 
 /** opencode writes terminal color codes; strip them so Slack/DB output stays readable. */
 // eslint-disable-next-line no-control-regex
@@ -52,6 +63,55 @@ function combineOutput(result: CommandLike): string {
   return stripAnsi(`${result.stdout ?? ""}\n${result.stderr ?? ""}`).trim();
 }
 
+async function connectSandbox(
+  sandboxId: string,
+  options: {
+    apiKey?: string;
+    timeoutMs?: number;
+    envs?: Record<string, string>;
+  },
+): Promise<SandboxInstance> {
+  const connect = (Sandbox as SandboxConstructor).connect;
+  if (!connect) {
+    throw new Error("Installed E2B SDK does not support reconnecting to sandboxes");
+  }
+  return connect(sandboxId, options);
+}
+
+async function pathExists(sandbox: SandboxInstance, path: string): Promise<boolean> {
+  try {
+    await sandbox.commands.run(`test -e ${shellQuote(path)}`);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function ensureWorkspace(
+  sandbox: SandboxInstance,
+  request: CodingAgentRequest,
+  config: SandboxProviderConfig,
+): Promise<string> {
+  if (!request.repoUrl) {
+    await sandbox.commands.run(`mkdir -p ${shellQuote(WORKDIR)}`);
+    return WORKDIR;
+  }
+
+  const hasRepo = await pathExists(sandbox, `${REPO_PATH}/.git`);
+  if (!hasRepo) {
+    await sandbox.commands.run(`rm -rf ${shellQuote(REPO_PATH)}`);
+    await sandbox.git.clone(request.repoUrl, {
+      path: REPO_PATH,
+      depth: 1,
+      ...(config.githubToken
+        ? { username: "x-access-token", password: config.githubToken }
+        : {}),
+    });
+  }
+
+  return REPO_PATH;
+}
+
 export function createSandboxProvider(config: SandboxProviderConfig = {}): SandboxProvider {
   const template = config.template ?? DEFAULT_OPENCODE_TEMPLATE;
 
@@ -62,28 +122,35 @@ export function createSandboxProvider(config: SandboxProviderConfig = {}): Sandb
         envs.FIREWORKS_API_KEY = config.modelApiKey;
       }
 
-      const sandbox = await Sandbox.create(template, {
+      const sandboxOptions = {
         apiKey: config.apiKey,
         timeoutMs: config.timeoutMs ?? 10 * 60_000,
         envs,
-      });
+      };
+
+      let createdSandbox = false;
+      let reusedSandbox = false;
+      let sandbox: SandboxInstance | null = null;
+
+      if (request.session?.sandboxId) {
+        try {
+          sandbox = await connectSandbox(request.session.sandboxId, sandboxOptions);
+          reusedSandbox = true;
+        } catch {
+          sandbox = null;
+        }
+      }
+
+      if (!sandbox) {
+        sandbox = await Sandbox.create(template, sandboxOptions);
+        createdSandbox = true;
+      }
 
       let streamed = "";
+      let completed = false;
 
       try {
-        if (request.repoUrl) {
-          await sandbox.git.clone(request.repoUrl, {
-            path: REPO_PATH,
-            depth: 1,
-            ...(config.githubToken
-              ? { username: "x-access-token", password: config.githubToken }
-              : {}),
-          });
-        } else {
-          await sandbox.commands.run(`mkdir -p ${WORKDIR}`);
-        }
-
-        const cwd = request.repoUrl ? REPO_PATH : WORKDIR;
+        const cwd = await ensureWorkspace(sandbox, request, config);
         const model = toOpencodeModelId(
           request.model ?? config.model ?? "accounts/fireworks/routers/glm-5p2-fast",
         );
@@ -132,14 +199,19 @@ export function createSandboxProvider(config: SandboxProviderConfig = {}): Sandb
           }
         }
 
+        completed = true;
         return {
           sandboxId: sandbox.sandboxId,
+          createdSandbox,
+          reusedSandbox,
           exitCode,
           output,
           gitDiff,
         };
       } finally {
-        await sandbox.kill();
+        if (!request.session?.keepAlive || (createdSandbox && !completed)) {
+          await sandbox.kill();
+        }
       }
     },
   };

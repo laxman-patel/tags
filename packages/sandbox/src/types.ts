@@ -5,12 +5,19 @@ export interface CodingAgentRequest {
   repoUrl?: string;
   /** opencode `--model` override for this run (falls back to provider config). */
   model?: string;
+  /** Existing sandbox session to reuse. When keepAlive is true, the sandbox is not killed. */
+  session?: {
+    sandboxId?: string | null;
+    keepAlive: boolean;
+  };
   /** Live opencode CLI output (E2B `onStdout` / `onStderr`). */
   onOutput?: (chunk: string) => void | Promise<void>;
 }
 
 export interface CodingAgentResult {
   sandboxId: string;
+  createdSandbox: boolean;
+  reusedSandbox: boolean;
   exitCode: number;
   /** Combined stdout/stderr from the opencode run. */
   output: string;

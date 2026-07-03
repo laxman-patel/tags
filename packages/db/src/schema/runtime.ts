@@ -111,6 +111,37 @@ export const runs = pgTable(
   (table) => [uniqueIndex("runs_idempotency_key_idx").on(table.idempotencyKey)],
 );
 
+export const spaceSandboxSessions = pgTable(
+  "space_sandbox_sessions",
+  {
+    id: uuid("id").primaryKey(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id),
+    spaceId: uuid("space_id")
+      .notNull()
+      .references(() => spaces.id),
+    provider: text("provider").notNull().default("e2b"),
+    externalSandboxId: text("external_sandbox_id"),
+    template: text("template").notNull(),
+    repoUrl: text("repo_url"),
+    workdir: text("workdir").notNull(),
+    status: text("status")
+      .$type<"ready" | "leased" | "expired" | "failed">()
+      .notNull()
+      .default("ready"),
+    activeRunId: uuid("active_run_id").references(() => runs.id),
+    leaseExpiresAt: timestamp("lease_expires_at", { withTimezone: true }),
+    lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
+    metadata: jsonb("metadata").$type<Record<string, unknown>>(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex("space_sandbox_sessions_space_idx").on(table.spaceId),
+  ],
+);
+
 export const runEvents = pgTable(
   "run_events",
   {

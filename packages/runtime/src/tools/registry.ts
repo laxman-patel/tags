@@ -1,5 +1,5 @@
 import type { Db } from "@tags/db";
-import type { RuntimeProviders } from "../providers";
+import type { RuntimeProviderConfig, RuntimeProviders } from "../providers";
 import { createCreateArtifactTool } from "./create-artifact";
 import { createRunCodingAgentTool } from "./run-coding-agent";
 import { createSearchMemoryTool } from "./search-memory";
@@ -9,7 +9,10 @@ import { createAskUserTool } from "./ask-user";
 import { createCreateScheduleTool } from "./create-schedule";
 import type { TagsTool } from "./types";
 
-export type ToolRegistryOptions = RuntimeProviders & { appUrl?: string };
+export type ToolRegistryOptions = RuntimeProviders & {
+  appUrl?: string;
+  providerConfig?: RuntimeProviderConfig;
+};
 
 export function resolveTools(
   db: Db,
@@ -23,7 +26,7 @@ export function resolveTools(
     search_memory: createSearchMemoryTool(db),
     save_memory: createSaveMemoryTool(db),
     create_artifact: createCreateArtifactTool(db, appUrl),
-    run_coding_agent: createRunCodingAgentTool(),
+    run_coding_agent: createRunCodingAgentTool(db, options.providerConfig),
     ask_user: createAskUserTool(db),
     create_schedule: createCreateScheduleTool(db),
   };

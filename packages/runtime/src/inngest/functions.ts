@@ -479,8 +479,9 @@ async function executeApprovedToolStep(
     }
   }
 
-  const providers = await createRuntimeProviders(buildRuntimeProviderConfig(secrets));
-  const toolOptions = { appUrl: input.appUrl, ...providers };
+  const providerConfig = buildRuntimeProviderConfig(secrets);
+  const providers = await createRuntimeProviders(providerConfig);
+  const toolOptions = { appUrl: input.appUrl, providerConfig, ...providers };
 
   return executeApprovedTool(db, {
     runId: setup.runId,

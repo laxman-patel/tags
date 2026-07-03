@@ -11,3 +11,4 @@ export * from "./usage";
 export * from "./policies";
 export * from "./users";
 export * from "./schedules";
+export * from "./space-sandboxes";
