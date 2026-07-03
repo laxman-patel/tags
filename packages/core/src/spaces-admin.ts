@@ -67,7 +67,9 @@ export type UpdateSpaceConfigInput = {
   modelId: string;
   reasoning?: string;
   instructions: string;
+  enabledSkills?: string[];
   enabledTools: string[];
+  enabledConnections?: string[];
   maxSteps?: number;
   runtimeMode?: RuntimeMode;
   repoUrl?: string | null;
@@ -97,9 +99,9 @@ export async function createSpaceConfigVersion(db: Db, input: UpdateSpaceConfigI
     modelId: input.modelId,
     reasoning: input.reasoning ?? active?.reasoning ?? "provider-default",
     instructions: input.instructions,
-    enabledSkills: active?.enabledSkills ?? [],
+    enabledSkills: input.enabledSkills ?? active?.enabledSkills ?? [],
     enabledTools: input.enabledTools,
-    enabledConnections: active?.enabledConnections ?? [],
+    enabledConnections: input.enabledConnections ?? active?.enabledConnections ?? [],
     maxSteps: input.maxSteps ?? active?.maxSteps ?? 12,
     runtimeMode: input.runtimeMode ?? active?.runtimeMode ?? "opencode",
     repoUrl: input.repoUrl !== undefined ? input.repoUrl : (active?.repoUrl ?? null),

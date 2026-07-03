@@ -1,5 +1,6 @@
 import { ClerkProvider } from "@clerk/nextjs";
 import { AuthHeader } from "@/components/auth-header";
+import "./globals.css";
 
 export const metadata = {
   title: "Tags",
