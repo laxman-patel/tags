@@ -8,8 +8,9 @@ export type SpaceCapabilities = {
 const NATIVE_TOOL_DESCRIPTIONS: Record<string, string> = {
   search_thread: "read recent conversation context in the current Slack thread",
   search_channel: "read recent top-level messages in this Slack channel",
-  search_memory: "search long-term Space memory",
-  save_memory: "store channel-scoped facts and preferences",
+  search_memory: "search the Space MEMORY.md file",
+  save_memory: "edit the Space MEMORY.md file",
+  session_search: "search prior Slack threads in this Space",
   create_artifact: "publish durable markdown, JSON, HTML, links, and diffs",
   ask_user: "pause and ask a human for missing information",
   create_schedule: "create recurring Space tasks with approval",

@@ -1,6 +1,7 @@
 import type { TagsEvent } from "@tags/core/events";
 import { truncateForPreview } from "@tags/core/ui-cards";
 import { checkSpaceBudget } from "@tags/core/policies";
+import { formatMemoryPromptBlock, loadSpaceMemoryFile } from "@tags/core/file-memory";
 import { appendRunEvent, updateRunStatus } from "@tags/core/runs";
 import {
   acquireSpaceSandboxLease,
@@ -111,6 +112,7 @@ export async function runOpencodeSegment(
   }
 
   await updateRunStatus(args.db, args.runId, "streaming");
+  const providers = await createRuntimeProviders(args.providerConfig);
 
   if (isCapabilityInventoryQuestion(args.triggerText)) {
     await emit({ type: "status", label: "Reading Space capabilities" });
@@ -132,8 +134,25 @@ export async function runOpencodeSegment(
     return { kind: "complete", text: replyText };
   }
 
-  await emit({ type: "status", label: "Reading thread context" });
+  let spaceMemorySnapshot: string | null = null;
+  if (providers.r2) {
+    await emit({ type: "status", label: "Reading Space memory" });
+    try {
+      const memory = await loadSpaceMemoryFile(providers.r2, {
+        organizationId: args.organizationId,
+        spaceId: args.spaceId,
+      });
+      spaceMemorySnapshot = formatMemoryPromptBlock(memory);
+    } catch (error) {
+      await emit({
+        type: "status",
+        label: "Space memory unavailable",
+        detail: error instanceof Error ? error.message : "Failed to load Space memory",
+      });
+    }
+  }
 
+  await emit({ type: "status", label: "Reading thread context" });
   const messages = await buildThreadContext(
     args.db,
     args.threadId,
@@ -163,10 +182,10 @@ export async function runOpencodeSegment(
     enabledTools: config.enabledTools,
     connectedToolkits: config.enabledConnections,
     hasComposioApiKey: Boolean(args.providerConfig.composioApiKey),
+    spaceMemorySnapshot,
   });
   const prompt = buildOpencodeUserPrompt(messages);
 
-  const providers = await createRuntimeProviders(args.providerConfig);
   const mcpServers: Record<string, TagsMcpServerConfig> = {};
 
   const tagsMcpToken = buildTagsMcpRunToken(
@@ -328,6 +347,7 @@ export async function runOpencodeSegment(
       organizationId: args.organizationId,
       spaceId: args.spaceId,
       fireworksApiKey: args.providerConfig.fireworksApiKey ?? "",
+      storage: providers.r2,
     });
 
     return { kind: "complete", text: replyText };

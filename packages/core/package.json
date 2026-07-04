@@ -12,6 +12,7 @@
     "./events": "./src/events.ts",
     "./ui-cards": "./src/ui-cards.ts",
     "./memory": "./src/memory.ts",
+    "./file-memory": "./src/file-memory.ts",
     "./audit": "./src/audit.ts",
     "./artifacts": "./src/artifacts.ts",
     "./usage": "./src/usage.ts",
@@ -19,6 +20,7 @@
     "./schedules": "./src/schedules.ts",
     "./questions": "./src/questions.ts",
     "./space-sandboxes": "./src/space-sandboxes.ts",
+    "./session-search": "./src/session-search.ts",
     "./model-labels": "./src/model-labels.ts"
   },
   "scripts": {

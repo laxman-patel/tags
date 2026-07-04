@@ -9,7 +9,8 @@
     "./tools/composio": "./src/tools/composio.ts"
   },
   "scripts": {
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "memory:backfill": "pnpm exec tsx src/scripts/backfill-file-memory.ts"
   },
   "dependencies": {
     "@ai-sdk/fireworks": "^3.0.4",

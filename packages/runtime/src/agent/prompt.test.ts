@@ -20,6 +20,22 @@ describe("opencode prompts", () => {
     expect(prompt).toContain("github");
   });
 
+  it("injects frozen Space memory into the system prompt", () => {
+    const prompt = buildOpencodeSystemPrompt(
+      "# Identity\nYou are Tags.",
+      "dev",
+      {
+        enabledTools: ["search_memory"],
+        spaceMemorySnapshot:
+          "SPACE MEMORY [10% - 20/2200 chars]\nThese are durable notes.\n\nUse pnpm.",
+      },
+    );
+
+    expect(prompt).toContain("# Durable Space memory");
+    expect(prompt).toContain("SPACE MEMORY");
+    expect(prompt).toContain("Use pnpm.");
+  });
+
   it("keeps Slack thread text in the user prompt", () => {
     const prompt = buildOpencodeUserPrompt([
       { role: "user", content: "@tags inspect the repo" },

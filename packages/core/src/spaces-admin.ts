@@ -53,7 +53,14 @@ export async function createSpaceWithConfig(db: Db, input: CreateSpaceInput) {
     version: 1,
     modelId: input.modelId,
     instructions: input.instructions,
-    enabledTools: input.enabledTools ?? ["search_thread", "search_channel", "create_artifact"],
+    enabledTools: input.enabledTools ?? [
+      "search_thread",
+      "search_channel",
+      "search_memory",
+      "save_memory",
+      "session_search",
+      "create_artifact",
+    ],
     runtimeMode: input.runtimeMode ?? "opencode",
     isActive: true,
   });

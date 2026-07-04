@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { searchMemories } from "@tags/core/memory";
+import { loadSpaceMemoryFile, searchMemoryEntries } from "@tags/core/file-memory";
 import type { Db } from "@tags/db";
 import type { TagsTool, ToolContext } from "./types";
 
@@ -10,17 +10,29 @@ const inputSchema = z.object({
 export function createSearchMemoryTool(db: Db): TagsTool {
   return {
     name: "search_memory",
-    description: "Search durable facts and preferences saved for this Space.",
+    description: "Search the Space MEMORY.md file for durable facts and preferences.",
     inputSchema,
     risk: "none",
     approval: { kind: "never" },
     sideEffecting: false,
     async execute(input: unknown, ctx: ToolContext) {
+      if (!ctx.r2) {
+        throw new Error("R2 memory storage is not configured");
+      }
+
       const parsed = inputSchema.parse(input);
-      const rows = await searchMemories(db, ctx.spaceId, parsed.query, 20, ctx.organizationId);
-      const items = rows.map((r) => ({ kind: r.kind, content: r.content }));
+      const memory = await loadSpaceMemoryFile(ctx.r2, {
+        organizationId: ctx.organizationId,
+        spaceId: ctx.spaceId,
+      });
+      const matches = searchMemoryEntries(memory, parsed.query).slice(0, 20);
+      const items = matches.map((entry) => ({ kind: "memory", content: entry.content }));
       return {
-        modelOutput: rows.map((r) => ({ kind: r.kind, content: r.content, id: r.id })),
+        modelOutput: {
+          query: parsed.query,
+          count: matches.length,
+          items,
+        },
         uiCard: {
           kind: "memory-search",
           query: parsed.query,

@@ -1,5 +1,4 @@
 import { getThreadById, listThreadMessages } from "@tags/core/threads";
-import { searchMemories } from "@tags/core/memory";
 import type { Db } from "@tags/db";
 import type { ModelMessage } from "ai";
 
@@ -79,20 +78,6 @@ export async function buildThreadContext(
     preamble.push(`Thread summary:\n${summary.text.trim()}`);
   }
 
-  const memories = await searchMemories(
-    db,
-    spaceId,
-    triggerText,
-    10,
-    organizationId,
-  );
-  if (memories.length > 0) {
-    const memoryBlock = memories
-      .map((m) => `- [${m.kind}] ${m.content}`)
-      .join("\n");
-    preamble.push(`Relevant Space memory (matched to trigger):\n${memoryBlock}`);
-  }
-
   const packed = packThreadHistory(history);
 
   if (preamble.length > 0) {
@@ -105,7 +90,26 @@ export async function buildThreadContext(
   return packed;
 }
 
-export function parseRememberCommand(text: string): string | null {
-  const match = text.match(/remember\s+that\s+(.+)/i);
-  return match?.[1]?.trim() ?? null;
+export type MemoryCommand =
+  | { action: "add"; content: string }
+  | { action: "remove"; oldText: string }
+  | { action: "show" };
+
+export function parseMemoryCommand(text: string): MemoryCommand | null {
+  const withoutMention = text.replace(/<@[^>]+>/g, "").replace(/@tags/gi, "").trim();
+  const remember = withoutMention.match(/^remember\s+that\s+(.+)/i);
+  if (remember?.[1]?.trim()) {
+    return { action: "add", content: remember[1].trim() };
+  }
+
+  const forget = withoutMention.match(/^forget\s+(.+)/i);
+  if (forget?.[1]?.trim()) {
+    return { action: "remove", oldText: forget[1].trim() };
+  }
+
+  if (/^(show\s+memory|what\s+do\s+you\s+remember\b.*)/i.test(withoutMention)) {
+    return { action: "show" };
+  }
+
+  return null;
 }

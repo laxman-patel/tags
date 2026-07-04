@@ -21,10 +21,18 @@ import {
   stopStream,
   updateMessage,
 } from "@tags/slack";
-import { parseRememberCommand } from "../context/builder";
+import { parseMemoryCommand } from "../context/builder";
 import { setSentryRunContext } from "../observability/sentry";
 import { syncSlackThreadToDb } from "@tags/slack/sync-thread";
-import { saveMemory } from "@tags/core/memory";
+import {
+  addMemoryEntry,
+  loadSpaceMemoryFile,
+  memoryUsage,
+  MemoryFullError,
+  mutateSpaceMemoryFile,
+  removeMemoryEntryBySubstring,
+} from "@tags/core/file-memory";
+import { createR2Client, type R2Storage } from "@tags/storage";
 import {
   executeApprovedTool,
   rejectPendingTool,
@@ -267,17 +275,12 @@ async function ingestStep(input: TagsRunInput): Promise<RunSetup> {
     rootMessageId: rootMessageTs,
   });
 
-  const remember = parseRememberCommand(input.triggerText);
-  if (remember) {
-    await saveMemory(db, {
-      organizationId: input.organizationId,
-      spaceId: input.spaceId,
-      kind: "fact",
-      content: remember,
-      createdBy: "human",
-      sourceThreadId: thread.id,
-    });
-  }
+  const memoryCommandResult = await executeDeterministicMemoryCommand(
+    db,
+    secrets.r2 ? { client: createR2Client(secrets.r2), config: secrets.r2 } : undefined,
+    input,
+    thread.id,
+  );
 
   if (!input.isScheduled) {
     // Sync first so the trigger message is stored with any file attachments
@@ -298,6 +301,18 @@ async function ingestStep(input: TagsRunInput): Promise<RunSetup> {
       authorType: "human",
       authorId: input.actorSlackUserId,
       text: input.triggerText,
+    });
+  }
+
+  if (memoryCommandResult) {
+    await upsertMessage(db, {
+      organizationId: input.organizationId,
+      spaceId: input.spaceId,
+      threadId: thread.id,
+      providerMessageId: `memory-command:${triggerMessageTs}`,
+      authorType: "system",
+      authorId: "tags",
+      text: `[Memory command result]\n${memoryCommandResult}`,
     });
   }
 
@@ -368,6 +383,67 @@ async function ingestStep(input: TagsRunInput): Promise<RunSetup> {
     slackStream,
     threadTs,
   };
+}
+
+async function executeDeterministicMemoryCommand(
+  db: ReturnType<typeof createDb>,
+  storage: R2Storage | undefined,
+  input: TagsRunInput,
+  threadId: string,
+): Promise<string | null> {
+  const command = parseMemoryCommand(input.triggerText);
+  if (!command) return null;
+  if (!storage) return "R2 memory storage is not configured.";
+
+  const context = {
+    db,
+    organizationId: input.organizationId,
+    spaceId: input.spaceId,
+    actorType: "human" as const,
+    sourceThreadId: threadId,
+  };
+
+  try {
+    switch (command.action) {
+      case "add": {
+        const result = await mutateSpaceMemoryFile(storage, context, (memory) =>
+          addMemoryEntry(memory, command.content),
+        );
+        const usage = memoryUsage(result.memory);
+        return result.duplicate
+          ? `That memory already exists. Usage: ${usage.used}/${usage.limit} chars.`
+          : `Saved to Space memory. Usage: ${usage.used}/${usage.limit} chars.`;
+      }
+      case "remove": {
+        const result = await mutateSpaceMemoryFile(storage, context, (memory) =>
+          removeMemoryEntryBySubstring(memory, command.oldText),
+        );
+        const usage = memoryUsage(result.memory);
+        return `Removed matching memory. Usage: ${usage.used}/${usage.limit} chars.`;
+      }
+      case "show": {
+        const memory = await loadSpaceMemoryFile(storage, {
+          organizationId: input.organizationId,
+          spaceId: input.spaceId,
+        });
+        const usage = memoryUsage(memory);
+        return `Space memory (${usage.used}/${usage.limit} chars):\n${
+          memory.entries.map((entry) => `- ${entry.content}`).join("\n") || "(no entries)"
+        }`;
+      }
+      default: {
+        const _exhaustive: never = command;
+        return _exhaustive;
+      }
+    }
+  } catch (error) {
+    if (error instanceof MemoryFullError) {
+      return `${error.message}\n\nCurrent entries:\n${error.entries
+        .map((entry) => `- ${entry.content}`)
+        .join("\n")}`;
+    }
+    return error instanceof Error ? error.message : "Memory command failed.";
+  }
 }
 
 async function agentSegmentStep(input: TagsRunInput, setup: RunSetup) {

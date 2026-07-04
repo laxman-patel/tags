@@ -4,6 +4,7 @@ import type { TagsEvent } from "@tags/core/events";
 import { formatToolResultForUser } from "@tags/core/ui-cards";
 import type { UICard } from "@tags/core/ui-cards";
 import { checkSpaceBudget } from "@tags/core/policies";
+import { formatMemoryPromptBlock, loadSpaceMemoryFile } from "@tags/core/file-memory";
 import {
   appendRunEvent,
   createToolInvocation,
@@ -98,6 +99,24 @@ export async function runAgentSegment(args: AgentLoopArgs): Promise<AgentSegment
   };
 
   await updateRunStatus(args.db, args.runId, "streaming");
+  let spaceMemorySnapshot: string | null = null;
+  if (providers.r2) {
+    await emit({ type: "status", label: "Reading Space memory" });
+    try {
+      const memory = await loadSpaceMemoryFile(providers.r2, {
+        organizationId: args.organizationId,
+        spaceId: args.spaceId,
+      });
+      spaceMemorySnapshot = formatMemoryPromptBlock(memory);
+    } catch (error) {
+      await emit({
+        type: "status",
+        label: "Space memory unavailable",
+        detail: error instanceof Error ? error.message : "Failed to load Space memory",
+      });
+    }
+  }
+
   await emit({ type: "status", label: "Reading thread context" });
 
   const messages = await buildThreadContext(args.db, args.threadId, args.organizationId, args.spaceId, args.triggerText);
@@ -173,7 +192,9 @@ export async function runAgentSegment(args: AgentLoopArgs): Promise<AgentSegment
   // Native TagsTools emit their own tool.started/finished events (with approval,
   // idempotency, and audit) inside buildAiTools. Wrapped Composio tools emit via
   // composio-governance.ts; streamText callbacks are not used for either set.
-  const instructions = buildSystemPrompt(config.instructions, args.spaceName);
+  const instructions = buildSystemPrompt(config.instructions, args.spaceName, {
+    spaceMemorySnapshot,
+  });
 
   try {
     const result = streamText({
@@ -228,6 +249,7 @@ export async function runAgentSegment(args: AgentLoopArgs): Promise<AgentSegment
       organizationId: args.organizationId,
       spaceId: args.spaceId,
       fireworksApiKey: args.fireworksApiKey,
+      storage: providers.r2,
     });
 
     return { kind: "complete", text: fullText };

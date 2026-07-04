@@ -1,7 +1,15 @@
 import { createFireworks } from "@ai-sdk/fireworks";
-import { generateText } from "ai";
+import { generateObject, generateText } from "ai";
+import { z } from "zod";
+import {
+  addMemoryEntry,
+  MemoryFullError,
+  mutateSpaceMemoryFile,
+  replaceMemoryEntryBySubstring,
+} from "@tags/core/file-memory";
+import type { R2Storage } from "@tags/storage";
 import { getMemoryPolicyForSpace } from "@tags/core/policies";
-import { saveMemory } from "@tags/core/memory";
+import { recordAuditEvent } from "@tags/core/audit";
 import {
   countThreadMessages,
   listThreadMessages,
@@ -11,6 +19,51 @@ import type { Db } from "@tags/db";
 
 const SUMMARY_THRESHOLD = 20;
 const SUMMARY_MODEL = "accounts/fireworks/routers/glm-5p2-fast";
+
+type MemoryConsolidationProposal = {
+  oldText: string;
+  content: string;
+};
+
+async function proposeMemoryConsolidation(args: {
+  candidate: string;
+  currentEntries: string[];
+  charLimit: number;
+  fireworksApiKey: string;
+}): Promise<MemoryConsolidationProposal | null> {
+  const fireworks = createFireworks({ apiKey: args.fireworksApiKey });
+  const schema = z.object({
+    replacement: z.union([
+      z.object({
+        oldText: z.string().min(1),
+        content: z.string().min(1),
+      }),
+      z.null(),
+    ]),
+  });
+
+  const result = await generateObject({
+    model: fireworks(SUMMARY_MODEL),
+    schema,
+    prompt: `A Space MEMORY.md file is full. Propose at most one explicit replacement that saves the new candidate by merging it with exactly one overlapping existing entry.
+
+Rules:
+- Return replacement: null if no single existing entry overlaps enough to merge safely.
+- oldText must be a unique substring of one current entry.
+- content must be a compact standalone replacement that includes the durable meaning of both the old entry and the new candidate.
+- Do not add unrelated facts or credentials.
+- Keep content shorter than the old entry plus candidate combined.
+- The file body limit is ${args.charLimit} characters.
+
+Current entries:
+${args.currentEntries.map((entry) => `- ${entry}`).join("\n")}
+
+New candidate:
+${args.candidate}`,
+  });
+
+  return result.object.replacement;
+}
 
 export async function maybeSummarizeThread(
   db: Db,
@@ -56,8 +109,11 @@ export async function maybeExtractMemories(
     organizationId: string;
     spaceId: string;
     fireworksApiKey: string;
+    storage?: R2Storage;
   },
 ): Promise<void> {
+  if (!args.storage) return;
+
   const policy = await getMemoryPolicyForSpace(db, args.spaceId);
   if (policy && !policy.allowAgentProposed) return;
 
@@ -74,38 +130,145 @@ export async function maybeExtractMemories(
     .slice(0, 8000);
 
   const fireworks = createFireworks({ apiKey: args.fireworksApiKey });
-  const result = await generateText({
-    model: fireworks(SUMMARY_MODEL),
-    prompt: `Extract durable facts, preferences, or decisions from this thread as JSON array. Each item: {"kind":"fact"|"preference"|"decision","content":"..."}. Return [] if nothing worth remembering. Max 5 items.\n\n${transcript}`,
+  const schema = z.object({
+    memories: z
+      .array(
+        z.object({
+          content: z.string().min(1),
+        }),
+      )
+      .max(5),
   });
 
-  let items: Array<{ kind: "fact" | "preference" | "decision"; content: string }> = [];
+  let items: Array<{ content: string }> = [];
   try {
-    const parsed = JSON.parse(result.text.trim()) as unknown;
-    if (Array.isArray(parsed)) {
-      items = parsed.filter(
-        (item): item is { kind: "fact" | "preference" | "decision"; content: string } =>
-          typeof item === "object" &&
-          item !== null &&
-          "content" in item &&
-          typeof (item as { content: unknown }).content === "string",
-      );
-    }
-  } catch {
+    const result = await generateObject({
+      model: fireworks(SUMMARY_MODEL),
+      schema,
+      prompt: `Extract durable Space memory entries from this Slack thread.
+
+Save only compact, standalone notes that will help this same Slack channel in future work:
+- durable facts about the Space
+- team preferences
+- decisions
+- corrections
+- conventions
+- workflow lessons
+
+Skip trivial observations, one-off task state, raw logs, secrets, large snippets, and facts that can be easily rediscovered from files or the web.
+Return at most 5 entries. Each entry should be a concise sentence suitable for MEMORY.md.
+
+Transcript:
+${transcript}`,
+    });
+    items = result.object.memories;
+  } catch (error) {
+    await recordAuditEvent(db, {
+      organizationId: args.organizationId,
+      spaceId: args.spaceId,
+      actorType: "agent",
+      eventType: "memory.extraction_failed",
+      payload: { error: error instanceof Error ? error.message : "Unknown extraction error" },
+    });
     return;
   }
 
-  for (const item of items.slice(0, 5)) {
-    const kind = item.kind ?? "fact";
-    if (kind !== "fact" && kind !== "preference" && kind !== "decision") continue;
-    await saveMemory(db, {
-      organizationId: args.organizationId,
-      spaceId: args.spaceId,
-      kind,
-      content: item.content.trim(),
-      createdBy: "agent",
-      sourceThreadId: args.threadId,
-      confidence: 40,
-    });
+  for (const item of items) {
+    try {
+      await mutateSpaceMemoryFile(
+        args.storage,
+        {
+          db,
+          organizationId: args.organizationId,
+          spaceId: args.spaceId,
+          actorType: "agent",
+          sourceThreadId: args.threadId,
+        },
+        (memory) => addMemoryEntry(memory, item.content),
+      );
+    } catch (error) {
+      if (error instanceof MemoryFullError) {
+        let replacement: MemoryConsolidationProposal | null = null;
+        try {
+          replacement = await proposeMemoryConsolidation({
+            candidate: item.content,
+            currentEntries: error.entries.map((entry) => entry.content),
+            charLimit: error.usage.limit,
+            fireworksApiKey: args.fireworksApiKey,
+          });
+        } catch (consolidationError) {
+          await recordAuditEvent(db, {
+            organizationId: args.organizationId,
+            spaceId: args.spaceId,
+            actorType: "agent",
+            eventType: "memory.consolidation_failed",
+            payload: {
+              content: item.content,
+              error:
+                consolidationError instanceof Error
+                  ? consolidationError.message
+                  : "Unknown consolidation error",
+            },
+          });
+          continue;
+        }
+
+        if (!replacement) {
+          await recordAuditEvent(db, {
+            organizationId: args.organizationId,
+            spaceId: args.spaceId,
+            actorType: "agent",
+            eventType: "memory.full_skipped",
+            payload: {
+              content: item.content,
+              usage: error.usage,
+            },
+          });
+          continue;
+        }
+
+        const proposal = replacement;
+        try {
+          await mutateSpaceMemoryFile(
+            args.storage,
+            {
+              db,
+              organizationId: args.organizationId,
+              spaceId: args.spaceId,
+              actorType: "agent",
+              sourceThreadId: args.threadId,
+            },
+            (memory) =>
+              replaceMemoryEntryBySubstring(memory, proposal.oldText, proposal.content),
+          );
+        } catch (consolidationError) {
+          await recordAuditEvent(db, {
+            organizationId: args.organizationId,
+            spaceId: args.spaceId,
+            actorType: "agent",
+            eventType: "memory.consolidation_failed",
+            payload: {
+              content: item.content,
+              replacement,
+              error:
+                consolidationError instanceof Error
+                  ? consolidationError.message
+                  : "Unknown consolidation error",
+            },
+          });
+        }
+        continue;
+      }
+      await recordAuditEvent(db, {
+        organizationId: args.organizationId,
+        spaceId: args.spaceId,
+        actorType: "agent",
+        eventType: "memory.extraction_skipped",
+        payload: {
+          content: item.content,
+          error: error instanceof Error ? error.message : "Unknown memory write error",
+        },
+      });
+    }
   }
 }

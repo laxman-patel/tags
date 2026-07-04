@@ -1,16 +1,14 @@
-import { softDeleteMemory } from "@tags/core/memory";
 import { adminUnauthorizedResponse, isAdminAuthorized } from "@/lib/admin-auth";
-import { getDb } from "@/lib/db";
 
 export const runtime = "nodejs";
 
-export async function DELETE(
-  request: Request,
-  { params }: { params: Promise<{ memoryId: string }> },
-) {
+export async function DELETE() {
   if (!(await isAdminAuthorized())) return adminUnauthorizedResponse();
-  const { memoryId } = await params;
-  const db = getDb();
-  await softDeleteMemory(db, memoryId);
-  return Response.json({ ok: true });
+  return Response.json(
+    {
+      error:
+        "Legacy Postgres memory rows are read-only. Use /api/memory/:spaceId to edit file-backed Space memory.",
+    },
+    { status: 410 },
+  );
 }

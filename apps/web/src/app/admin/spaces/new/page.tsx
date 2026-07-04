@@ -36,6 +36,7 @@ export default function NewSpacePage() {
             "search_thread",
             "search_memory",
             "save_memory",
+            "session_search",
             "create_artifact",
           ],
           runtimeMode: "opencode",

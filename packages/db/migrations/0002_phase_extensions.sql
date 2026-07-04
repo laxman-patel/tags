@@ -1,5 +1,7 @@
 -- Phase 1–9 extension tables and space policy FKs
 
+CREATE EXTENSION IF NOT EXISTS pg_trgm;
+
 CREATE TYPE memory_kind AS ENUM ('fact', 'summary', 'preference', 'decision', 'artifact');
 CREATE TYPE artifact_kind AS ENUM ('markdown', 'html', 'diff', 'image', 'table', 'json', 'link');
 

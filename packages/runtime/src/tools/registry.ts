@@ -5,6 +5,7 @@ import { createRunCodingAgentTool } from "./run-coding-agent";
 import { createSearchChannelTool } from "./search-channel";
 import { createSearchMemoryTool } from "./search-memory";
 import { createSaveMemoryTool } from "./save-memory";
+import { createSessionSearchTool } from "./session-search";
 import { createSearchThreadTool } from "./search-thread";
 import { createAskUserTool } from "./ask-user";
 import { createCreateScheduleTool } from "./create-schedule";
@@ -28,6 +29,7 @@ export function resolveTools(
     search_channel: createSearchChannelTool(createSlackClient, options.providerConfig?.slackBotToken),
     search_memory: createSearchMemoryTool(db),
     save_memory: createSaveMemoryTool(db),
+    session_search: createSessionSearchTool(db),
     create_artifact: createCreateArtifactTool(db, appUrl),
     run_coding_agent: createRunCodingAgentTool(db, options.providerConfig),
     ask_user: createAskUserTool(db),

@@ -17,7 +17,12 @@ export const NATIVE_TOOLS = [
   {
     id: "save_memory",
     label: "Save memory",
-    description: "Store channel-scoped facts and preferences.",
+    description: "Edit the Space MEMORY.md file.",
+  },
+  {
+    id: "session_search",
+    label: "Session search",
+    description: "Search prior Slack threads in this Space.",
   },
   {
     id: "create_artifact",

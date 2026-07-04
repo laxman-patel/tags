@@ -164,7 +164,7 @@ export async function handleTagsMcpRequest(
     { name: "tags", version: "1.0.0" },
     {
       instructions:
-        "Tags native tools for the current Slack Space run. Use search_thread to load more thread context before answering.",
+        "Tags native tools for the current Slack Space run. Use search_thread for current-thread context, search_memory for the Space MEMORY.md file, and session_search for prior threads in this Space.",
     },
   );
 
