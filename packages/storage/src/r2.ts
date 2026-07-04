@@ -34,6 +34,14 @@ export function artifactObjectKey(organizationId: string, artifactId: string): s
   return `artifacts/${organizationId}/${artifactId}`;
 }
 
+export function artifactBinaryObjectKey(
+  organizationId: string,
+  artifactId: string,
+  filename: string,
+): string {
+  return `artifacts/${organizationId}/${artifactId}/${filename}`;
+}
+
 export function spaceMemoryPrefix(organizationId: string, spaceId: string): string {
   return `memory/${organizationId}/${spaceId}`;
 }
@@ -72,6 +80,23 @@ export async function uploadArtifactBody(
   key: string,
   body: string,
   contentType = "text/plain",
+): Promise<void> {
+  await client.send(
+    new PutObjectCommand({
+      Bucket: config.bucketName,
+      Key: key,
+      Body: body,
+      ContentType: contentType,
+    }),
+  );
+}
+
+export async function uploadArtifactBytes(
+  client: S3Client,
+  config: R2Config,
+  key: string,
+  body: Uint8Array | Buffer,
+  contentType: string,
 ): Promise<void> {
   await client.send(
     new PutObjectCommand({

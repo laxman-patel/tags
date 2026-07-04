@@ -6,6 +6,7 @@ export type UICard =
       artifactKind: string;
       url?: string;
       preview?: string;
+      contentType?: string;
     }
   | {
       kind: "memory-search";

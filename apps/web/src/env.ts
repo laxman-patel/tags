@@ -33,6 +33,15 @@ const envSchema = z
     R2_SECRET_ACCESS_KEY: z.string().optional(),
     R2_BUCKET_NAME: z.string().optional(),
     R2_PUBLIC_BASE_URL: z.url().optional(),
+    DEMO_RECORDING_ENABLED: z
+      .string()
+      .optional()
+      .transform((value) => value === "true" || value === "1"),
+    E2B_DEMO_TEMPLATE: z.string().default("tags-demo-desktop"),
+    DEMO_RECORDING_MAX_SECONDS: z.coerce.number().int().positive().default(90),
+    DEMO_RECORDING_WIDTH: z.coerce.number().int().positive().default(1280),
+    DEMO_RECORDING_HEIGHT: z.coerce.number().int().positive().default(800),
+    DEMO_RECORDING_FPS: z.coerce.number().int().positive().default(15),
   })
   .superRefine((data, ctx) => {
     if (data.NODE_ENV === "production") {

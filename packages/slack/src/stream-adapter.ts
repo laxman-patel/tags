@@ -110,6 +110,9 @@ export class SlackStreamAdapter {
       case "approval.requested":
       case "question.requested":
       case "artifact.created":
+      case "recording.started":
+      case "recording.finished":
+      case "recording.failed":
         if (this.native) {
           await this.flush(true);
           await this.appendChunks([

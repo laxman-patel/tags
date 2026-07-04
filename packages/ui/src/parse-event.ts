@@ -54,6 +54,27 @@ export function parseTagsEvent(
         artifactUrl: String((payload as { artifactUrl?: string })?.artifactUrl ?? ""),
         artifactTitle: String((payload as { artifactTitle?: string })?.artifactTitle ?? ""),
       };
+    case "recording.started":
+      return {
+        type: "recording.started",
+        prUrl: (payload as { prUrl?: string })?.prUrl,
+        demoKind: (payload as { demoKind?: string })?.demoKind,
+      };
+    case "recording.finished":
+      return {
+        type: "recording.finished",
+        artifactId: String((payload as { artifactId?: string })?.artifactId ?? ""),
+        artifactUrl: String((payload as { artifactUrl?: string })?.artifactUrl ?? ""),
+        prUrl: (payload as { prUrl?: string })?.prUrl,
+        slackFileId: (payload as { slackFileId?: string })?.slackFileId,
+        prCommentUrl: (payload as { prCommentUrl?: string })?.prCommentUrl,
+      };
+    case "recording.failed":
+      return {
+        type: "recording.failed",
+        error: String((payload as { error?: string })?.error ?? "Recording failed"),
+        prUrl: (payload as { prUrl?: string })?.prUrl,
+      };
     case "run.finished":
       return { type: "run.finished" };
     case "run.failed":

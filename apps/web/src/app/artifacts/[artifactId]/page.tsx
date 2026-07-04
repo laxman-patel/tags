@@ -37,6 +37,7 @@ export default async function ArtifactPage({
         kind={artifact.kind}
         url={artifact.url}
         preview={body ?? undefined}
+        contentType={artifact.contentType}
       />
       {body != null && (
         <article className="mt-6 rounded-xl border border-border bg-card p-5 text-sm leading-relaxed whitespace-pre-wrap">

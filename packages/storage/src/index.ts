@@ -1,4 +1,5 @@
 export {
+  artifactBinaryObjectKey,
   artifactObjectKey,
   copyObject,
   createR2Client,
@@ -14,6 +15,7 @@ export {
   spaceMemoryObjectKey,
   spaceMemoryPrefix,
   uploadArtifactBody,
+  uploadArtifactBytes,
   type ArtifactBodyReadResult,
   type ConditionalPutResult,
   type R2Config,

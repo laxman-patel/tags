@@ -23,7 +23,7 @@ export async function createArtifact(
     spaceId: string;
     threadId: string;
     runId: string;
-    kind: "markdown" | "html" | "diff" | "image" | "table" | "json" | "link";
+    kind: "markdown" | "html" | "diff" | "image" | "video" | "table" | "json" | "link";
     title: string;
     url: string;
     body?: string;

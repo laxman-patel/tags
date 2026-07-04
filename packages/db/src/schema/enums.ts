@@ -75,6 +75,7 @@ export const artifactKindEnum = pgEnum("artifact_kind", [
   "html",
   "diff",
   "image",
+  "video",
   "table",
   "json",
   "link",

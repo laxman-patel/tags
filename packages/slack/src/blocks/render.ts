@@ -269,6 +269,38 @@ export function renderSlackBlocks(event: TagsEvent): SlackBlock[] {
           },
         },
       ];
+    case "recording.started":
+      return [
+        {
+          type: "context",
+          elements: [
+            {
+              type: "mrkdwn",
+              text: `🎥 Recording demo${event.demoKind ? ` (${event.demoKind})` : ""}${event.prUrl ? ` for <${event.prUrl}|PR>` : ""}`,
+            },
+          ],
+        },
+      ];
+    case "recording.finished":
+      return [
+        {
+          type: "section",
+          text: {
+            type: "mrkdwn",
+            text: `🎥 Demo recording: <${event.artifactUrl}|watch video>${event.prUrl ? `\nPR: <${event.prUrl}|open>` : ""}`,
+          },
+        },
+      ];
+    case "recording.failed":
+      return [
+        {
+          type: "section",
+          text: {
+            type: "mrkdwn",
+            text: `⚠️ Demo recording failed${event.prUrl ? ` for <${event.prUrl}|PR>` : ""}: ${event.error}`,
+          },
+        },
+      ];
     case "run.finished":
       // The final reply itself is the completion signal; no footer noise.
       return [];

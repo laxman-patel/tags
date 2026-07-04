@@ -66,13 +66,21 @@ export default async function RunDetailPage({
         {artifacts.length > 0 && (
           <div className="grid gap-3">
             {artifacts.map(
-              (a: { id: string; title: string; kind: string; url: string; body: string | null }) => (
+              (a: {
+                id: string;
+                title: string;
+                kind: string;
+                url: string;
+                body: string | null;
+                contentType: string | null;
+              }) => (
                 <ArtifactCard
                   key={a.id}
                   title={a.title}
                   kind={a.kind}
                   url={a.url}
                   preview={a.body ?? undefined}
+                  contentType={a.contentType}
                 />
               ),
             )}

@@ -157,6 +157,39 @@ export function EventRenderer(props: { event: TagsEvent }) {
           url={event.artifactUrl}
         />
       );
+    case "recording.started":
+      return (
+        <div className={cardClass}>
+          <span className="font-medium">Recording demo</span>
+          {event.demoKind ? <p className={`mt-1 mb-0 ${mutedClass}`}>{event.demoKind}</p> : null}
+          {event.prUrl ? (
+            <p className="mt-1 mb-0">
+              <a href={event.prUrl} className="underline-offset-4 hover:underline">
+                Pull request
+              </a>
+            </p>
+          ) : null}
+        </div>
+      );
+    case "recording.finished":
+      return (
+        <div className={cardClass}>
+          <span className="font-medium">Demo recording ready</span>
+          <p className="mt-1 mb-0">
+            <a href={event.artifactUrl} className="underline-offset-4 hover:underline">
+              Watch video
+            </a>
+          </p>
+          {event.prCommentUrl ? <p className={`mt-1 mb-0 ${mutedClass}`}>PR comment added</p> : null}
+        </div>
+      );
+    case "recording.failed":
+      return (
+        <div className="rounded-xl border border-destructive/40 bg-destructive/10 p-3 text-sm">
+          <span className="font-medium text-destructive">Demo recording failed</span>
+          <p className="mt-1 mb-0 text-destructive/90">{event.error}</p>
+        </div>
+      );
     case "run.finished":
       return (
         <div className={cardClass}>

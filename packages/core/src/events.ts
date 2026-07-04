@@ -24,5 +24,15 @@ export type TagsEvent =
       expiresAt?: string;
     }
   | { type: "artifact.created"; artifactId: string; artifactUrl: string; artifactTitle: string }
+  | { type: "recording.started"; prUrl?: string; demoKind?: string }
+  | {
+      type: "recording.finished";
+      artifactId: string;
+      artifactUrl: string;
+      prUrl?: string;
+      slackFileId?: string;
+      prCommentUrl?: string;
+    }
+  | { type: "recording.failed"; error: string; prUrl?: string }
   | { type: "run.finished" }
   | { type: "run.failed"; error: string };
