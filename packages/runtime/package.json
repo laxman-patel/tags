@@ -16,10 +16,14 @@
   "dependencies": {
     "@ai-sdk/fireworks": "^3.0.4",
     "@ai-sdk/mcp": "^2.0.5",
-    "@modelcontextprotocol/sdk": "^1.29.0",
     "@aws-sdk/client-s3": "^3.1078.0",
     "@composio/core": "^0.13.1",
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "@opentelemetry/api": "^1.9.1",
+    "@opentelemetry/api-logs": "^0.220.0",
+    "@sentry/node": "^10.63.0",
     "@slack/web-api": "^7.18.0",
+    "@superlog/otel-helpers": "^0.1.1",
     "@tags/connections": "workspace:*",
     "@tags/core": "workspace:*",
     "@tags/db": "workspace:*",
@@ -29,7 +33,6 @@
     "ai": "^7.0.11",
     "drizzle-orm": "^0.45.2",
     "inngest": "^4.11.0",
-    "@sentry/node": "^10.63.0",
     "zod": "^4.4.3"
   }
 }

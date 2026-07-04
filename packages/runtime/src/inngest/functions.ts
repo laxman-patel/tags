@@ -53,6 +53,15 @@ import { upsertDemoRecordingCommentWithComposio } from "../integrations/composio
 import { loadComposioTools } from "../tools/composio";
 import type { UICard } from "@tags/core/ui-cards";
 import { recordDemo, type TagsRunOutput } from "@tags/sandbox";
+import { withSpan } from "@superlog/otel-helpers";
+import {
+  agentRunDuration,
+  agentRunsCompleted,
+  agentRunsStarted,
+  emitInfo,
+  emitWarn,
+  tagsTracer,
+} from "../observability/otel";
 import {
   APPROVAL_RESOLVED_EVENT,
   QUESTION_ANSWERED_EVENT,
@@ -99,6 +108,8 @@ export const tagsRunFunction: InngestFunction.Any = inngest.createFunction(
   { id: "tags-run", retries: 2, triggers: [{ event: RUN_REQUESTED_EVENT }] },
   async ({ event, step }) => {
     const input = event.data as TagsRunInput;
+    const startedAt = Date.now();
+    agentRunsStarted.add(1, { trigger: input.trigger, "space.id": input.spaceId });
 
     const setup = (await step.run("ingest", () => ingestStep(input))) as RunSetup;
 
@@ -244,6 +255,26 @@ export const tagsRunFunction: InngestFunction.Any = inngest.createFunction(
           finalizeReactionStep(input.channelId, input.triggerMessageTs, threadStatus),
         );
       }
+      const durationMs = Date.now() - startedAt;
+      agentRunsCompleted.add(1, {
+        trigger: input.trigger,
+        outcome: threadStatus,
+        "space.id": input.spaceId,
+      });
+      agentRunDuration.record(durationMs, {
+        trigger: input.trigger,
+        outcome: threadStatus,
+        "space.id": input.spaceId,
+      });
+      emitInfo("agent run finished", {
+        "organization.id": input.organizationId,
+        "workspace.id": input.workspaceId,
+        "space.id": input.spaceId,
+        "run.id": setup.runId,
+        trigger: input.trigger,
+        outcome: threadStatus,
+        "duration.ms": durationMs,
+      });
     }
 
     return { runId: setup.runId };
@@ -251,6 +282,19 @@ export const tagsRunFunction: InngestFunction.Any = inngest.createFunction(
 );
 
 async function ingestStep(input: TagsRunInput): Promise<RunSetup> {
+  return await withSpan(
+    "agent.run_ingest",
+    async (span) => {
+      span.setAttributes({
+        "organization.id": input.organizationId,
+        "workspace.id": input.workspaceId,
+        "space.id": input.spaceId,
+        "slack.channel.id": input.channelId,
+        "slack.team.id": input.teamId,
+        trigger: input.trigger,
+        "run.scheduled": Boolean(input.isScheduled),
+      });
+
   const secrets = loadRuntimeSecrets();
   const db = createDb(secrets.databaseUrl);
   const slack = createSlackClient(secrets.slackBotToken);
@@ -380,6 +424,17 @@ async function ingestStep(input: TagsRunInput): Promise<RunSetup> {
     if (!input.isScheduled) {
       await removeReaction(slack, input.channelId, input.triggerMessageTs, "eyes").catch(() => {});
     }
+    span.setAttributes({
+      "run.id": run.id,
+      "thread.id": thread.id,
+      outcome: "skipped",
+    });
+    emitInfo("agent run skipped because thread is busy", {
+      "space.id": input.spaceId,
+      "run.id": run.id,
+      "thread.id": thread.id,
+      outcome: "skipped",
+    });
     return {
       runId: run.id,
       threadId: thread.id,
@@ -401,6 +456,18 @@ async function ingestStep(input: TagsRunInput): Promise<RunSetup> {
     runId: run.id,
   });
 
+  span.setAttributes({
+    "run.id": run.id,
+    "thread.id": thread.id,
+    outcome: "success",
+  });
+  emitInfo("agent run ingested", {
+    "space.id": input.spaceId,
+    "run.id": run.id,
+    "thread.id": thread.id,
+    trigger: input.trigger,
+    outcome: "success",
+  });
   return {
     runId: run.id,
     threadId: thread.id,
@@ -408,6 +475,9 @@ async function ingestStep(input: TagsRunInput): Promise<RunSetup> {
     slackStream,
     threadTs,
   };
+    },
+    { tracer: tagsTracer },
+  );
 }
 
 async function recordDemoStep(
@@ -415,6 +485,17 @@ async function recordDemoStep(
   setup: RunSetup,
   runOutput: TagsRunOutput | undefined,
 ): Promise<void> {
+  return await withSpan(
+    "demo.record",
+    async (span) => {
+      span.setAttributes({
+        "organization.id": input.organizationId,
+        "workspace.id": input.workspaceId,
+        "space.id": input.spaceId,
+        "thread.id": setup.threadId,
+        "run.id": setup.runId,
+      });
+
   const secrets = loadRuntimeSecrets();
   if (!secrets.demoRecording.enabled) return;
 
@@ -542,8 +623,17 @@ async function recordDemoStep(
   } catch (error) {
     const message = error instanceof Error ? error.message : "Demo recording failed";
     await emit({ type: "recording.failed", prUrl, error: message });
+    emitWarn("demo recording failed", {
+      "space.id": input.spaceId,
+      "run.id": setup.runId,
+      outcome: "error",
+      "error.type": error instanceof Error ? error.name : typeof error,
+    });
     await postThreadMessage(slack, input.channelId, setup.threadTs, `Demo recording failed for ${prUrl}: ${message}`);
   }
+    },
+    { tracer: tagsTracer },
+  );
 }
 
 async function executeDeterministicMemoryCommand(

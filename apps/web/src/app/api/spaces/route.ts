@@ -2,16 +2,27 @@ import { listSpaces, createSpaceWithConfig } from "@tags/core/spaces-admin";
 import { eq, organizations, spaces, workspaces } from "@tags/db";
 import { adminUnauthorizedResponse, isAdminAuthorized } from "@/lib/admin-auth";
 import { getDb } from "@/lib/db";
+import { withSpan } from "@superlog/otel-helpers";
+import { emitWebInfo, spacesRequestsCompleted, webTracer } from "@/lib/otel";
 
 export const runtime = "nodejs";
 
 export async function GET(request: Request) {
+  return await withSpan("spaces.list", async (span) => {
   if (!(await isAdminAuthorized())) return adminUnauthorizedResponse();
 
   const db = getDb();
   const orgId = request.headers.get("x-tags-org-id") ?? await getDefaultOrgId(db);
+  span.setAttribute("organization.id", orgId);
   const rows = await listSpaces(db, orgId);
 
+  spacesRequestsCompleted.add(1, { method: "GET", outcome: "success" });
+  span.setAttributes({ outcome: "success", "spaces.count": rows.length });
+  emitWebInfo("spaces listed", {
+    "organization.id": orgId,
+    "spaces.count": rows.length,
+    outcome: "success",
+  });
   return Response.json({
     spaces: rows.map((r) => ({
       ...r.space,
@@ -19,9 +30,11 @@ export async function GET(request: Request) {
       workspaceTeamId: r.workspace.externalWorkspaceId,
     })),
   });
+  }, { tracer: webTracer });
 }
 
 export async function POST(request: Request) {
+  return await withSpan("spaces.create", async (span) => {
   if (!(await isAdminAuthorized())) return adminUnauthorizedResponse();
 
   const body = (await request.json()) as {
@@ -38,6 +51,11 @@ export async function POST(request: Request) {
 
   const db = getDb();
   const orgId = body.organizationId ?? await getDefaultOrgId(db);
+  span.setAttributes({
+    "organization.id": orgId,
+    "space.slug": body.slug,
+    "model.id": body.modelId,
+  });
 
   let workspaceId = body.workspaceId;
   if (!workspaceId) {
@@ -45,6 +63,8 @@ export async function POST(request: Request) {
     workspaceId = ws[0]?.id;
   }
   if (!workspaceId) {
+    spacesRequestsCompleted.add(1, { method: "POST", outcome: "validation_error" });
+    span.setAttribute("outcome", "validation_error");
     return Response.json({ error: "No workspace found" }, { status: 400 });
   }
 
@@ -60,7 +80,20 @@ export async function POST(request: Request) {
     runtimeMode: "opencode",
   });
 
+  spacesRequestsCompleted.add(1, { method: "POST", outcome: "success" });
+  span.setAttributes({
+    "workspace.id": workspaceId,
+    "space.id": result.spaceId,
+    outcome: "success",
+  });
+  emitWebInfo("space created", {
+    "organization.id": orgId,
+    "workspace.id": workspaceId,
+    "space.id": result.spaceId,
+    outcome: "success",
+  });
   return Response.json(result, { status: 201 });
+  }, { tracer: webTracer });
 }
 
 async function getDefaultOrgId(db: ReturnType<typeof getDb>) {

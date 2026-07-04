@@ -25,6 +25,14 @@ import { wrapComposioToolsWithApproval } from "../tools/composio-governance";
 import { gateSideEffectingTool, isApprovedToolMatch } from "../tools/approval-gate";
 import { resolveTools, type ToolRegistryOptions } from "../tools/registry";
 import { toolIdempotencyKey, type TagsTool, type ToolContext } from "../tools/types";
+import { withSpan } from "@superlog/otel-helpers";
+import {
+  agentSegmentsCompleted,
+  emitInfo,
+  emitWarn,
+  tagsTracer,
+  toolExecutionsCompleted,
+} from "../observability/otel";
 
 export type AgentLoopArgs = {
   db: Db;
@@ -61,6 +69,24 @@ export type AgentLoopArgs = {
 };
 
 export async function runAgentSegment(args: AgentLoopArgs): Promise<AgentSegmentResult> {
+  return await withSpan(
+    "agent.segment",
+    async (span) => {
+      span.setAttributes({
+        "organization.id": args.organizationId,
+        "workspace.id": args.workspaceId,
+        "space.id": args.spaceId,
+        "thread.id": args.threadId,
+        "run.id": args.runId,
+        "slack.channel.id": args.channelId,
+        "agent.trigger.length": args.triggerText.length,
+      });
+      emitInfo("agent segment started", {
+        "organization.id": args.organizationId,
+        "space.id": args.spaceId,
+        "run.id": args.runId,
+      });
+
   const config = await loadActiveSpaceConfig(args.db, args.spaceId);
   if (!config) {
     throw new Error(`No active space config for space ${args.spaceId}`);
@@ -254,10 +280,34 @@ export async function runAgentSegment(args: AgentLoopArgs): Promise<AgentSegment
       storage: providers.r2,
     });
 
+    agentSegmentsCompleted.add(1, {
+      outcome: "complete",
+      "space.id": args.spaceId,
+      "model.id": config.modelId,
+    });
+    span.setAttributes({
+      outcome: "complete",
+      "gen_ai.request.model": config.modelId,
+      "llm.tokens.input": usage?.inputTokens ?? 0,
+      "llm.tokens.output": usage?.outputTokens ?? 0,
+    });
+    emitInfo("agent segment completed", {
+      "space.id": args.spaceId,
+      "run.id": args.runId,
+      outcome: "complete",
+      "model.id": config.modelId,
+    });
     return { kind: "complete", text: fullText };
   } catch (error) {
     if (error instanceof ApprovalPauseError) {
       await updateRunStatus(args.db, args.runId, "waiting");
+      agentSegmentsCompleted.add(1, { outcome: "approval_required", "space.id": args.spaceId });
+      span.setAttribute("outcome", "approval_required");
+      emitInfo("agent segment paused for approval", {
+        "space.id": args.spaceId,
+        "run.id": args.runId,
+        outcome: "approval_required",
+      });
       return {
         kind: "approval_required",
         ...error.payload,
@@ -266,6 +316,13 @@ export async function runAgentSegment(args: AgentLoopArgs): Promise<AgentSegment
 
     if (error instanceof QuestionPauseError) {
       await updateRunStatus(args.db, args.runId, "waiting");
+      agentSegmentsCompleted.add(1, { outcome: "question_required", "space.id": args.spaceId });
+      span.setAttribute("outcome", "question_required");
+      emitInfo("agent segment paused for question", {
+        "space.id": args.spaceId,
+        "run.id": args.runId,
+        outcome: "question_required",
+      });
       return {
         kind: "question_required",
         ...error.payload,
@@ -278,12 +335,23 @@ export async function runAgentSegment(args: AgentLoopArgs): Promise<AgentSegment
       error: { code: "agent_error", message },
       finishedAt: new Date(),
     });
+    agentSegmentsCompleted.add(1, { outcome: "error", "space.id": args.spaceId });
+    span.setAttribute("outcome", "error");
+    emitWarn("agent segment failed", {
+      "space.id": args.spaceId,
+      "run.id": args.runId,
+      outcome: "error",
+      "error.type": error instanceof Error ? error.name : typeof error,
+    });
     throw error;
   } finally {
     if (composio) {
       await composio.close();
     }
   }
+    },
+    { tracer: tagsTracer },
+  );
 }
 
 export async function executeApprovedTool(
@@ -304,6 +372,18 @@ export async function executeApprovedTool(
     emit: (event: TagsEvent) => Promise<void>;
   },
 ): Promise<{ modelOutput: unknown; uiCard?: UICard }> {
+  return await withSpan(
+    "tool.execute_approved",
+    async (span) => {
+      span.setAttributes({
+        "organization.id": args.organizationId,
+        "workspace.id": args.workspaceId,
+        "space.id": args.spaceId,
+        "thread.id": args.threadId,
+        "run.id": args.runId,
+        "tool.name": args.toolName,
+      });
+
   const tagsTool = resolveTools(db, [args.toolName], args.toolOptions)[0];
   if (!tagsTool) {
     throw new Error(`Tool not found: ${args.toolName}`);
@@ -327,7 +407,22 @@ export async function executeApprovedTool(
     uiCard: toolResult.uiCard,
   });
 
+  toolExecutionsCompleted.add(1, {
+    outcome: "success",
+    "space.id": args.spaceId,
+    "tool.name": args.toolName,
+  });
+  span.setAttribute("outcome", "success");
+  emitInfo("approved tool executed", {
+    "space.id": args.spaceId,
+    "run.id": args.runId,
+    "tool.name": args.toolName,
+    outcome: "success",
+  });
   return { modelOutput: toolResult.modelOutput, uiCard: toolResult.uiCard };
+    },
+    { tracer: tagsTracer },
+  );
 }
 
 export async function rejectPendingTool(
