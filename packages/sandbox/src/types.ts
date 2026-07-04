@@ -29,6 +29,42 @@ export interface CodingAgentRequest {
   onOutput?: (chunk: string) => void | Promise<void>;
 }
 
+export type DemoStep =
+  | { type: "navigate"; url: string }
+  | { type: "click"; selector: string }
+  | { type: "fill"; selector: string; value: string }
+  | { type: "press"; key: string }
+  | { type: "waitForSelector"; selector: string; timeoutMs?: number }
+  | { type: "waitForText"; text: string; timeoutMs?: number }
+  | { type: "waitMs"; ms: number }
+  | { type: "assertText"; text: string };
+
+export type DemoRecipe =
+  | {
+      kind: "web";
+      repoSubdir?: string;
+      installCommand?: string;
+      startCommand: string;
+      readyUrl: string;
+      readyTimeoutMs?: number;
+      steps: DemoStep[];
+      successText?: string;
+    }
+  | {
+      kind: "terminal";
+      repoSubdir?: string;
+      command: string;
+    }
+  | { kind: "none"; reason: string };
+
+export type TagsRunOutput = {
+  prUrl?: string;
+  repoUrl?: string;
+  branch?: string;
+  commitSha?: string;
+  demo?: DemoRecipe;
+};
+
 export interface CodingAgentResult {
   sandboxId: string;
   createdSandbox: boolean;
@@ -40,6 +76,8 @@ export interface CodingAgentResult {
   gitDiff?: string;
   /** Map of repo URL -> checkout path inside the sandbox. */
   repoPaths?: Record<string, string>;
+  /** Structured run metadata written by opencode to `.tags/run-output.json`. */
+  runOutput?: TagsRunOutput;
 }
 
 export interface SandboxProvider {

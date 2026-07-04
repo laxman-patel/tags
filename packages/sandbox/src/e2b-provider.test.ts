@@ -32,6 +32,9 @@ function createMockSandbox(sandboxId: string): MockSandbox {
         if (command === "git diff") {
           return { stdout: "", stderr: "", exitCode: 0 };
         }
+        if (command === "cat .tags/run-output.json") {
+          throw new Error("missing");
+        }
         return { stdout: "Done.", stderr: "", exitCode: 0 };
       }),
     },
@@ -135,5 +138,74 @@ describe("createSandboxProvider", () => {
     expect(commands.some((command) => command.includes("opencode run --agent 'tags'"))).toBe(
       true,
     );
+  });
+
+  it("reads structured run output from the repo", async () => {
+    const sandbox = createMockSandbox("new-sandbox");
+    sandbox.commands.run.mockImplementation(async (command: string) => {
+      if (command === "test -e '/home/user/repo/.git'") {
+        return { stdout: "", stderr: "", exitCode: 0 };
+      }
+      if (command === "git diff") {
+        return { stdout: "", stderr: "", exitCode: 0 };
+      }
+      if (command === "cat .tags/run-output.json") {
+        return {
+          stdout: JSON.stringify({
+            prUrl: "https://github.com/acme/repo/pull/12",
+            repoUrl: "https://github.com/acme/repo",
+            branch: "tags/demo",
+            demo: {
+              kind: "web",
+              startCommand: "pnpm dev",
+              readyUrl: "http://127.0.0.1:3000",
+              steps: [{ type: "navigate", url: "http://127.0.0.1:3000" }],
+            },
+          }),
+          stderr: "",
+          exitCode: 0,
+        };
+      }
+      return { stdout: "Done.", stderr: "", exitCode: 0 };
+    });
+    mocks.create.mockResolvedValue(sandbox);
+
+    const provider = createSandboxProvider();
+    const result = await provider.runCodingAgent({
+      prompt: "fix the button",
+      repoUrl: "https://github.com/acme/repo",
+    });
+
+    expect(result.runOutput).toMatchObject({
+      prUrl: "https://github.com/acme/repo/pull/12",
+      branch: "tags/demo",
+      demo: { kind: "web", startCommand: "pnpm dev" },
+    });
+  });
+
+  it("falls back to a PR URL found in opencode output", async () => {
+    const sandbox = createMockSandbox("new-sandbox");
+    sandbox.commands.run.mockImplementation(async (command: string) => {
+      if (command === "git diff") {
+        return { stdout: "", stderr: "", exitCode: 0 };
+      }
+      if (command === "cat .tags/run-output.json") {
+        throw new Error("missing");
+      }
+      return {
+        stdout: "Opened https://github.com/acme/repo/pull/34",
+        stderr: "",
+        exitCode: 0,
+      };
+    });
+    mocks.create.mockResolvedValue(sandbox);
+
+    const provider = createSandboxProvider();
+    const result = await provider.runCodingAgent({
+      prompt: "fix the button",
+      repoUrl: "https://github.com/acme/repo",
+    });
+
+    expect(result.runOutput?.prUrl).toBe("https://github.com/acme/repo/pull/34");
   });
 });

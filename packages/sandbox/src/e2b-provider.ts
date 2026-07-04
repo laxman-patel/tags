@@ -1,5 +1,9 @@
 import { Sandbox } from "e2b";
 import type { CodingAgentRequest, CodingAgentResult, SandboxProvider } from "./types";
+import {
+  extractGitHubPrUrl,
+  parseTagsRunOutputJson,
+} from "./run-output";
 
 /** E2B pre-built template with opencode installed (see e2b.dev/docs/agents/opencode). */
 export const DEFAULT_OPENCODE_TEMPLATE = "opencode";
@@ -64,6 +68,16 @@ function stripAnsi(value: string): string {
 
 function combineOutput(result: CommandLike): string {
   return stripAnsi(`${result.stdout ?? ""}\n${result.stderr ?? ""}`).trim();
+}
+
+function mergeRunOutputFromText(
+  existing: CodingAgentResult["runOutput"],
+  output: string,
+): CodingAgentResult["runOutput"] {
+  if (existing?.prUrl) return existing;
+  const prUrl = extractGitHubPrUrl(output);
+  if (!prUrl) return existing;
+  return { ...existing, prUrl };
 }
 
 async function connectSandbox(
@@ -208,6 +222,22 @@ async function writeOpencodeConfig(
   return OPENCODE_CONFIG_PATH;
 }
 
+async function readRunOutput(
+  sandbox: SandboxInstance,
+  repoPaths: Record<string, string>,
+): Promise<CodingAgentResult["runOutput"]> {
+  for (const repoPath of Object.values(repoPaths)) {
+    try {
+      const result = await sandbox.commands.run("cat .tags/run-output.json", { cwd: repoPath });
+      const parsed = parseTagsRunOutputJson(combineOutput(result));
+      if (parsed) return parsed;
+    } catch {
+      // Optional metadata file. Ignore malformed or missing output.
+    }
+  }
+  return undefined;
+}
+
 export function createSandboxProvider(config: SandboxProviderConfig = {}): SandboxProvider {
   const template = config.template ?? DEFAULT_OPENCODE_TEMPLATE;
 
@@ -313,6 +343,9 @@ export function createSandboxProvider(config: SandboxProviderConfig = {}): Sandb
           }
         }
 
+        const fileRunOutput = await readRunOutput(sandbox, repoPaths);
+        const runOutput = mergeRunOutputFromText(fileRunOutput, output);
+
         completed = true;
         return {
           sandboxId: sandbox.sandboxId,
@@ -322,6 +355,7 @@ export function createSandboxProvider(config: SandboxProviderConfig = {}): Sandb
           output,
           gitDiff,
           repoPaths: Object.keys(repoPaths).length > 0 ? repoPaths : undefined,
+          runOutput,
         };
       } finally {
         if (!request.session?.keepAlive || (createdSandbox && !completed)) {

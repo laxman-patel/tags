@@ -58,7 +58,9 @@ export function buildOpencodeSystemPrompt(
       ? `\n# Connected tools\nThe Space has these Composio toolkits exposed through the opencode MCP server named \"composio\": ${connectedToolkits.join(", ")}.${connectionStatus} Use them when the task clearly requires external tool access. Ask before high-impact external side effects.`
       : "\n# Connected tools\nNo Composio toolkits are enabled for this Space.";
 
-  return `${system}${nativeToolContext}${toolContext}`;
+  const codingOutputContext = `\n# Coding run output\nWhen you perform repo-changing coding work, create or update .tags/run-output.json in the changed repo. Use this JSON shape when known: {"prUrl":"https://github.com/owner/repo/pull/123","repoUrl":"https://github.com/owner/repo","branch":"branch-name","commitSha":"sha","demo":{"kind":"web","repoSubdir":"optional/path","installCommand":"optional command","startCommand":"command to run the app","readyUrl":"http://127.0.0.1:3000/path","steps":[{"type":"navigate","url":"http://127.0.0.1:3000/path"},{"type":"waitForText","text":"visible fixed UI text"}],"successText":"optional short description"}}. For non-UI work use demo.kind \"terminal\" with a command, or \"none\" with a reason. Do not include secrets.`;
+
+  return `${system}${nativeToolContext}${toolContext}${codingOutputContext}`;
 }
 
 export function buildOpencodeUserPrompt(messages: ModelMessage[]): string {
