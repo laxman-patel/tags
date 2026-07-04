@@ -65,6 +65,27 @@ export type TagsRunOutput = {
   demo?: DemoRecipe;
 };
 
+export type DemoRecordingRequest = {
+  apiKey?: string;
+  template: string;
+  repoUrl: string;
+  branch?: string;
+  githubToken?: string;
+  demo: DemoRecipe;
+  maxSeconds: number;
+  width: number;
+  height: number;
+  fps: number;
+};
+
+export type DemoRecordingResult = {
+  video: Buffer;
+  filename: string;
+  contentType: "video/mp4";
+  durationMs: number;
+  logs: string;
+};
+
 export interface CodingAgentResult {
   sandboxId: string;
   createdSandbox: boolean;

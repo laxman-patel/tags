@@ -11,10 +11,13 @@ export {
   parseTagsRunOutput,
   parseTagsRunOutputJson,
 } from "./run-output";
+export { recordDemo } from "./demo-recorder";
 export type {
   CodingAgentRequest,
   CodingAgentResult,
   DemoRecipe,
+  DemoRecordingRequest,
+  DemoRecordingResult,
   DemoStep,
   SandboxProvider,
   TagsRunOutput,

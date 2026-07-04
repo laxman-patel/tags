@@ -158,6 +158,60 @@ export async function postThreadMessage(
   }
 }
 
+export async function uploadThreadFile(
+  client: WebClient,
+  args: {
+    channelId: string;
+    threadTs: string;
+    file: Buffer;
+    filename: string;
+    title: string;
+    initialComment?: string;
+  },
+): Promise<{ fileId?: string; permalink?: string }> {
+  await globalSlackRateLimiter.acquire(args.channelId);
+
+  try {
+    const filesClient = client.files as unknown as {
+      uploadV2: (input: {
+        channel_id: string;
+        thread_ts: string;
+        file: Buffer;
+        filename: string;
+        title: string;
+        initial_comment?: string;
+      }) => Promise<{
+        ok?: boolean;
+        file?: { id?: string; permalink?: string };
+        files?: Array<{ id?: string; permalink?: string }>;
+        error?: string;
+      }>;
+    };
+    const result = await filesClient.uploadV2({
+      channel_id: args.channelId,
+      thread_ts: args.threadTs,
+      file: args.file,
+      filename: args.filename,
+      title: args.title,
+      ...(args.initialComment ? { initial_comment: args.initialComment } : {}),
+    });
+
+    if (!result.ok) {
+      throw new Error(result.error ?? "Failed to upload Slack file");
+    }
+
+    const file = result.file ?? result.files?.[0];
+    return { fileId: file?.id, permalink: file?.permalink };
+  } catch (error) {
+    const retryAfter = extractRetryAfter(error);
+    if (retryAfter) {
+      await sleep(retryAfter * 1000);
+      return uploadThreadFile(client, args);
+    }
+    throw error;
+  }
+}
+
 export async function updateMessage(
   client: WebClient,
   channelId: string,
