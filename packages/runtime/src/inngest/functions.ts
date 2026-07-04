@@ -10,7 +10,8 @@ import {
 import { loadActiveSpaceConfig } from "@tags/core/spaces";
 import { findOrCreateThread, upsertMessage } from "@tags/core/threads";
 import type { TagsEvent } from "@tags/core/events";
-import { createDb, runs, threads } from "@tags/db";
+import { createArtifact } from "@tags/core/artifacts";
+import { createDb, newId, runs, threads } from "@tags/db";
 import {
   addReaction,
   createSlackClient,
@@ -19,6 +20,7 @@ import {
   SlackStreamAdapter,
   buildRunLinkBlock,
   stopStream,
+  uploadThreadFile,
   updateMessage,
 } from "@tags/slack";
 import { parseMemoryCommand } from "../context/builder";
@@ -32,7 +34,13 @@ import {
   mutateSpaceMemoryFile,
   removeMemoryEntryBySubstring,
 } from "@tags/core/file-memory";
-import { createR2Client, type R2Storage } from "@tags/storage";
+import {
+  artifactBinaryObjectKey,
+  createR2Client,
+  publicArtifactUrl,
+  uploadArtifactBytes,
+  type R2Storage,
+} from "@tags/storage";
 import {
   executeApprovedTool,
   rejectPendingTool,
@@ -41,8 +49,10 @@ import type { AgentSegmentResult } from "../agent/types";
 import { runOpencodeSegment, type OpencodeContinuation } from "../agent/opencode-segment";
 import { createRuntimeProviders } from "../providers";
 import { buildRuntimeProviderConfig, loadRuntimeSecrets } from "../secrets";
+import { upsertDemoRecordingComment } from "../integrations/github";
 import { loadComposioTools } from "../tools/composio";
 import type { UICard } from "@tags/core/ui-cards";
+import { recordDemo, type TagsRunOutput } from "@tags/sandbox";
 import {
   APPROVAL_RESOLVED_EVENT,
   QUESTION_ANSWERED_EVENT,
@@ -217,6 +227,10 @@ export const tagsRunFunction: InngestFunction.Any = inngest.createFunction(
         }
       } else {
         threadStatus = "failed";
+      }
+
+      if (threadStatus === "done" && segment.kind === "complete") {
+        await step.run("record-demo", () => recordDemoStep(input, setup, segment.runOutput));
       }
     } catch (error) {
       threadStatus = "failed";
@@ -394,6 +408,123 @@ async function ingestStep(input: TagsRunInput): Promise<RunSetup> {
     slackStream,
     threadTs,
   };
+}
+
+async function recordDemoStep(
+  input: TagsRunInput,
+  setup: RunSetup,
+  runOutput: TagsRunOutput | undefined,
+): Promise<void> {
+  const secrets = loadRuntimeSecrets();
+  if (!secrets.demoRecording.enabled) return;
+
+  const db = createDb(secrets.databaseUrl);
+  const slack = createSlackClient(secrets.slackBotToken);
+  const emit = async (event: TagsEvent) => {
+    await appendRunEvent(db, setup.runId, event);
+  };
+
+  const config = await loadActiveSpaceConfig(db, input.spaceId);
+  const repoUrl = runOutput?.repoUrl ?? config?.repoUrls?.[0] ?? config?.repoUrl ?? undefined;
+  const prUrl = runOutput?.prUrl;
+  const demo = runOutput?.demo;
+
+  if (!prUrl || !repoUrl || !demo || demo.kind === "none") {
+    return;
+  }
+
+  if (!secrets.e2bApiKey || !secrets.githubToken || !secrets.r2?.publicBaseUrl) {
+    const message =
+      "Demo recording is enabled but E2B_API_KEY, GITHUB_TOKEN, or R2_PUBLIC_BASE_URL is missing.";
+    await emit({ type: "recording.failed", prUrl, error: message });
+    await postThreadMessage(slack, input.channelId, setup.threadTs, `Demo recording skipped: ${message}`);
+    return;
+  }
+
+  await emit({ type: "recording.started", prUrl, demoKind: demo.kind });
+
+  try {
+    const recording = await recordDemo({
+      apiKey: secrets.e2bApiKey,
+      template: secrets.e2bDemoTemplate,
+      repoUrl,
+      branch: runOutput?.branch,
+      githubToken: secrets.githubToken,
+      demo,
+      maxSeconds: secrets.demoRecording.maxSeconds,
+      width: secrets.demoRecording.width,
+      height: secrets.demoRecording.height,
+      fps: secrets.demoRecording.fps,
+    });
+
+    const r2Client = createR2Client(secrets.r2);
+    const artifactId = newId();
+    const key = artifactBinaryObjectKey(input.organizationId, artifactId, recording.filename);
+    await uploadArtifactBytes(r2Client, secrets.r2, key, recording.video, recording.contentType);
+    const artifactUrl = publicArtifactUrl(secrets.r2, key);
+    if (!artifactUrl) throw new Error("R2_PUBLIC_BASE_URL is not configured");
+
+    const slackFile = await uploadThreadFile(slack, {
+      channelId: input.channelId,
+      threadTs: setup.threadTs,
+      file: recording.video,
+      filename: recording.filename,
+      title: "Tags demo recording",
+      initialComment: `Demo recording for ${prUrl}\n${artifactUrl}`,
+    });
+
+    const prComment = await upsertDemoRecordingComment({
+      token: secrets.githubToken,
+      prUrl,
+      runId: setup.runId,
+      artifactUrl,
+      appUrl: input.appUrl,
+      slackPermalink: slackFile.permalink,
+    });
+
+    const artifact = await createArtifact(db, {
+      id: artifactId,
+      organizationId: input.organizationId,
+      spaceId: input.spaceId,
+      threadId: setup.threadId,
+      runId: setup.runId,
+      kind: "video",
+      title: "Demo recording",
+      url: artifactUrl,
+      contentRef: key,
+      contentType: recording.contentType,
+      sizeBytes: recording.video.byteLength,
+      metadata: {
+        prUrl,
+        repoUrl,
+        branch: runOutput?.branch,
+        durationMs: recording.durationMs,
+        slackFileId: slackFile.fileId,
+        slackPermalink: slackFile.permalink,
+        prCommentUrl: prComment.htmlUrl,
+      },
+    });
+    if (!artifact) throw new Error("Failed to create demo recording artifact");
+
+    await emit({
+      type: "artifact.created",
+      artifactId,
+      artifactUrl,
+      artifactTitle: "Demo recording",
+    });
+    await emit({
+      type: "recording.finished",
+      artifactId,
+      artifactUrl,
+      prUrl,
+      slackFileId: slackFile.fileId,
+      prCommentUrl: prComment.htmlUrl,
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Demo recording failed";
+    await emit({ type: "recording.failed", prUrl, error: message });
+    await postThreadMessage(slack, input.channelId, setup.threadTs, `Demo recording failed for ${prUrl}: ${message}`);
+  }
 }
 
 async function executeDeterministicMemoryCommand(

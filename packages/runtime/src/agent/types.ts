@@ -1,3 +1,5 @@
+import type { TagsRunOutput } from "@tags/sandbox";
+
 export class ApprovalPauseError extends Error {
   readonly kind = "approval_required" as const;
 
@@ -32,7 +34,7 @@ export class QuestionPauseError extends Error {
 }
 
 export type AgentSegmentResult =
-  | { kind: "complete"; text: string }
+  | { kind: "complete"; text: string; runOutput?: TagsRunOutput }
   | { kind: "failed"; text: string }
   | {
       kind: "approval_required";

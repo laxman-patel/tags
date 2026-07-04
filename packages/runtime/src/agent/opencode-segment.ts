@@ -392,6 +392,7 @@ export async function runOpencodeSegment(
         reusedSandbox: result.reusedSandbox,
         exitCode: result.exitCode,
         output: result.output.slice(0, 12_000),
+        runOutput: result.runOutput,
       },
       uiCard,
     });
@@ -439,7 +440,11 @@ export async function runOpencodeSegment(
       storage: providers.r2,
     });
 
-    return { kind: "complete", text: replyText };
+    return {
+      kind: "complete",
+      text: replyText,
+      ...(result.runOutput ? { runOutput: result.runOutput } : {}),
+    };
   } catch (error) {
     releaseStatus = "failed";
     const message = error instanceof Error ? error.message : "Unknown error";

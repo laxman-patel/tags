@@ -9,6 +9,7 @@ export {
   startStream,
   stopStream,
   updateMessage,
+  uploadThreadFile,
 } from "./client";
 export {
   buildChannelContextBlock,
