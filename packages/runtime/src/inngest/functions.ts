@@ -49,7 +49,7 @@ import type { AgentSegmentResult } from "../agent/types";
 import { runOpencodeSegment, type OpencodeContinuation } from "../agent/opencode-segment";
 import { createRuntimeProviders } from "../providers";
 import { buildRuntimeProviderConfig, loadRuntimeSecrets } from "../secrets";
-import { upsertDemoRecordingComment } from "../integrations/github";
+import { upsertDemoRecordingCommentWithComposio } from "../integrations/composio-github";
 import { loadComposioTools } from "../tools/composio";
 import type { UICard } from "@tags/core/ui-cards";
 import { recordDemo, type TagsRunOutput } from "@tags/sandbox";
@@ -433,9 +433,16 @@ async function recordDemoStep(
     return;
   }
 
-  if (!secrets.e2bApiKey || !secrets.githubToken || !secrets.r2?.publicBaseUrl) {
+  if (!secrets.e2bApiKey || !secrets.composioApiKey || !secrets.r2?.publicBaseUrl) {
     const message =
-      "Demo recording is enabled but E2B_API_KEY, GITHUB_TOKEN, or R2_PUBLIC_BASE_URL is missing.";
+      "Demo recording is enabled but E2B_API_KEY, COMPOSIO_API_KEY, or R2_PUBLIC_BASE_URL is missing.";
+    await emit({ type: "recording.failed", prUrl, error: message });
+    await postThreadMessage(slack, input.channelId, setup.threadTs, `Demo recording skipped: ${message}`);
+    return;
+  }
+
+  if (!config?.enabledConnections.includes("github")) {
+    const message = "Demo recording PR comments require the Space GitHub connection to be enabled.";
     await emit({ type: "recording.failed", prUrl, error: message });
     await postThreadMessage(slack, input.channelId, setup.threadTs, `Demo recording skipped: ${message}`);
     return;
@@ -473,14 +480,27 @@ async function recordDemoStep(
       initialComment: `Demo recording for ${prUrl}\n${artifactUrl}`,
     });
 
-    const prComment = await upsertDemoRecordingComment({
-      token: secrets.githubToken,
-      prUrl,
-      runId: setup.runId,
-      artifactUrl,
-      appUrl: input.appUrl,
-      slackPermalink: slackFile.permalink,
+    let prComment: { htmlUrl?: string } = {};
+    const composio = await loadComposioTools({
+      apiKey: secrets.composioApiKey,
+      entityId: input.spaceId,
+      toolkits: ["github"],
     });
+    if (!composio) {
+      throw new Error("Composio GitHub tools are unavailable");
+    }
+    try {
+      prComment = await upsertDemoRecordingCommentWithComposio({
+        tools: composio.tools,
+        prUrl,
+        runId: setup.runId,
+        artifactUrl,
+        appUrl: input.appUrl,
+        slackPermalink: slackFile.permalink,
+      });
+    } finally {
+      await composio.close();
+    }
 
     const artifact = await createArtifact(db, {
       id: artifactId,
