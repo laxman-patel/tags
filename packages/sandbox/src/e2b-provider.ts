@@ -6,6 +6,7 @@ export const DEFAULT_OPENCODE_TEMPLATE = "opencode";
 
 export const REPO_PATH = "/home/user/repo";
 export const WORKDIR = "/home/user/workspace";
+export const REPOS_ROOT = "/home/user/repos";
 const OPENCODE_CONFIG_PATH = "/tmp/tags/opencode.json";
 const TAGS_AGENT_NAME = "tags";
 
@@ -89,29 +90,77 @@ async function pathExists(sandbox: SandboxInstance, path: string): Promise<boole
   }
 }
 
+function safeRepoName(repoUrl: string): string {
+  const match = repoUrl.match(/[^/]+\/[^/.]+(?:\.git)?\/?$/);
+  if (match) {
+    return match[0].replace(/\.git\/?$/, "").replace(/[^a-zA-Z0-9_-]/g, "-");
+  }
+  return `repo-${Math.abs(hashString(repoUrl)) % 100000}`;
+}
+
+function hashString(s: string): number {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) {
+    h = (h * 31 + s.charCodeAt(i)) | 0;
+  }
+  return h;
+}
+
 async function ensureWorkspace(
   sandbox: SandboxInstance,
   request: CodingAgentRequest,
   config: SandboxProviderConfig,
-): Promise<string> {
-  if (!request.repoUrl) {
+): Promise<{ cwd: string; repoPaths: Record<string, string> }> {
+  const repoUrls = request.repoUrls?.length
+    ? request.repoUrls
+    : request.repoUrl
+      ? [request.repoUrl]
+      : [];
+
+  if (repoUrls.length === 0) {
     await sandbox.commands.run(`mkdir -p ${shellQuote(WORKDIR)}`);
-    return WORKDIR;
+    return { cwd: WORKDIR, repoPaths: {} };
   }
 
-  const hasRepo = await pathExists(sandbox, `${REPO_PATH}/.git`);
-  if (!hasRepo) {
-    await sandbox.commands.run(`rm -rf ${shellQuote(REPO_PATH)}`);
-    await sandbox.git.clone(request.repoUrl, {
-      path: REPO_PATH,
-      depth: 1,
-      ...(config.githubToken
-        ? { username: "x-access-token", password: config.githubToken }
-        : {}),
-    });
+  // Single-repo backwards compatibility: use REPO_PATH directly.
+  if (repoUrls.length === 1 && !request.repoUrls) {
+    const repoUrl = repoUrls[0]!;
+    const hasRepo = await pathExists(sandbox, `${REPO_PATH}/.git`);
+    if (!hasRepo) {
+      await sandbox.commands.run(`rm -rf ${shellQuote(REPO_PATH)}`);
+      await sandbox.git.clone(repoUrl, {
+        path: REPO_PATH,
+        depth: 1,
+        ...(config.githubToken
+          ? { username: "x-access-token", password: config.githubToken }
+          : {}),
+      });
+    }
+    return { cwd: REPO_PATH, repoPaths: { [repoUrl]: REPO_PATH } };
   }
 
-  return REPO_PATH;
+  // Multi-repo: clone each into REPOS_ROOT/<safe-name>.
+  await sandbox.commands.run(`mkdir -p ${shellQuote(REPOS_ROOT)}`);
+  const repoPaths: Record<string, string> = {};
+
+  for (const url of repoUrls) {
+    const name = safeRepoName(url);
+    const path = `${REPOS_ROOT}/${name}`;
+    const hasRepo = await pathExists(sandbox, `${path}/.git`);
+    if (!hasRepo) {
+      await sandbox.commands.run(`rm -rf ${shellQuote(path)}`);
+      await sandbox.git.clone(url, {
+        path,
+        depth: 1,
+        ...(config.githubToken
+          ? { username: "x-access-token", password: config.githubToken }
+          : {}),
+      });
+    }
+    repoPaths[url] = path;
+  }
+
+  return { cwd: REPOS_ROOT, repoPaths };
 }
 
 async function writeOpencodeConfig(
@@ -197,7 +246,7 @@ export function createSandboxProvider(config: SandboxProviderConfig = {}): Sandb
       let completed = false;
 
       try {
-        const cwd = await ensureWorkspace(sandbox, request, config);
+        const { cwd, repoPaths } = await ensureWorkspace(sandbox, request, config);
         const opencodeConfigPath = await writeOpencodeConfig(sandbox, request);
         const model = toOpencodeModelId(
           request.model ?? config.model ?? "accounts/fireworks/routers/glm-5p2-fast",
@@ -238,15 +287,29 @@ export function createSandboxProvider(config: SandboxProviderConfig = {}): Sandb
         }
 
         let gitDiff: string | undefined;
-        if (request.repoUrl) {
-          try {
-            const diffResult = await sandbox.commands.run("git diff", { cwd: REPO_PATH });
-            gitDiff = combineOutput(diffResult);
-            if (gitDiff) {
-              output = `${output}\n\n--- git diff ---\n${gitDiff}`;
+        const repoUrls = request.repoUrls?.length
+          ? request.repoUrls
+          : request.repoUrl
+            ? [request.repoUrl]
+            : [];
+        if (repoUrls.length > 0) {
+          const diffs: string[] = [];
+          for (const url of repoUrls) {
+            const repoPath = repoPaths[url];
+            if (!repoPath) continue;
+            try {
+              const diffResult = await sandbox.commands.run("git diff", { cwd: repoPath });
+              const diff = combineOutput(diffResult);
+              if (diff) {
+                diffs.push(`--- ${safeRepoName(url)} ---\n${diff}`);
+              }
+            } catch {
+              // Non-fatal: opencode output is still useful without diff.
             }
-          } catch {
-            // Non-fatal: opencode output is still useful without diff.
+          }
+          if (diffs.length > 0) {
+            gitDiff = diffs.join("\n\n");
+            output = `${output}\n\n--- git diff ---\n${gitDiff}`;
           }
         }
 
@@ -258,6 +321,7 @@ export function createSandboxProvider(config: SandboxProviderConfig = {}): Sandb
           exitCode,
           output,
           gitDiff,
+          repoPaths: Object.keys(repoPaths).length > 0 ? repoPaths : undefined,
         };
       } finally {
         if (!request.session?.keepAlive || (createdSandbox && !completed)) {

@@ -71,7 +71,7 @@ In your Slack app settings (production domain `https://<your-domain>`):
 
 Streaming replies use Slack's native `chat.startStream`/`chat.appendStream`/`chat.stopStream` APIs (animated "Tags is thinking…" indicator, markdown rendering, task timeline). These need `chat:write` only; if streaming is unavailable the bot falls back to posting and editing a regular message.
 
-**Event subscriptions:** `app_mention` (add `message.channels` only if you need thread-reply triggers — bot messages are ignored).
+**Event subscriptions:** `app_mention`, `message.channels` (required for thread-reply triggers and passive channel learning — bot messages are ignored). Set `SLACK_BOT_USER_ID` for accurate mention detection in thread replies.
 
 Sync Inngest at `https://<your-domain>/api/inngest` from the Inngest dashboard after deploy.
 

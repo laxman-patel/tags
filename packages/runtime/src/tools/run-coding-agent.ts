@@ -9,7 +9,7 @@ import {
 import { loadActiveSpaceConfig } from "@tags/core/spaces";
 import { truncateForPreview } from "@tags/core/ui-cards";
 import type { Db } from "@tags/db";
-import { DEFAULT_OPENCODE_TEMPLATE, REPO_PATH, WORKDIR } from "@tags/sandbox";
+import { DEFAULT_OPENCODE_TEMPLATE, REPO_PATH, REPOS_ROOT, WORKDIR } from "@tags/sandbox";
 import type { RuntimeProviderConfig } from "../providers";
 import type { TagsTool } from "./types";
 
@@ -37,13 +37,18 @@ export function createRunCodingAgentTool(
         throw new Error(`No active space config for space ${ctx.spaceId}`);
       }
 
-      const repoUrl = parsed.repoUrl ?? config.repoUrl ?? undefined;
+      const configRepoUrls = config.repoUrls?.length ? config.repoUrls : [];
+      const repoUrls = parsed.repoUrl ? [parsed.repoUrl] : configRepoUrls;
+      const primaryRepoUrl = repoUrls[0] ?? config.repoUrl ?? undefined;
+      const multiRepo = repoUrls.length > 1;
+      const workdir = multiRepo ? REPOS_ROOT : primaryRepoUrl ? REPO_PATH : WORKDIR;
+
       const sandboxSession = await getOrCreateSpaceSandboxSession(db, {
         organizationId: ctx.organizationId,
         spaceId: ctx.spaceId,
         template: providerConfig.e2bOpencodeTemplate ?? DEFAULT_OPENCODE_TEMPLATE,
-        repoUrl,
-        workdir: repoUrl ? REPO_PATH : WORKDIR,
+        repoUrl: primaryRepoUrl ?? null,
+        workdir,
       });
       const sandboxLease = await acquireSpaceSandboxLease(db, {
         spaceId: ctx.spaceId,
@@ -73,7 +78,9 @@ export function createRunCodingAgentTool(
       try {
         const result = await ctx.sandbox.runCodingAgent({
           prompt: parsed.prompt,
-          repoUrl,
+          ...(multiRepo
+            ? { repoUrls }
+            : { repoUrl: primaryRepoUrl }),
           model: config.modelId,
           session: {
             sandboxId: sandboxLease.externalSandboxId,
@@ -91,6 +98,7 @@ export function createRunCodingAgentTool(
             createdSandbox: result.createdSandbox,
             reusedSandbox: result.reusedSandbox,
             runId: ctx.runId,
+            ...(result.repoPaths ? { repoPaths: result.repoPaths } : {}),
           },
         });
 

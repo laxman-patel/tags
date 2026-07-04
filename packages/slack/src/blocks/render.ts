@@ -174,15 +174,41 @@ export function renderSlackBlocks(event: TagsEvent): SlackBlock[] {
       }
       return blocks;
     }
-    case "approval.requested":
-      return [
-        {
+    case "approval.requested": {
+      const fields: SlackBlock[] = [];
+      if (event.toolName) {
+        fields.push({
           type: "section",
-          text: {
-            type: "mrkdwn",
-            text: "Approval needed before executing this action.",
-          },
-        },
+          text: { type: "mrkdwn", text: `🔐 *Approval needed*\n*Tool:* \`${event.toolName}\`` },
+        });
+      } else {
+        fields.push({
+          type: "section",
+          text: { type: "mrkdwn", text: "🔐 *Approval needed before executing this action.*" },
+        });
+      }
+      const detailLines: string[] = [];
+      if (event.riskLevel) detailLines.push(`*Risk:* ${event.riskLevel}`);
+      if (event.requestText) detailLines.push(`*Request:* ${event.requestText}`);
+      if (event.requestedBySlackUserId) detailLines.push(`*Requested by:* <@${event.requestedBySlackUserId}>`);
+      if (event.expiresAt) {
+        const expiry = new Date(event.expiresAt);
+        detailLines.push(`*Expires:* <t:${Math.floor(expiry.getTime() / 1000)}:R>`);
+      }
+      if (event.inputPreview) {
+        const preview = typeof event.inputPreview === "string"
+          ? event.inputPreview
+          : JSON.stringify(event.inputPreview);
+        detailLines.push(`*Input:*\n\`\`\`${preview.slice(0, 400)}\`\`\``);
+      }
+      if (detailLines.length > 0) {
+        fields.push({
+          type: "section",
+          text: { type: "mrkdwn", text: detailLines.join("\n") },
+        });
+      }
+      return [
+        ...fields,
         {
           type: "actions",
           block_id: `approval_${event.approvalId}`,
@@ -204,13 +230,19 @@ export function renderSlackBlocks(event: TagsEvent): SlackBlock[] {
           ],
         },
       ];
-    case "question.requested":
+    }
+    case "question.requested": {
+      const detailLines: string[] = [];
+      if (event.expiresAt) {
+        const expiry = new Date(event.expiresAt);
+        detailLines.push(`*Expires:* <t:${Math.floor(expiry.getTime() / 1000)}:R>`);
+      }
       return [
         {
           type: "section",
           text: {
             type: "mrkdwn",
-            text: `❓ *Tags needs your input:*\n${event.questionText ?? "Please answer the question."}`,
+            text: `❓ *Tags needs your input:*\n${event.questionText ?? "Please answer the question."}${detailLines.length > 0 ? `\n${detailLines.join("\n")}` : ""}`,
           },
         },
         {
@@ -226,6 +258,7 @@ export function renderSlackBlocks(event: TagsEvent): SlackBlock[] {
           ],
         },
       ];
+    }
     case "artifact.created":
       return [
         {

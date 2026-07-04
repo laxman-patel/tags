@@ -83,10 +83,24 @@ export async function gateSideEffectingTool(
     requestedBySlackUserId: args.actorUserId ?? undefined,
   });
 
+  const inputPreviewStr = (() => {
+    try {
+      return JSON.stringify(args.toolInput).slice(0, 500);
+    } catch {
+      return String(args.toolInput).slice(0, 500);
+    }
+  })();
+
   await args.emit({
     type: "approval.requested",
     approvalId: approval.id,
     requestId,
+    toolName: args.toolName,
+    riskLevel: approval.riskLevel,
+    requestText: approval.requestText,
+    inputPreview: inputPreviewStr,
+    requestedBySlackUserId: args.actorUserId ?? undefined,
+    expiresAt: approval.expiresAt.toISOString(),
   });
 
   throw new ApprovalPauseError({

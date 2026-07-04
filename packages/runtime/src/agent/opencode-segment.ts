@@ -1,8 +1,10 @@
 import type { TagsEvent } from "@tags/core/events";
-import { truncateForPreview } from "@tags/core/ui-cards";
+import { formatToolResultForUser, truncateForPreview } from "@tags/core/ui-cards";
+import type { UICard } from "@tags/core/ui-cards";
 import { checkSpaceBudget } from "@tags/core/policies";
 import { formatMemoryPromptBlock, loadSpaceMemoryFile } from "@tags/core/file-memory";
-import { appendRunEvent, updateRunStatus } from "@tags/core/runs";
+import { appendRunEvent, getPendingApprovalByRunId, updateRunStatus } from "@tags/core/runs";
+import { getPendingQuestionByRunId } from "@tags/core/questions";
 import {
   acquireSpaceSandboxLease,
   getOrCreateSpaceSandboxSession,
@@ -13,7 +15,7 @@ import {
 import { loadActiveSpaceConfig } from "@tags/core/spaces";
 import { recordUsage } from "@tags/core/usage";
 import type { Db } from "@tags/db";
-import { DEFAULT_OPENCODE_TEMPLATE, REPO_PATH, WORKDIR } from "@tags/sandbox";
+import { DEFAULT_OPENCODE_TEMPLATE, REPO_PATH, REPOS_ROOT, WORKDIR } from "@tags/sandbox";
 import { buildChannelContextBlock, buildRunLinkBlock, isChannelContextRequest, SlackStreamAdapter } from "@tags/slack";
 import type { AgentSegmentResult } from "./types";
 import { buildCapabilitiesReply, isCapabilityInventoryQuestion } from "./capabilities";
@@ -55,6 +57,20 @@ export function cleanOpencodeReply(raw: string): string {
   return cleaned.replace(/\n{3,}/g, "\n\n").trim();
 }
 
+export type OpencodeContinuation =
+  | {
+      kind: "approved_tool";
+      toolName: string;
+      toolInput: unknown;
+      toolOutput: unknown;
+      uiCard?: UICard;
+    }
+  | {
+      kind: "question_answered";
+      questionText: string;
+      answer: string;
+    };
+
 export type OpencodeSegmentArgs = {
   db: Db;
   slack: import("@slack/web-api").WebClient;
@@ -72,6 +88,8 @@ export type OpencodeSegmentArgs = {
   spaceName: string;
   appUrl: string;
   providerConfig: RuntimeProviderConfig;
+  /** When set, appends a continuation message to the opencode prompt for HITL resume. */
+  continuation?: OpencodeContinuation;
 };
 
 /**
@@ -178,13 +196,34 @@ export async function runOpencodeSegment(
     }
   }
 
+  const repoUrls = config.repoUrls?.length ? config.repoUrls : [];
+  const primaryRepoUrl = repoUrls[0] ?? config.repoUrl ?? null;
+  const multiRepo = repoUrls.length > 1;
+  const workdir = multiRepo ? REPOS_ROOT : primaryRepoUrl ? REPO_PATH : WORKDIR;
+
   const systemPrompt = buildOpencodeSystemPrompt(config.instructions, args.spaceName, {
     enabledTools: config.enabledTools,
     connectedToolkits: config.enabledConnections,
     hasComposioApiKey: Boolean(args.providerConfig.composioApiKey),
     spaceMemorySnapshot,
   });
-  const prompt = buildOpencodeUserPrompt(messages);
+  let prompt = buildOpencodeUserPrompt(messages);
+
+  if (args.continuation) {
+    const cont = args.continuation;
+    const continuationText =
+      cont.kind === "approved_tool"
+        ? `[Approved action completed]\nTool: ${cont.toolName}\nInput: ${JSON.stringify(cont.toolInput).slice(0, 500)}\nResult:\n${formatToolResultForUser(cont.toolOutput, cont.uiCard)}\n\nContinue the original task using this approved result. Summarize the outcome clearly for the user in Slack.`
+        : `[Human answered a question]\nQuestion: ${cont.questionText}\nAnswer: ${cont.answer}\n\nContinue the original task using this answer. Respond to the user in Slack.`;
+    prompt = `${prompt}\n\n---\n${continuationText}`;
+  }
+
+  if (multiRepo) {
+    const repoList = repoUrls
+      .map((url, i) => `  ${i + 1}. ${url} -> /home/user/repos/${url.match(/[^/]+\/[^/.]+(?:\.git)?\/?$/)?.[0]?.replace(/\.git\/?$/, "").replace(/[^a-zA-Z0-9_-]/g, "-") ?? `repo-${i}`}`)
+      .join("\n");
+    prompt = `${prompt}\n\n# Repositories\nThe following repos are checked out in the sandbox:\n${repoList}\nUse the appropriate repo path for the task.`;
+  }
 
   const mcpServers: Record<string, TagsMcpServerConfig> = {};
 
@@ -229,8 +268,8 @@ export async function runOpencodeSegment(
     organizationId: args.organizationId,
     spaceId: args.spaceId,
     template: args.providerConfig.e2bOpencodeTemplate ?? DEFAULT_OPENCODE_TEMPLATE,
-    repoUrl: config.repoUrl,
-    workdir: config.repoUrl ? REPO_PATH : WORKDIR,
+    repoUrl: primaryRepoUrl,
+    workdir,
   });
   const sandboxLease = await acquireSpaceSandboxLease(args.db, {
     spaceId: args.spaceId,
@@ -264,7 +303,9 @@ export async function runOpencodeSegment(
       prompt,
       systemPrompt,
       model: config.modelId,
-      repoUrl: config.repoUrl ?? undefined,
+      ...(multiRepo
+        ? { repoUrls }
+        : { repoUrl: primaryRepoUrl ?? undefined }),
       session: {
         sandboxId: sandboxLease.externalSandboxId,
         keepAlive: true,
@@ -283,8 +324,56 @@ export async function runOpencodeSegment(
         createdSandbox: result.createdSandbox,
         reusedSandbox: result.reusedSandbox,
         runId: args.runId,
+        ...(result.repoPaths ? { repoPaths: result.repoPaths } : {}),
       },
     });
+
+    // Detect HITL pauses initiated by MCP tools (ask_user, approval gate).
+    // The MCP handler emits the event to the DB and returns a pause response
+    // to opencode. After opencode finishes, we check for pending pauses and
+    // surface them to Slack + return the pause result to the Inngest workflow.
+    const pendingApproval = await getPendingApprovalByRunId(args.db, args.runId);
+    if (pendingApproval) {
+      await emit({
+        type: "approval.requested",
+        approvalId: pendingApproval.id,
+        requestId: pendingApproval.requestId,
+        toolName: pendingApproval.toolName,
+        riskLevel: pendingApproval.riskLevel,
+        requestText: pendingApproval.requestText,
+        inputPreview: pendingApproval.toolInput,
+        requestedBySlackUserId: pendingApproval.requestedBySlackUserId ?? undefined,
+        expiresAt: pendingApproval.expiresAt.toISOString(),
+      });
+      await updateRunStatus(args.db, args.runId, "waiting");
+      return {
+        kind: "approval_required",
+        requestId: pendingApproval.requestId,
+        approvalId: pendingApproval.id,
+        toolName: pendingApproval.toolName,
+        toolInput: pendingApproval.toolInput,
+        invocationId: pendingApproval.toolInvocationId,
+      };
+    }
+
+    const pendingQuestion = await getPendingQuestionByRunId(args.db, args.runId);
+    if (pendingQuestion) {
+      await emit({
+        type: "question.requested",
+        questionId: pendingQuestion.id,
+        requestId: pendingQuestion.requestId,
+        questionText: pendingQuestion.questionText,
+        expiresAt: pendingQuestion.expiresAt.toISOString(),
+      });
+      await updateRunStatus(args.db, args.runId, "waiting");
+      return {
+        kind: "question_required",
+        requestId: pendingQuestion.requestId,
+        questionId: pendingQuestion.id,
+        questionText: pendingQuestion.questionText,
+        invocationId: pendingQuestion.toolInvocationId,
+      };
+    }
 
     const uiCard = {
       kind: "coding-agent" as const,

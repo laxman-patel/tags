@@ -13,12 +13,11 @@ import {
   verifyTagsMcpRunToken,
 } from "./tags-mcp-token";
 import type { RuntimeProviderConfig, RuntimeProviders } from "../providers";
+import { ApprovalPauseError, QuestionPauseError } from "../agent/types";
 
 /** Native tools that cannot run inside the opencode sandbox MCP bridge. */
 export const OPENCODE_MCP_EXCLUDED_TOOLS = new Set([
   "run_coding_agent",
-  "ask_user",
-  "create_schedule",
 ]);
 
 export type TagsMcpServerConfig = ComposioMcpServerConfig;
@@ -102,6 +101,28 @@ function registerTagsToolOnMcpServer(
           ],
         };
       } catch (error) {
+        if (error instanceof QuestionPauseError) {
+          return {
+            isError: true,
+            content: [
+              {
+                type: "text",
+                text: `[TAGS_PAUSE:question] The run has been paused to ask the human a question. Stop and wait for the answer.`,
+              },
+            ],
+          };
+        }
+        if (error instanceof ApprovalPauseError) {
+          return {
+            isError: true,
+            content: [
+              {
+                type: "text",
+                text: `[TAGS_PAUSE:approval] The run has been paused for human approval. Stop and wait for the decision.`,
+              },
+            ],
+          };
+        }
         const message = error instanceof Error ? error.message : "Tool execution failed";
         await toolCtx.emit({
           type: "tool.finished",

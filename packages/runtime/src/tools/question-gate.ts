@@ -55,6 +55,7 @@ export async function gateQuestionTool(args: QuestionGateArgs): Promise<{ cached
     questionId: question.id,
     requestId,
     questionText: args.questionText,
+    expiresAt: question.expiresAt.toISOString(),
   });
 
   throw new QuestionPauseError({

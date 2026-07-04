@@ -3,8 +3,10 @@ export interface CodingAgentRequest {
   prompt: string;
   /** Optional opencode agent prompt. Use this for higher-priority harness instructions. */
   systemPrompt?: string;
-  /** Optional git repository to clone into the sandbox before running. */
+  /** Optional git repository to clone into the sandbox before running. Legacy single-repo. */
   repoUrl?: string;
+  /** Multiple git repositories to clone into the sandbox. When set, takes precedence over repoUrl. */
+  repoUrls?: string[];
   /** opencode `--model` override for this run (falls back to provider config). */
   model?: string;
   /** Existing sandbox session to reuse. When keepAlive is true, the sandbox is not killed. */
@@ -36,6 +38,8 @@ export interface CodingAgentResult {
   output: string;
   /** `git diff` after the run when `repoUrl` was provided. */
   gitDiff?: string;
+  /** Map of repo URL -> checkout path inside the sandbox. */
+  repoPaths?: Record<string, string>;
 }
 
 export interface SandboxProvider {

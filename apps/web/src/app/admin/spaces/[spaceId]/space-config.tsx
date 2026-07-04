@@ -32,6 +32,7 @@ type ActiveConfig = {
   runtimeMode: string;
   repoUrl?: string | null;
   repoUrls?: string[];
+  passiveLearningMode?: string;
 };
 
 export type ConnectionInfo = {
@@ -98,6 +99,8 @@ type SpaceConfigContextValue = {
   setMaxSteps: Dispatch<SetStateAction<number>>;
   repoUrls: string[];
   setRepoUrls: Dispatch<SetStateAction<string[]>>;
+  passiveLearningMode: string;
+  setPassiveLearningMode: Dispatch<SetStateAction<string>>;
   enabledTools: string[];
   setEnabledTools: Dispatch<SetStateAction<string[]>>;
   enabledConnections: string[];
@@ -136,6 +139,7 @@ export function SpaceConfigProvider({
   const [reasoning, setReasoning] = useState("provider-default");
   const [maxSteps, setMaxSteps] = useState(12);
   const [repoUrls, setRepoUrls] = useState<string[]>([]);
+  const [passiveLearningMode, setPassiveLearningMode] = useState("off");
   const [enabledTools, setEnabledTools] = useState<string[]>([]);
   const [enabledConnections, setEnabledConnections] = useState<string[]>([]);
   const [connections, setConnections] = useState<ConnectionInfo | null>(null);
@@ -170,6 +174,7 @@ export function SpaceConfigProvider({
             ? [activeConfig.repoUrl]
             : [];
       setRepoUrls(urls);
+      setPassiveLearningMode(activeConfig.passiveLearningMode ?? "off");
     }
     setConnections(await connectionsRes.json());
     setCodebase(await codebaseRes.json());
@@ -196,6 +201,7 @@ export function SpaceConfigProvider({
           reasoning,
           maxSteps,
           repoUrls: normalized,
+          passiveLearningMode,
         }),
       });
       const data = await res.json();
@@ -225,6 +231,7 @@ export function SpaceConfigProvider({
           reasoning,
           maxSteps,
           repoUrls: normalized,
+          passiveLearningMode,
         }),
       });
       const data = await res.json();
@@ -309,6 +316,8 @@ export function SpaceConfigProvider({
         setMaxSteps,
         repoUrls,
         setRepoUrls,
+        passiveLearningMode,
+        setPassiveLearningMode,
         enabledTools,
         setEnabledTools,
         enabledConnections,

@@ -8,6 +8,8 @@ const envSchema = z
     FIREWORKS_API_KEY: z.string().min(1),
     SLACK_SIGNING_SECRET: z.string().min(1),
     SLACK_BOT_TOKEN: z.string().min(1),
+    /** Slack bot user ID for accurate mention detection in thread replies. */
+    SLACK_BOT_USER_ID: z.string().optional(),
     NEXT_PUBLIC_APP_URL: z.url().default("http://localhost:3000"),
     NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: z.string().min(1),
     CLERK_SECRET_KEY: z.string().min(1),

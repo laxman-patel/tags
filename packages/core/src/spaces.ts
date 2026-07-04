@@ -5,6 +5,14 @@ import { spaceConfigs, spaces, workspaces } from "@tags/db";
 export const RUNTIME_MODES = ["opencode", "orchestrator"] as const;
 export type RuntimeMode = (typeof RUNTIME_MODES)[number];
 
+export const PASSIVE_LEARNING_MODES = ["off", "ingest_only", "extract_memory"] as const;
+export type PassiveLearningMode = (typeof PASSIVE_LEARNING_MODES)[number];
+
+export function parsePassiveLearningMode(value: string | null | undefined): PassiveLearningMode {
+  if (value === "ingest_only" || value === "extract_memory") return value;
+  return "off";
+}
+
 export type ActiveSpaceConfig = {
   id: string;
   organizationId: string;
@@ -17,14 +25,21 @@ export type ActiveSpaceConfig = {
   enabledTools: string[];
   enabledConnections: string[];
   maxSteps: number;
-  /** opencode = E2B harness (default); orchestrator = AI SDK outer loop + Composio. */
+  /**
+   * @deprecated opencode is the only supported runtime. The orchestrator path
+   * is legacy and not wired into the Slack workflow. Kept for DB backwards compat.
+   */
   runtimeMode: RuntimeMode;
   repoUrl?: string | null;
   repoUrls?: string[];
+  passiveLearningMode: PassiveLearningMode;
 };
 
-export function parseRuntimeMode(value: string | null | undefined): RuntimeMode {
-  if (value === "orchestrator") return "orchestrator";
+/**
+ * @deprecated Always returns "opencode". The orchestrator runtime is legacy
+ * and no longer wired into the Slack workflow.
+ */
+export function parseRuntimeMode(_value: string | null | undefined): RuntimeMode {
   return "opencode";
 }
 
@@ -87,5 +102,6 @@ export async function loadActiveSpaceConfig(
         : row.repoUrl
           ? [row.repoUrl]
           : [],
+    passiveLearningMode: parsePassiveLearningMode(row.passiveLearningMode),
   };
 }

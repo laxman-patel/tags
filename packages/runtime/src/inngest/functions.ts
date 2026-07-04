@@ -36,11 +36,9 @@ import { createR2Client, type R2Storage } from "@tags/storage";
 import {
   executeApprovedTool,
   rejectPendingTool,
-  runAgentSegment,
-  type AgentLoopArgs,
 } from "../agent/loop";
 import type { AgentSegmentResult } from "../agent/types";
-import { runOpencodeSegment } from "../agent/opencode-segment";
+import { runOpencodeSegment, type OpencodeContinuation } from "../agent/opencode-segment";
 import { createRuntimeProviders } from "../providers";
 import { buildRuntimeProviderConfig, loadRuntimeSecrets } from "../secrets";
 import { loadComposioTools } from "../tools/composio";
@@ -301,6 +299,19 @@ async function ingestStep(input: TagsRunInput): Promise<RunSetup> {
       authorType: "human",
       authorId: input.actorSlackUserId,
       text: input.triggerText,
+    });
+  } else {
+    // Persist the scheduled prompt as a system message so thread search,
+    // audit, replay, and summarization can see it.
+    await upsertMessage(db, {
+      organizationId: input.organizationId,
+      spaceId: input.spaceId,
+      threadId: thread.id,
+      providerMessageId: triggerMessageTs,
+      authorType: "system",
+      authorId: "schedule",
+      text: input.triggerText,
+      metadata: { scheduled: true },
     });
   }
 
@@ -566,34 +577,34 @@ async function resumeAfterApprovalStep(
   const secrets = loadRuntimeSecrets();
   const db = createDb(secrets.databaseUrl);
   const slack = createSlackClient(secrets.slackBotToken);
+  const providerConfig = buildRuntimeProviderConfig(secrets);
 
-  const loopArgs: AgentLoopArgs = {
+  const continuation: OpencodeContinuation = {
+    kind: "approved_tool",
+    toolName: segment.toolName,
+    toolInput: segment.toolInput,
+    toolOutput: toolResult.modelOutput,
+    ...(toolResult.uiCard ? { uiCard: toolResult.uiCard } : {}),
+  };
+
+  return runOpencodeSegment({
     db,
     slack,
-    fireworksApiKey: secrets.fireworksApiKey,
     runId: setup.runId,
     spaceId: input.spaceId,
     workspaceId: input.workspaceId,
     threadId: setup.threadId,
     organizationId: input.organizationId,
     channelId: input.channelId,
-    threadTs: setup.threadTs,
     slackMessageTs: setup.slackMessageTs,
     slackStream: setup.slackStream,
     triggerText: input.triggerText,
-    actorUserId: input.actorSlackUserId,
+    actorSlackUserId: input.actorSlackUserId,
     spaceName: input.spaceName,
     appUrl: input.appUrl,
-    providerConfig: buildRuntimeProviderConfig(secrets),
-    approvedToolContinuation: {
-      toolName: segment.toolName,
-      toolInput: segment.toolInput,
-      toolOutput: toolResult.modelOutput,
-      uiCard: toolResult.uiCard,
-    },
-  };
-
-  return runAgentSegment(loopArgs);
+    providerConfig,
+    continuation,
+  });
 }
 
 async function resumeAfterQuestionStep(
@@ -605,33 +616,32 @@ async function resumeAfterQuestionStep(
   const secrets = loadRuntimeSecrets();
   const db = createDb(secrets.databaseUrl);
   const slack = createSlackClient(secrets.slackBotToken);
+  const providerConfig = buildRuntimeProviderConfig(secrets);
 
-  const loopArgs: AgentLoopArgs = {
+  const continuation: OpencodeContinuation = {
+    kind: "question_answered",
+    questionText: segment.questionText,
+    answer,
+  };
+
+  return runOpencodeSegment({
     db,
     slack,
-    fireworksApiKey: secrets.fireworksApiKey,
     runId: setup.runId,
     spaceId: input.spaceId,
     workspaceId: input.workspaceId,
     threadId: setup.threadId,
     organizationId: input.organizationId,
     channelId: input.channelId,
-    threadTs: setup.threadTs,
     slackMessageTs: setup.slackMessageTs,
     slackStream: setup.slackStream,
     triggerText: input.triggerText,
-    actorUserId: input.actorSlackUserId,
+    actorSlackUserId: input.actorSlackUserId,
     spaceName: input.spaceName,
     appUrl: input.appUrl,
-    providerConfig: buildRuntimeProviderConfig(secrets),
-    approvedToolContinuation: {
-      toolName: "ask_user",
-      toolInput: { question: segment.questionText },
-      toolOutput: { answer },
-    },
-  };
-
-  return runAgentSegment(loopArgs);
+    providerConfig,
+    continuation,
+  });
 }
 
 async function completeQuestionStep(

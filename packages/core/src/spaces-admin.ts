@@ -1,7 +1,7 @@
 import { desc, eq, max } from "drizzle-orm";
 import type { Db } from "@tags/db";
 import { newId, spaceConfigs, spaces, workspaces } from "@tags/db";
-import { parseRuntimeMode, loadActiveSpaceConfig, type RuntimeMode } from "./spaces";
+import { parseRuntimeMode, parsePassiveLearningMode, loadActiveSpaceConfig, type RuntimeMode, type PassiveLearningMode } from "./spaces";
 
 export type CreateSpaceInput = {
   organizationId: string;
@@ -13,6 +13,7 @@ export type CreateSpaceInput = {
   instructions: string;
   enabledTools?: string[];
   runtimeMode?: RuntimeMode;
+  passiveLearningMode?: PassiveLearningMode;
 };
 
 export async function listSpaces(db: Db, organizationId: string) {
@@ -62,6 +63,7 @@ export async function createSpaceWithConfig(db: Db, input: CreateSpaceInput) {
       "create_artifact",
     ],
     runtimeMode: input.runtimeMode ?? "opencode",
+    passiveLearningMode: input.passiveLearningMode ?? "off",
     isActive: true,
   });
 
@@ -81,6 +83,7 @@ export type UpdateSpaceConfigInput = {
   runtimeMode?: RuntimeMode;
   repoUrl?: string | null;
   repoUrls?: string[];
+  passiveLearningMode?: PassiveLearningMode;
 };
 
 export async function createSpaceConfigVersion(db: Db, input: UpdateSpaceConfigInput) {
@@ -121,6 +124,9 @@ export async function createSpaceConfigVersion(db: Db, input: UpdateSpaceConfigI
     enabledConnections: input.enabledConnections ?? previous?.enabledConnections ?? [],
     maxSteps: input.maxSteps ?? previous?.maxSteps ?? 12,
     runtimeMode: input.runtimeMode ?? previous?.runtimeMode ?? "opencode",
+    passiveLearningMode: parsePassiveLearningMode(
+      input.passiveLearningMode ?? previous?.passiveLearningMode ?? "off",
+    ),
     repoUrl,
     repoUrls,
     isActive: true,

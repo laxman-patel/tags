@@ -336,3 +336,13 @@ export async function listPendingApprovals(db: Db, organizationId: string) {
     )
     .orderBy(desc(approvalRequests.createdAt));
 }
+
+export async function getPendingApprovalByRunId(db: Db, runId: string) {
+  const rows = await db
+    .select()
+    .from(approvalRequests)
+    .where(and(eq(approvalRequests.runId, runId), eq(approvalRequests.status, "pending")))
+    .orderBy(desc(approvalRequests.createdAt))
+    .limit(1);
+  return rows[0] ?? null;
+}

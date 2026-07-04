@@ -28,12 +28,56 @@ export default function SpaceToolsPage() {
     setEnabledConnections,
     connections,
     connectToolkit,
+    passiveLearningMode,
+    setPassiveLearningMode,
     save,
     busy,
   } = useSpaceConfig();
 
+  const passiveModes = [
+    { value: "off", label: "Off", description: "No passive learning" },
+    { value: "ingest_only", label: "Ingest only", description: "Store channel messages without extracting memories" },
+    { value: "extract_memory", label: "Extract memory", description: "Store and extract durable facts into Space memory" },
+  ];
+
   return (
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+      <Card>
+        <CardHeader>
+          <CardTitle>Passive learning</CardTitle>
+          <CardDescription>
+            Hermes-style ambient channel learning. Does not post messages or start runs.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {passiveModes.map((mode) => (
+            <div
+              key={mode.value}
+              className="grid grid-cols-[1fr_auto] items-center gap-3 border-t border-border/60 py-3 first:border-t-0 first:pt-0"
+            >
+              <div>
+                <div className="text-sm font-medium">{mode.label}</div>
+                <p className="mt-1 mb-0 text-[13px] leading-snug text-muted-foreground">
+                  {mode.description}
+                </p>
+              </div>
+              <Switch
+                checked={passiveLearningMode === mode.value}
+                onCheckedChange={(checked) => {
+                  if (checked) setPassiveLearningMode(mode.value);
+                  else if (passiveLearningMode === mode.value) setPassiveLearningMode("off");
+                }}
+              />
+            </div>
+          ))}
+        </CardContent>
+        <CardFooter>
+          <Button onClick={save} disabled={busy}>
+            Save tool access
+          </Button>
+        </CardFooter>
+      </Card>
+
       <Card>
         <CardHeader>
           <CardTitle>Native tools</CardTitle>

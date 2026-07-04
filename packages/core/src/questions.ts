@@ -78,3 +78,13 @@ export async function getQuestionByRequestId(db: Db, requestId: string) {
     .limit(1);
   return rows[0];
 }
+
+export async function getPendingQuestionByRunId(db: Db, runId: string) {
+  const rows = await db
+    .select()
+    .from(questionRequests)
+    .where(and(eq(questionRequests.runId, runId), eq(questionRequests.status, "pending")))
+    .orderBy(questionRequests.createdAt)
+    .limit(1);
+  return rows[0] ?? null;
+}

@@ -153,6 +153,8 @@ export async function runAgentSegment(args: AgentLoopArgs): Promise<AgentSegment
   let composio: ComposioToolsHandle | null = null;
   // Composio MCP bypasses native TagsTool machinery; only load in orchestrator mode
   // and wrap every tool with the shared approval gate (see composio-governance.ts).
+  // @deprecated runtimeMode is always "opencode" — this branch is dead code kept
+  // for future reference. Composio tools are now exposed via the opencode MCP bridge.
   if (
     config.runtimeMode === "orchestrator" &&
     args.providerConfig.composioApiKey &&

@@ -1,5 +1,6 @@
 import { getEnv } from "@/env";
 import { startRunFromSlack } from "@/lib/slack-run";
+import { passivelyIngestChannelMessage } from "@/lib/passive-learning";
 import { addReaction, createSlackClient, postThreadMessage, startStream } from "@tags/slack";
 
 export const runtime = "nodejs";
@@ -49,7 +50,11 @@ export async function POST(request: Request) {
 
   const teamId = payload.team_id ?? "";
   const channelId = event.channel;
-  const text = event.text?.replace(/<@[^>]+>/g, "").trim() ?? "";
+  const rawText = event.text ?? "";
+  const mentionsBot = env.SLACK_BOT_USER_ID
+    ? rawText.includes(`<@${env.SLACK_BOT_USER_ID}>`)
+    : /<@[^>]+>/.test(rawText);
+  const text = rawText.replace(/<@[^>]+>/g, "").trim();
   const threadTs = event.thread_ts ?? event.ts;
   const rootTs = event.thread_ts ?? event.ts;
   const eventId = payload.event_id ?? event.event_ts ?? event.ts;
@@ -66,10 +71,21 @@ export async function POST(request: Request) {
   const isMention = event.type === "app_mention";
   const isThreadReply =
     event.type === "message" &&
-    event.thread_ts &&
-    (text.toLowerCase().includes("@tags") || text.toLowerCase().startsWith("tags "));
+    Boolean(event.thread_ts) &&
+    (mentionsBot || text.toLowerCase().startsWith("tags "));
 
   if (!isMention && !isThreadReply) {
+    // Passive learning: ingest non-mention channel messages for configured Spaces.
+    // Does not start a run or post anything to Slack.
+    if (event.type === "message" && event.user) {
+      passivelyIngestChannelMessage(env, {
+        teamId,
+        channelId,
+        messageTs: event.ts,
+        text: rawText,
+        actorSlackUserId: event.user,
+      }).catch(() => {});
+    }
     return new Response("ok");
   }
 

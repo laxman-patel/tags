@@ -1,9 +1,9 @@
 import { serve } from "inngest/next";
-import { inngest, scheduleTickFunction, tagsRunFunction } from "@tags/runtime";
+import { inngest, scheduleTickFunction, passiveLearningTickFunction, tagsRunFunction } from "@tags/runtime";
 
 export const runtime = "nodejs";
 
 export const { GET, POST, PUT } = serve({
   client: inngest,
-  functions: [tagsRunFunction, scheduleTickFunction],
+  functions: [tagsRunFunction, scheduleTickFunction, passiveLearningTickFunction],
 });

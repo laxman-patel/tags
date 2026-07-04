@@ -52,6 +52,7 @@ export async function PATCH(
     runtimeMode?: string;
     repoUrl?: string | null;
     repoUrls?: string[];
+    passiveLearningMode?: string;
   };
 
   const db = getDb();
@@ -71,6 +72,7 @@ export async function PATCH(
     runtimeMode: "opencode",
     repoUrl: body.repoUrl,
     repoUrls: body.repoUrls !== undefined ? stringArray(body.repoUrls) : undefined,
+    passiveLearningMode: body.passiveLearningMode as "off" | "ingest_only" | "extract_memory" | undefined,
   });
 
   await recordAuditEvent(db, {
