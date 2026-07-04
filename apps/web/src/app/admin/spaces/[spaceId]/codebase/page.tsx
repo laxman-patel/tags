@@ -58,9 +58,9 @@ export default function SpaceCodebasePage() {
         </CardHeader>
         <CardContent className="grid gap-4">
           <div>
-            <span className="mb-1.5 block text-xs text-muted-foreground">Private repo token</span>
-            <StatusBadge tone={codebase?.hasGlobalGitHubToken ? "success" : "warning"}>
-              {codebase?.hasGlobalGitHubToken ? "configured" : "not configured"}
+            <span className="mb-1.5 block text-xs text-muted-foreground">Composio GitHub</span>
+            <StatusBadge tone={statusTone(codebase?.githubConnectionStatus ?? "missing_api_key")}>
+              {codebase?.githubConnectionStatus ?? "missing_api_key"}
             </StatusBadge>
           </div>
 

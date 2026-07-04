@@ -57,7 +57,8 @@ export type CodebaseInfo = {
   repoUrl: string | null;
   repoUrls: string[];
   repos: CodebaseRepoInfo[];
-  hasGlobalGitHubToken: boolean;
+  hasComposioApiKey: boolean;
+  githubConnectionStatus: string;
   testedRepoUrl?: string | null;
   parsedGitHubRepo?: { owner: string; repo: string } | null;
   result?: {

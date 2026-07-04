@@ -6,6 +6,20 @@ export type GitHubPrRef = {
   number: number;
 };
 
+export type GitHubRepoAccessResult =
+  | {
+      ok: true;
+      status: "reachable";
+      private: boolean;
+      defaultBranch: string | null;
+      message: string;
+    }
+  | {
+      ok: false;
+      status: "github_tool_unavailable" | "request_failed";
+      message: string;
+    };
+
 type ComposioExecutableTool = {
   execute?: (input: any, options: any) => Promise<unknown>;
 };
@@ -81,6 +95,62 @@ function commentHtmlUrl(value: unknown): string | undefined {
   const record = value as Record<string, unknown>;
   const url = record.html_url ?? record.htmlUrl ?? record.url;
   return typeof url === "string" ? url : undefined;
+}
+
+function resultRecord(value: unknown): Record<string, unknown> {
+  if (typeof value !== "object" || value === null) return {};
+  const record = value as Record<string, unknown>;
+  const data = record.data;
+  if (typeof data === "object" && data !== null) return data as Record<string, unknown>;
+  return record;
+}
+
+function resultMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+export async function testGitHubRepoAccessWithComposio(args: {
+  tools: ComposioToolMap;
+  owner: string;
+  repo: string;
+}): Promise<GitHubRepoAccessResult> {
+  const getRepoTool = findTool(args.tools, [
+    /^GITHUB_GET_A_REPOSITORY$/i,
+    /^GITHUB_GET_REPOSITORY$/i,
+    /github.*get.*repo/i,
+    /github.*repo.*get/i,
+  ]);
+
+  if (!getRepoTool) {
+    return {
+      ok: false,
+      status: "github_tool_unavailable",
+      message: "Composio GitHub repository metadata tool is unavailable.",
+    };
+  }
+
+  try {
+    const [, tool] = getRepoTool;
+    const result = resultRecord(await tool.execute!({ owner: args.owner, repo: args.repo }, {}));
+    return {
+      ok: true,
+      status: "reachable",
+      private: Boolean(result.private),
+      defaultBranch:
+        typeof result.default_branch === "string"
+          ? result.default_branch
+          : typeof result.defaultBranch === "string"
+            ? result.defaultBranch
+            : null,
+      message: "Repository metadata is reachable through the Space's Composio GitHub connection.",
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      status: "request_failed",
+      message: `Composio GitHub repo check failed: ${resultMessage(error)}`,
+    };
+  }
 }
 
 export async function upsertDemoRecordingCommentWithComposio(args: {

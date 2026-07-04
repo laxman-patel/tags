@@ -24,8 +24,6 @@ export type SandboxProviderConfig = {
   template?: string;
   /** Fireworks API key — passed as `FIREWORKS_API_KEY` for opencode (see opencode.ai/docs/config). */
   modelApiKey?: string;
-  /** Optional GitHub token for private `repoUrl` clones (`x-access-token`). */
-  githubToken?: string;
   /** opencode `--model` string, e.g. `accounts/fireworks/models/kimi-k2-instruct`. */
   model?: string;
   /** Max sandbox lifetime in ms. */
@@ -145,9 +143,6 @@ async function ensureWorkspace(
       await sandbox.git.clone(repoUrl, {
         path: REPO_PATH,
         depth: 1,
-        ...(config.githubToken
-          ? { username: "x-access-token", password: config.githubToken }
-          : {}),
       });
     }
     return { cwd: REPO_PATH, repoPaths: { [repoUrl]: REPO_PATH } };
@@ -166,9 +161,6 @@ async function ensureWorkspace(
       await sandbox.git.clone(url, {
         path,
         depth: 1,
-        ...(config.githubToken
-          ? { username: "x-access-token", password: config.githubToken }
-          : {}),
       });
     }
     repoPaths[url] = path;

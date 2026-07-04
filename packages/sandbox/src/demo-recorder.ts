@@ -37,11 +37,6 @@ function safeFilenamePart(value: string): string {
   return value.replace(/[^a-zA-Z0-9._-]+/g, "-").replace(/^-|-$/g, "").slice(0, 80);
 }
 
-function repoUrlWithToken(repoUrl: string, githubToken?: string): string {
-  if (!githubToken || !repoUrl.startsWith("https://github.com/")) return repoUrl;
-  return repoUrl.replace("https://github.com/", `https://x-access-token:${githubToken}@github.com/`);
-}
-
 function validateDemo(demo: DemoRecipe): void {
   if (demo.kind === "none") {
     throw new Error(`No recordable demo: ${demo.reason}`);
@@ -101,10 +96,9 @@ async function createDesktopSandbox(args: DemoRecordingRequest): Promise<Desktop
 
 async function setupRepo(sandbox: DesktopSandbox, args: DemoRecordingRequest): Promise<string> {
   await sandbox.commands.run(`rm -rf ${shellQuote(WORKDIR)}`);
-  const cloneUrl = repoUrlWithToken(args.repoUrl, args.githubToken);
   const branch = args.branch ? ` --branch ${shellQuote(args.branch)}` : "";
   await sandbox.commands.run(
-    `git clone --depth 1${branch} ${shellQuote(cloneUrl)} ${shellQuote(WORKDIR)}`,
+    `git clone --depth 1${branch} ${shellQuote(args.repoUrl)} ${shellQuote(WORKDIR)}`,
     { timeoutMs: 120_000 },
   );
 

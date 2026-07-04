@@ -1,3 +1,8 @@
+import { testGitHubRepoAccessWithComposio } from "@tags/runtime/integrations/composio-github";
+import {
+  listComposioConnectedAccountStatuses,
+  loadComposioTools,
+} from "@tags/runtime/tools/composio";
 import { recordAuditEvent } from "@tags/core/audit";
 import { loadActiveSpaceConfig } from "@tags/core/spaces";
 import { getSpaceById } from "@tags/core/spaces-admin";
@@ -8,7 +13,13 @@ import { parseGitHubRepo } from "@/lib/github-repo";
 
 export const runtime = "nodejs";
 
-async function testGitHubRepo(repoUrl: string | null | undefined, token?: string) {
+async function loadGitHubConnectionStatus(spaceId: string, apiKey?: string) {
+  if (!apiKey) return "missing_api_key";
+  const statuses = await listComposioConnectedAccountStatuses({ apiKey, entityId: spaceId });
+  return statuses.github === "ACTIVE" ? "connected" : "needs_auth";
+}
+
+async function testGitHubRepo(repoUrl: string | null | undefined, spaceId: string, apiKey?: string) {
   const parsed = parseGitHubRepo(repoUrl);
   if (!parsed) {
     return {
@@ -18,33 +29,46 @@ async function testGitHubRepo(repoUrl: string | null | undefined, token?: string
     };
   }
 
-  const response = await fetch(`https://api.github.com/repos/${parsed.owner}/${parsed.repo}`, {
-    headers: {
-      accept: "application/vnd.github+json",
-      ...(token ? { authorization: `Bearer ${token}` } : {}),
-    },
-  });
-
-  if (response.ok) {
-    const data = (await response.json()) as { private?: boolean; default_branch?: string };
+  if (!apiKey) {
     return {
-      ok: true,
-      status: "reachable",
-      private: Boolean(data.private),
-      defaultBranch: data.default_branch ?? null,
-      message: "Repository metadata is reachable.",
+      ok: false,
+      status: "missing_composio_api_key",
+      message: "Configure COMPOSIO_API_KEY before testing GitHub repo access.",
     };
   }
 
-  return {
-    ok: false,
-    status: response.status === 404 ? "not_found_or_no_access" : "request_failed",
-    httpStatus: response.status,
-    message:
-      response.status === 404
-        ? "Repository was not found or the configured token cannot access it."
-        : `GitHub returned HTTP ${response.status}.`,
-  };
+  const githubConnectionStatus = await loadGitHubConnectionStatus(spaceId, apiKey);
+  if (githubConnectionStatus !== "connected") {
+    return {
+      ok: false,
+      status: "github_not_connected",
+      message: "Connect the Space's GitHub account through Composio before testing repo access.",
+    };
+  }
+
+  const handle = await loadComposioTools({
+    apiKey,
+    entityId: spaceId,
+    toolkits: ["github"],
+  });
+
+  if (!handle) {
+    return {
+      ok: false,
+      status: "github_tool_unavailable",
+      message: "Composio GitHub tools are unavailable for this Space.",
+    };
+  }
+
+  try {
+    return await testGitHubRepoAccessWithComposio({
+      tools: handle.tools,
+      owner: parsed.owner,
+      repo: parsed.repo,
+    });
+  } finally {
+    await handle.close();
+  }
 }
 
 function resolveRepoUrls(config: Awaited<ReturnType<typeof loadActiveSpaceConfig>>) {
@@ -70,6 +94,7 @@ export async function GET(
   const config = await loadActiveSpaceConfig(db, spaceId);
   const repoUrls = resolveRepoUrls(config);
   const env = getEnv();
+  const githubConnectionStatus = await loadGitHubConnectionStatus(spaceId, env.COMPOSIO_API_KEY);
   return Response.json({
     repoUrl: repoUrls[0] ?? null,
     repoUrls,
@@ -77,7 +102,8 @@ export async function GET(
       url,
       parsedGitHubRepo: parseGitHubRepo(url),
     })),
-    hasGlobalGitHubToken: Boolean(env.GITHUB_TOKEN),
+    hasComposioApiKey: Boolean(env.COMPOSIO_API_KEY),
+    githubConnectionStatus,
   });
 }
 
@@ -97,7 +123,8 @@ export async function POST(
   const repoUrls = resolveRepoUrls(config);
   const repoUrl = body.repoUrl?.trim() || repoUrls[0] || null;
   const env = getEnv();
-  const result = await testGitHubRepo(repoUrl, env.GITHUB_TOKEN);
+  const githubConnectionStatus = await loadGitHubConnectionStatus(spaceId, env.COMPOSIO_API_KEY);
+  const result = await testGitHubRepo(repoUrl, spaceId, env.COMPOSIO_API_KEY);
 
   await recordAuditEvent(db, {
     organizationId: space.organizationId,
@@ -112,7 +139,8 @@ export async function POST(
     repoUrls,
     testedRepoUrl: repoUrl,
     parsedGitHubRepo: parseGitHubRepo(repoUrl),
-    hasGlobalGitHubToken: Boolean(env.GITHUB_TOKEN),
+    hasComposioApiKey: Boolean(env.COMPOSIO_API_KEY),
+    githubConnectionStatus,
     result,
   });
 }

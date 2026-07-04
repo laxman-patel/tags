@@ -71,7 +71,7 @@ In your Slack app settings (production domain `https://<your-domain>`):
 
 Streaming replies use Slack's native `chat.startStream`/`chat.appendStream`/`chat.stopStream` APIs (animated "Tags is thinking…" indicator, markdown rendering, task timeline). These need `chat:write` only; if streaming is unavailable the bot falls back to posting and editing a regular message.
 
-Demo recordings for coding PR runs are disabled by default. To enable them, set `DEMO_RECORDING_ENABLED=true`, configure `E2B_API_KEY`, configure public R2 artifact URLs, grant the Slack bot `files:write`, and enable/connect the Space's GitHub toolkit through Composio. PR comments are written through that Composio GitHub connection; `GITHUB_TOKEN` is only an optional helper for private git clones.
+Demo recordings for coding PR runs are disabled by default. To enable them, set `DEMO_RECORDING_ENABLED=true`, configure `E2B_API_KEY`, configure public R2 artifact URLs, grant the Slack bot `files:write`, and enable/connect the Space's GitHub toolkit through Composio. GitHub metadata checks and PR comments are written through that Composio GitHub connection.
 
 **Event subscriptions:** `app_mention`, `message.channels` (required for thread-reply triggers and passive channel learning — bot messages are ignored). Set `SLACK_BOT_USER_ID` for accurate mention detection in thread replies.
 

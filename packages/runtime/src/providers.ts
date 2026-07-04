@@ -15,8 +15,6 @@ export type RuntimeProviderConfig = {
   e2bOpencodeTemplate?: string;
   /** E2B desktop template used for post-change demo recording. */
   e2bDemoTemplate?: string;
-  /** Optional GitHub token for private repo clones in the sandbox. */
-  githubToken?: string;
   r2?: R2Config;
   /** Signs short-lived run tokens for the Tags MCP bridge used by opencode. */
   mcpSigningKey?: string;
@@ -54,7 +52,6 @@ export async function createRuntimeProviders(
     template: config.e2bOpencodeTemplate,
     modelApiKey: config.fireworksApiKey,
     model: config.opencodeModel,
-    githubToken: config.githubToken,
   });
 
   let r2: RuntimeProviders["r2"];

@@ -456,7 +456,6 @@ async function recordDemoStep(
       template: secrets.e2bDemoTemplate,
       repoUrl,
       branch: runOutput?.branch,
-      githubToken: secrets.githubToken,
       demo,
       maxSeconds: secrets.demoRecording.maxSeconds,
       width: secrets.demoRecording.width,

@@ -70,7 +70,6 @@ export type DemoRecordingRequest = {
   template: string;
   repoUrl: string;
   branch?: string;
-  githubToken?: string;
   demo: DemoRecipe;
   maxSeconds: number;
   width: number;

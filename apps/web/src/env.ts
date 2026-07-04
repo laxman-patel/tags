@@ -20,8 +20,6 @@ const envSchema = z
     SENTRY_DSN: z.string().optional(),
     /** E2B sandbox API key (opencode coding agent). */
     E2B_API_KEY: z.string().optional(),
-    /** Optional GitHub token for private repo access checks and sandbox clones. */
-    GITHUB_TOKEN: z.string().optional(),
     /** opencode model string for the sandbox coding agent. */
     OPENCODE_MODEL: z.string().optional(),
     COMPOSIO_API_KEY: z.string().optional(),

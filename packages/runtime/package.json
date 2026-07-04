@@ -5,6 +5,7 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
+    "./integrations/composio-github": "./src/integrations/composio-github.ts",
     "./observability/sentry": "./src/observability/sentry.ts",
     "./tools/composio": "./src/tools/composio.ts"
   },

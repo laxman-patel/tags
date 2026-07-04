@@ -11,7 +11,6 @@ const runtimeSecretsSchema = z.object({
   E2B_API_KEY: z.string().optional(),
   E2B_OPENCODE_TEMPLATE: z.string().optional(),
   E2B_DEMO_TEMPLATE: z.string().default("tags-demo-desktop"),
-  GITHUB_TOKEN: z.string().optional(),
   COMPOSIO_API_KEY: z.string().optional(),
   OPENCODE_MODEL: z.string().optional(),
   INNGEST_SIGNING_KEY: z.string().optional(),
@@ -33,7 +32,6 @@ export type RuntimeSecrets = {
   e2bApiKey?: string;
   e2bOpencodeTemplate?: string;
   e2bDemoTemplate: string;
-  githubToken?: string;
   composioApiKey?: string;
   opencodeModel?: string;
   mcpSigningKey?: string;
@@ -67,7 +65,6 @@ export function loadRuntimeSecrets(): RuntimeSecrets {
     e2bApiKey: env.E2B_API_KEY,
     e2bOpencodeTemplate: env.E2B_OPENCODE_TEMPLATE,
     e2bDemoTemplate: env.E2B_DEMO_TEMPLATE,
-    githubToken: env.GITHUB_TOKEN,
     composioApiKey: env.COMPOSIO_API_KEY,
     opencodeModel: env.OPENCODE_MODEL,
     mcpSigningKey: env.INNGEST_SIGNING_KEY,
@@ -89,7 +86,6 @@ export function buildRuntimeProviderConfig(secrets: RuntimeSecrets): RuntimeProv
     e2bApiKey: secrets.e2bApiKey,
     e2bOpencodeTemplate: secrets.e2bOpencodeTemplate,
     e2bDemoTemplate: secrets.e2bDemoTemplate,
-    githubToken: secrets.githubToken,
     fireworksApiKey: secrets.fireworksApiKey,
     opencodeModel: secrets.opencodeModel,
     mcpSigningKey: secrets.mcpSigningKey,

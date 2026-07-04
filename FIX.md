@@ -451,7 +451,7 @@ Budgets are per-Space (`budget_policies` referenced from `spaces`). Claude Tag h
 
 ### P3-6. No per-Space repo configuration for coding Spaces
 
-Default opencode mode never clones a repo (`runOpencodeSegment` calls `runCodingAgent` without `repoUrl`); only the orchestrator's `run_coding_agent` tool accepts a model-supplied `repoUrl`. **Fix:** add `repo_url` (nullable text) to `space_configs` (new migration + `ActiveSpaceConfig` + admin UI field), and pass it through in `opencode-segment.ts`. Note `GITHUB_TOKEN` is already threaded through for private clones.
+Default opencode mode never clones a repo (`runOpencodeSegment` calls `runCodingAgent` without `repoUrl`); only the orchestrator's `run_coding_agent` tool accepts a model-supplied `repoUrl`. **Fix:** add `repo_url` (nullable text) to `space_configs` (new migration + `ActiveSpaceConfig` + admin UI field), and pass it through in `opencode-segment.ts`. GitHub product actions should use the Space's Composio GitHub connection.
 
 ### P3-7. Observability is missing
 
