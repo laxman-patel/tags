@@ -7,6 +7,7 @@ import {
   useUser,
 } from "@clerk/react";
 import tagsLogo from "../imports/Group_101__5_.png";
+import slackLogo from "../imports/slack-logo.png";
 import {
   Sidebar,
   Table,
@@ -54,7 +55,6 @@ import {
   DatabaseIcon,
   ChatCircleIcon,
   GearSixIcon,
-  SlackLogoIcon,
   WrenchIcon,
   HeadsetIcon,
   CodeIcon,
@@ -701,8 +701,8 @@ function WorkspaceConnectionCard({
   return (
     <LayerCard className="ws-rise overflow-hidden p-0">
       <div className="flex items-center gap-4 p-5">
-        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-kumo-hairline bg-gradient-to-b from-kumo-base to-kumo-recessed text-kumo-default shadow-sm">
-          <SlackLogoIcon size={24} weight="fill" />
+        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-kumo-hairline bg-kumo-base p-2 shadow-sm">
+          <img src={slackLogo} alt="" className="h-full w-full object-contain" />
         </div>
         <div className="min-w-0 flex-1">
           <Text variant="heading3" as="h2" truncate>
@@ -711,8 +711,6 @@ function WorkspaceConnectionCard({
           <div className="mt-1 flex min-w-0 items-center gap-2 text-kumo-subtle">
             <LiveConnectionDot />
             <Text variant="secondary" size="sm">Connected</Text>
-            <span aria-hidden="true" className="text-kumo-hairline">·</span>
-            <span className="truncate font-mono text-xs text-kumo-subtle">{slackWorkspace.teamId}</span>
           </div>
         </div>
         <Button
