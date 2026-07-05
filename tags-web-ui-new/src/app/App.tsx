@@ -593,12 +593,13 @@ function ToolLogo({
   size?: "sm" | "base";
 }) {
   const boxSize = size === "sm" ? "h-7 w-7" : "h-9 w-9";
+  const logoSize = size === "sm" ? "h-4 w-4" : "h-5 w-5";
   const iconSize = size === "sm" ? 14 : 18;
 
   return (
     <div className={cn("flex items-center justify-center rounded-md border border-kumo-hairline bg-kumo-base text-kumo-subtle shrink-0", boxSize)}>
       {"logoUrl" in tool && tool.logoUrl ? (
-        <img src={tool.logoUrl} alt="" className="h-4 w-4 rounded-sm object-contain" />
+        <img src={tool.logoUrl} alt="" className={cn("rounded-sm object-contain", logoSize)} />
       ) : (
         <ActionIcon action={tool.id} size={iconSize} />
       )}
