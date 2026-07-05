@@ -826,7 +826,7 @@ function SpacesView({
         </div>
       </div>
 
-      <div className="grid min-w-0 grid-cols-1 gap-4 md:grid-cols-2">
+      <div className="grid min-w-0 grid-cols-1 gap-4 min-[520px]:[grid-template-columns:repeat(auto-fill,minmax(16rem,16rem))]">
         {spaces.map((space) => (
           <SpaceProjectCard
             key={space.id}
@@ -885,7 +885,7 @@ function SpaceProjectCard({
             onClick();
           }
         }}
-        className="group w-[calc(100vw-2rem)] min-w-0 cursor-pointer overflow-hidden p-0 transition-colors hover:bg-kumo-base focus-visible:ring-2 focus-visible:ring-kumo-focus md:w-full"
+        className="group w-full min-w-0 cursor-pointer overflow-hidden p-0 transition-colors hover:bg-kumo-base focus-visible:ring-2 focus-visible:ring-kumo-focus"
       >
         <div className="flex items-center justify-between gap-3 px-4 py-3">
           <div className="min-w-0">
@@ -926,7 +926,7 @@ function SpaceProjectCard({
         </div>
 
         <div className="px-2 pb-2">
-          <div className="relative h-44 overflow-hidden rounded-md border border-kumo-hairline bg-kumo-recessed">
+          <div className="relative aspect-square overflow-hidden rounded-md border border-kumo-hairline bg-kumo-recessed">
             <div
               className="absolute inset-0 opacity-60"
               style={{
