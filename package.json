@@ -2,7 +2,6 @@
   "name": "tags",
   "private": true,
   "scripts": {
-    "dev": "pnpm --filter @tags/web dev",
     "build": "pnpm -r build",
     "test": "vitest run",
     "test:watch": "vitest",

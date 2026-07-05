@@ -2,7 +2,7 @@
 
 Open-source Claude Tag for teams — channel-native org harness built on **opencode**, with **Fireworks** inference for now.
 
-**Must-not-miss features:** generative UI (Block Kit + web React from `run_events`), streaming Slack replies, human-in-the-loop approvals, full thread context.
+**Must-not-miss features:** generative UI (Block Kit from `run_events`), streaming Slack replies, human-in-the-loop approvals, full thread context.
 
 ## Prerequisites
 
@@ -19,7 +19,7 @@ Open-source Claude Tag for teams — channel-native org harness built on **openc
 | 0 | Walking skeleton (Slack + Inngest + approval) |
 | 1 | Space admin API + config versioning |
 | 2 | Slack thread sync, rate limits, run links |
-| 3 | Web admin, artifacts, approval inbox, UI package |
+| 3 | Artifacts, approval inbox, UI package |
 | 4 | Memory tools, context packing, memory browser |
 | 5 | Approval authorization + audit events |
 | 6 | Run timeline / tool trace depth |
@@ -104,7 +104,6 @@ Run and artifact pages require Clerk sign-in (`/runs`, `/artifacts`).
 
 | Package | Role |
 | --- | --- |
-| `apps/web` | Next.js — Slack ingress, web inspection |
 | `packages/db` | Drizzle schema, migrations, RLS |
 | `packages/core` | Spaces, threads, runs domain logic |
 | `packages/runtime` | opencode harness integration, tools, Inngest durable runs |
