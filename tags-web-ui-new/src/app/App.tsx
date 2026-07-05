@@ -814,7 +814,7 @@ function SpacesView({
         </div>
       </div>
 
-      <div className="grid min-w-0 grid-cols-1 gap-3 min-[520px]:[grid-template-columns:repeat(auto-fill,minmax(13rem,13rem))]">
+      <div className="grid min-w-0 grid-cols-1 gap-4 min-[520px]:[grid-template-columns:repeat(auto-fill,minmax(17.5rem,17.5rem))]">
         {spaces.map((space) => (
           <SpaceProjectCard
             key={space.id}
@@ -873,15 +873,11 @@ function SpaceProjectCard({
             onClick();
           }
         }}
-        className="group w-full max-w-[13rem] min-w-0 cursor-pointer overflow-hidden p-0 transition-colors hover:bg-kumo-base focus-visible:ring-2 focus-visible:ring-kumo-focus min-[520px]:max-w-none"
+        className="group w-full max-w-[17.5rem] min-w-0 cursor-pointer overflow-hidden p-0 transition-colors hover:bg-kumo-base focus-visible:ring-2 focus-visible:ring-kumo-focus min-[520px]:max-w-none"
       >
         <div className="flex items-center justify-between gap-2 px-3 py-2">
           <div className="min-w-0">
-            <Text bold truncate as="div">{space.name}</Text>
-            <div className="mt-1 flex items-center gap-1.5 text-kumo-subtle">
-              <HashIcon size={12} />
-              <Text variant="secondary" size="xs" truncate>{space.channel}</Text>
-            </div>
+            <Text size="sm" truncate as="div">{space.name}</Text>
           </div>
           <DropdownMenu>
             <DropdownMenu.Trigger
@@ -913,24 +909,24 @@ function SpaceProjectCard({
           </DropdownMenu>
         </div>
 
-        <div className="px-1.5 pb-1.5">
-          <div className="relative aspect-[5/4] overflow-hidden rounded-md border border-kumo-hairline bg-kumo-recessed">
+        <div className="px-2 pb-2">
+          <div className="relative aspect-[7/4] overflow-hidden rounded-md border border-kumo-hairline bg-kumo-recessed">
             <div
               className="absolute inset-0 opacity-60"
               style={{
                 backgroundImage: "radial-gradient(var(--color-kumo-line) 1px, transparent 1px)",
-                backgroundSize: "7px 7px",
+                backgroundSize: "8px 8px",
               }}
             />
             <div className="absolute inset-0 flex items-center justify-center">
-              <div className="flex items-center gap-1.5">
+              <div className="flex items-center gap-2">
                 {centerTools.map((tool) => (
                   <div
                     key={tool.id}
-                    className="flex h-7 w-7 items-center justify-center rounded-md border border-kumo-line bg-kumo-base text-kumo-default shadow-sm transition-transform group-hover:-translate-y-0.5"
+                    className="flex h-8 w-8 items-center justify-center rounded-md border border-kumo-line bg-kumo-base text-kumo-default shadow-sm transition-transform group-hover:-translate-y-0.5"
                   >
                     {tool.id === "tags" ? (
-                      <BrainIcon size={14} weight="duotone" />
+                      <BrainIcon size={16} weight="duotone" />
                     ) : (
                       <ToolLogo tool={tool} size="sm" />
                     )}
@@ -938,18 +934,15 @@ function SpaceProjectCard({
                 ))}
               </div>
             </div>
-            <div className="absolute inset-x-2 bottom-2 flex items-center justify-between gap-2">
-              <StatusLine space={space} />
-              <div className="hidden items-center gap-2 text-kumo-subtle sm:flex">
-                <span className="inline-flex items-center gap-1">
-                  <WrenchIcon size={12} />
-                  <Text variant="secondary" size="xs">{displayToolCount(nativeTools.length + composioTools.length)}</Text>
-                </span>
-                <span className="inline-flex items-center gap-1">
-                  <ActivityIcon size={12} />
-                  <Text variant="secondary" size="xs">{space.runCount.toLocaleString()}</Text>
-                </span>
-              </div>
+            <div className="absolute inset-x-3 bottom-2.5 flex min-w-0 items-center gap-1.5 text-kumo-subtle">
+              <span className={cn("h-1.5 w-1.5 shrink-0 rounded-full", statusTone(space.status))} />
+              <Text variant="secondary" size="xs" truncate>
+                {space.status === "active" ? "production" : space.status}
+                {" · "}
+                {space.channel}
+                {" · "}
+                {displayToolCount(nativeTools.length + composioTools.length)}
+              </Text>
             </div>
           </div>
         </div>
