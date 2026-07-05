@@ -26,6 +26,12 @@ export interface ComposioDirectoryTool {
   noAuth?: boolean;
 }
 
+export interface SlackChannel {
+  id: string;
+  name: string;
+  isPrivate: boolean;
+}
+
 export interface Repo {
   id: string;
   name: string;
@@ -107,7 +113,7 @@ export function loadControlPlane() {
   return requestJson<ControlPlanePayload>("/api/control-plane");
 }
 
-export function createSpace(input: { name: string; channel: string }) {
+export function createSpace(input: { name: string; channel: string; channelId?: string }) {
   return requestJson<{ spaceId: string; configId: string }>("/api/spaces", {
     method: "POST",
     body: JSON.stringify(input),
@@ -123,6 +129,10 @@ export function updateSpaceConfig(spaceId: string, input: { enabledTools?: strin
 
 export function loadComposioDirectory() {
   return requestJson<{ items: ComposioDirectoryTool[]; source: "composio" | "fallback" }>("/api/composio/toolkits");
+}
+
+export function loadSlackChannels() {
+  return requestJson<{ channels: SlackChannel[]; source: "slack" | "fallback" }>("/api/slack/channels");
 }
 
 export function authorizeComposioTool(spaceId: string, toolkitId: string) {

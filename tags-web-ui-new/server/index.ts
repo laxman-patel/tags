@@ -46,6 +46,7 @@ import {
   resolveToolkitConnectionStatus,
   type ComposioToolkitDirectoryItem,
 } from "@tags/runtime/tools/composio";
+import { createSlackClient } from "@tags/slack";
 import { createServer as createViteServer, type ViteDevServer } from "vite";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -210,6 +211,19 @@ const FALLBACK_COMPOSIO_DIRECTORY: ComposioToolkitDirectoryItem[] = [
   { id: "dropbox", name: "Dropbox", description: "Find, read, and manage Dropbox files.", categories: ["Storage"], toolsCount: 12 },
 ];
 
+const FALLBACK_SLACK_CHANNELS = [
+  "general",
+  "engineering",
+  "product",
+  "design",
+  "support-bot",
+  "eng-help",
+  "sales-team",
+  "devops-alerts",
+  "incidents",
+  "releases",
+].map((name) => ({ id: name, name, isPrivate: false }));
+
 function toolkitName(toolkitId: string) {
   return toolkitId
     .split(/[_-]/g)
@@ -244,6 +258,43 @@ async function loadComposioDirectory() {
     console.warn("[control-plane] failed to load Composio toolkits", error);
     return { items: FALLBACK_COMPOSIO_DIRECTORY, source: "fallback" as const };
   }
+}
+
+async function loadSlackChannels() {
+  const token = process.env.SLACK_BOT_TOKEN ?? "";
+  if (!token) return { channels: FALLBACK_SLACK_CHANNELS, source: "fallback" as const };
+
+  const client = createSlackClient(token);
+  const channels: Array<{ id: string; name: string; isPrivate: boolean }> = [];
+  let cursor: string | undefined;
+
+  try {
+    do {
+      const page = await client.conversations.list({
+        cursor,
+        exclude_archived: true,
+        limit: 200,
+        types: "public_channel,private_channel",
+      });
+      for (const channel of page.channels ?? []) {
+        if (!channel.id || !channel.name) continue;
+        channels.push({
+          id: channel.id,
+          name: channel.name,
+          isPrivate: Boolean(channel.is_private),
+        });
+      }
+      cursor = page.response_metadata?.next_cursor || undefined;
+    } while (cursor);
+  } catch (error) {
+    console.warn("[control-plane] failed to load Slack channels", error);
+    return { channels: FALLBACK_SLACK_CHANNELS, source: "fallback" as const };
+  }
+
+  return {
+    channels: channels.length > 0 ? channels : FALLBACK_SLACK_CHANNELS,
+    source: channels.length > 0 ? ("slack" as const) : ("fallback" as const),
+  };
 }
 
 function legacyComposioConnections(enabledTools: string[] | undefined) {
@@ -461,20 +512,29 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, url: URL) {
         return sendJson(res, 200, payload);
       }
 
+      if (method === "GET" && segments[0] === "slack" && segments[1] === "channels") {
+        const payload = await loadSlackChannels();
+        apiRequestsCompleted.add(1, { route: "slack.channels", method, outcome: "success" });
+        span.setAttributes({ outcome: "success", "slack.channels.count": payload.channels.length, "slack.channels.source": payload.source });
+        return sendJson(res, 200, payload);
+      }
+
       if (method === "POST" && segments[0] === "spaces" && segments.length === 1) {
-        const body = (await readJson(req)) as { name?: string; channel?: string; organizationId?: string; workspaceId?: string };
+        const body = (await readJson(req)) as { name?: string; channel?: string; channelId?: string; organizationId?: string; workspaceId?: string };
         const organizationId = body.organizationId || (await getDefaultOrgId(db));
         const workspace = body.workspaceId ? null : await getDefaultWorkspace(db, organizationId);
         const workspaceId = body.workspaceId ?? workspace?.id;
-        if (!organizationId || !workspaceId || !body.name || !body.channel) {
+        const channelName = body.channel?.replace(/^#/, "").trim();
+        const externalSpaceId = body.channelId?.trim() || channelName;
+        if (!organizationId || !workspaceId || !body.name || !channelName || !externalSpaceId) {
           apiRequestsCompleted.add(1, { route: "spaces", method, outcome: "validation_error" });
           return sendJson(res, 400, { error: "name, channel, organization, and workspace are required" });
         }
-        const slug = slugify(body.channel);
+        const slug = slugify(channelName);
         const result = await createSpaceWithConfig(db, {
           organizationId,
           workspaceId,
-          externalSpaceId: body.channel,
+          externalSpaceId,
           name: body.name,
           slug,
           modelId: "accounts/fireworks/models/kimi-k2-instruct",

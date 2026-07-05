@@ -67,6 +67,7 @@ import {
   authorizeComposioTool,
   loadControlPlane,
   loadComposioDirectory,
+  loadSlackChannels,
   loadRunEvents,
   respondToApproval,
   updateSpaceConfig,
@@ -79,6 +80,7 @@ import {
   type RunStatus,
   type Space,
   type SpaceStatus,
+  type SlackChannel,
   type Tool,
   type ToolAuthState,
 } from "./api";
@@ -90,8 +92,7 @@ type View =
   | { page: "space-detail"; id: string }
   | { page: "approvals" }
   | { page: "runs" }
-  | { page: "run-detail"; id: string }
-  | { page: "new-space" };
+  | { page: "run-detail"; id: string };
 
 // ===== Mock Data =====
 
@@ -1515,7 +1516,7 @@ function RunDetailView({ run, events, onBack }: { run: Run; events: RunEvent[]; 
   );
 }
 
-const SLACK_CHANNELS = [
+const FALLBACK_SLACK_CHANNELS: SlackChannel[] = [
   "general",
   "engineering",
   "product",
@@ -1526,101 +1527,190 @@ const SLACK_CHANNELS = [
   "devops-alerts",
   "incidents",
   "releases",
-];
+].map((name) => ({ id: name, name, isPrivate: false }));
 
-function NewSpaceView({
-  onBack,
+function NewSpaceDialog({
+  open,
+  onOpenChange,
   onCreate,
   existingChannels,
 }: {
-  onBack: () => void;
-  onCreate: (name: string, channel: string) => void;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onCreate: (name: string, channel: string, channelId?: string) => Promise<void>;
   existingChannels: string[];
 }) {
   const [name, setName] = useState("");
-  const [channel, setChannel] = useState("");
+  const [channelQuery, setChannelQuery] = useState("");
+  const [selectedChannel, setSelectedChannel] = useState<SlackChannel | null>(null);
+  const [channels, setChannels] = useState<SlackChannel[]>(FALLBACK_SLACK_CHANNELS);
+  const [channelsLoading, setChannelsLoading] = useState(false);
+  const [channelSource, setChannelSource] = useState<"slack" | "fallback">("fallback");
+  const [submitting, setSubmitting] = useState(false);
 
-  const availableChannels = SLACK_CHANNELS.filter(
-    (c) => !existingChannels.includes(c)
+  useEffect(() => {
+    if (!open) return;
+    setChannelsLoading(true);
+    loadSlackChannels()
+      .then((payload) => {
+        setChannels(payload.channels.length > 0 ? payload.channels : FALLBACK_SLACK_CHANNELS);
+        setChannelSource(payload.source);
+      })
+      .catch(() => {
+        setChannels(FALLBACK_SLACK_CHANNELS);
+        setChannelSource("fallback");
+      })
+      .finally(() => setChannelsLoading(false));
+  }, [open]);
+
+  const existingChannelSet = new Set(existingChannels.map((channel) => channel.replace(/^#/, "").toLowerCase()));
+  const availableChannels = channels.filter(
+    (channel) => !existingChannelSet.has(channel.name.toLowerCase()) && !existingChannelSet.has(channel.id.toLowerCase())
   );
+  const filteredChannels = availableChannels
+    .filter((channel) => {
+      const query = channelQuery.replace(/^#/, "").toLowerCase().trim();
+      return !query || channel.name.toLowerCase().includes(query);
+    })
+    .slice(0, 24);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const reset = () => {
+    setName("");
+    setChannelQuery("");
+    setSelectedChannel(null);
+    setSubmitting(false);
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (name.trim() && channel.trim()) {
-      onCreate(name.trim(), channel.trim().replace(/^#/, ""));
+    const channelName = selectedChannel?.name ?? channelQuery.trim().replace(/^#/, "");
+    if (!name.trim() || !channelName) return;
+    setSubmitting(true);
+    try {
+      await onCreate(name.trim(), channelName, selectedChannel?.id);
+      reset();
+      onOpenChange(false);
+    } finally {
+      setSubmitting(false);
     }
   };
 
   return (
-    <div className="max-w-xl">
-      <BackLink label="All Spaces" onClick={onBack} />
-      <PageHeader
-        title="New Space"
-        description="Connect an AI agent to a Slack channel."
-      />
-
-      <form onSubmit={handleSubmit}>
-        <LayerCard>
-          <LayerCard.Primary>
-            <div className="flex flex-col gap-5">
-              <Field label="Space name" description="Shown in the dashboard and Slack.">
-                <Input
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="e.g. Customer Support"
-                  autoFocus
-                />
-              </Field>
-
-              <Field
-                label="Slack channel"
-                description="The agent will listen for messages in this channel."
-              >
-                <div className="flex flex-col gap-2">
-                  <Input
-                    value={channel}
-                    onChange={(e) => setChannel(e.target.value.replace(/^#/, ""))}
-                    placeholder="channel-name"
-                  />
-                  <div className="flex flex-wrap gap-1.5">
-                    {availableChannels.slice(0, 8).map((c) => (
-                      <button
-                        key={c}
-                        type="button"
-                        onClick={() => setChannel(c)}
-                        className={cn(
-                          "inline-flex items-center gap-1 px-2 py-0.5 rounded-md border transition-colors",
-                          channel === c
-                            ? "border-kumo-line bg-kumo-tint text-kumo-default"
-                            : "border-kumo-hairline text-kumo-subtle hover:text-kumo-default hover:bg-kumo-tint"
-                        )}
-                      >
-                        <HashIcon size={11} />
-                        <Text variant="secondary" size="xs">
-                          {c}
-                        </Text>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </Field>
+    <Dialog.Root
+      open={open}
+      onOpenChange={(nextOpen) => {
+        onOpenChange(nextOpen);
+        if (!nextOpen) reset();
+      }}
+    >
+      <Dialog className="flex max-h-[calc(100vh-2rem)] max-w-2xl flex-col overflow-hidden p-0">
+        <form onSubmit={handleSubmit} className="flex min-h-0 flex-col">
+          <div className="flex items-start justify-between gap-4 border-b border-kumo-hairline p-4">
+            <div>
+              <Dialog.Title>New Space</Dialog.Title>
+              <Dialog.Description>
+                Connect an agent to a Slack channel.
+              </Dialog.Description>
             </div>
-          </LayerCard.Primary>
-          <LayerCard.Secondary className="flex items-center justify-end gap-2">
-            <Button variant="ghost" onClick={onBack} type="button">
-              Cancel
-            </Button>
+            <Dialog.Close
+              aria-label="Close"
+              render={(p) => (
+                <Button {...p} variant="ghost" shape="square" size="sm" icon={XIcon} aria-label="Close" type="button" />
+              )}
+            />
+          </div>
+
+          <div className="flex min-h-0 flex-col gap-5 overflow-y-auto p-4">
+            <Field label="Space name" description="Shown in the dashboard and Slack.">
+              <Input
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Customer Support"
+                aria-label="Space name"
+                autoFocus
+              />
+            </Field>
+
+            <Field
+              label="Slack channel"
+              description={channelSource === "slack" ? "Select a channel from your Slack workspace." : "Connect Slack to replace these suggestions with workspace channels."}
+            >
+              <div className="flex flex-col gap-3">
+                <div className="relative">
+                  <MagnifyingGlassIcon size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-kumo-subtle" />
+                  <Input
+                    value={selectedChannel ? selectedChannel.name : channelQuery}
+                    onChange={(e) => {
+                      setSelectedChannel(null);
+                      setChannelQuery(e.target.value.replace(/^#/, ""));
+                    }}
+                    placeholder="Search channels"
+                    aria-label="Slack channel"
+                    className="pl-9"
+                  />
+                </div>
+
+                <div className="max-h-56 overflow-y-auto rounded-md border border-kumo-hairline bg-kumo-base p-1">
+                  {channelsLoading ? (
+                    <div className="flex items-center gap-2 px-3 py-3 text-kumo-subtle">
+                      <ArrowClockwiseIcon size={14} className="animate-spin" />
+                      <Text variant="secondary" size="xs">Loading channels</Text>
+                    </div>
+                  ) : filteredChannels.length === 0 ? (
+                    <div className="px-3 py-3">
+                      <Text variant="secondary" size="xs">No matching channels.</Text>
+                    </div>
+                  ) : (
+                    filteredChannels.map((channel) => {
+                      const selected = selectedChannel?.id === channel.id;
+                      return (
+                        <button
+                          key={channel.id}
+                          type="button"
+                          onClick={() => {
+                            setSelectedChannel(channel);
+                            setChannelQuery(channel.name);
+                          }}
+                          className={cn(
+                            "flex w-full items-center justify-between gap-3 rounded-md px-3 py-2 text-left transition-colors",
+                            selected ? "bg-kumo-tint text-kumo-default" : "text-kumo-subtle hover:bg-kumo-tint hover:text-kumo-default"
+                          )}
+                        >
+                          <span className="inline-flex min-w-0 items-center gap-2">
+                            <HashIcon size={14} className="shrink-0" />
+                            <Text size="sm" truncate>{channel.name}</Text>
+                          </span>
+                          <Badge variant={channel.isPrivate ? "warning" : "neutral"} appearance="dot">
+                            {channel.isPrivate ? "Private" : "Public"}
+                          </Badge>
+                        </button>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+            </Field>
+          </div>
+
+          <div className="flex items-center justify-end gap-2 border-t border-kumo-hairline p-4">
+            <Dialog.Close
+              render={(p) => (
+                <Button {...p} variant="ghost" type="button">
+                  Cancel
+                </Button>
+              )}
+            />
             <Button
               variant="primary"
               type="submit"
-              disabled={!name.trim() || !channel.trim()}
+              disabled={submitting || !name.trim() || !(selectedChannel?.name ?? channelQuery.trim())}
             >
-              Create Space
+              {submitting ? "Creating" : "Create Space"}
             </Button>
-          </LayerCard.Secondary>
-        </LayerCard>
-      </form>
-    </div>
+          </div>
+        </form>
+      </Dialog>
+    </Dialog.Root>
   );
 }
 
@@ -1628,6 +1718,7 @@ function NewSpaceView({
 
 export default function App() {
   const [view, setView] = useState<View>({ page: "spaces" });
+  const [newSpaceOpen, setNewSpaceOpen] = useState(false);
   const [spaces, setSpaces] = useState<Space[]>([]);
   const [runs, setRuns] = useState<Run[]>([]);
   const [approvals, setApprovals] = useState<Approval[]>([]);
@@ -1813,9 +1904,9 @@ export default function App() {
     }
   };
 
-  const handleCreateSpace = async (name: string, channel: string) => {
+  const handleCreateSpace = async (name: string, channel: string, channelId?: string) => {
     try {
-      await createSpace({ name, channel });
+      await createSpace({ name, channel, channelId });
       await refresh();
       setView({ page: "spaces" });
     } catch (err) {
@@ -1837,11 +1928,10 @@ export default function App() {
   return (
     <div data-mode="dark" className="min-h-screen w-full bg-kumo-canvas">
       <Sidebar.Provider
-        defaultOpen={false}
+        defaultOpen
         collapsible="icon"
-        peekable
         contained
-        className="h-full"
+        className="min-h-screen"
       >
         <Sidebar variant="sidebar">
           <Sidebar.Header>
@@ -1932,7 +2022,7 @@ export default function App() {
                 spaces={spaces}
                 runs={runs}
                 onSelectSpace={(id) => setView({ page: "space-detail", id })}
-                onNewSpace={() => setView({ page: "new-space" })}
+                onNewSpace={() => setNewSpaceOpen(true)}
                 onSelectRun={(id) => setView({ page: "run-detail", id })}
               />
             )}
@@ -1967,17 +2057,16 @@ export default function App() {
                 onBack={() => setView({ page: "runs" })}
               />
             )}
-            {view.page === "new-space" && (
-              <NewSpaceView
-                onBack={() => setView({ page: "spaces" })}
-                onCreate={handleCreateSpace}
-                existingChannels={spaces.map((s) => s.channel)}
-              />
-            )}
               </>
             )}
           </div>
         </main>
+        <NewSpaceDialog
+          open={newSpaceOpen}
+          onOpenChange={setNewSpaceOpen}
+          onCreate={handleCreateSpace}
+          existingChannels={spaces.map((s) => s.channel)}
+        />
       </Sidebar.Provider>
     </div>
   );

@@ -71,6 +71,7 @@
     "@tags/core": "workspace:*",
     "@tags/db": "workspace:*",
     "@tags/runtime": "workspace:*",
+    "@tags/slack": "workspace:*",
     "tw-animate-css": "1.3.8",
     "vaul": "1.1.2"
   },

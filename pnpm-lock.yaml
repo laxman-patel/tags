@@ -273,6 +273,9 @@ importers:
       '@tags/runtime':
         specifier: workspace:*
         version: link:../packages/runtime
+      '@tags/slack':
+        specifier: workspace:*
+        version: link:../packages/slack
       canvas-confetti:
         specifier: 1.9.4
         version: 1.9.4
