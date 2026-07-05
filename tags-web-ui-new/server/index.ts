@@ -210,6 +210,14 @@ function sendRedirect(res: ServerResponse, location: string, status = 302) {
   res.end();
 }
 
+function sendHtml(res: ServerResponse, status: number, body: string) {
+  res.writeHead(status, {
+    "content-type": "text/html; charset=utf-8",
+    "content-length": Buffer.byteLength(body),
+  });
+  res.end(body);
+}
+
 async function readRawBody(req: IncomingMessage): Promise<string> {
   const chunks: Buffer[] = [];
   for await (const chunk of req) chunks.push(Buffer.from(chunk));
@@ -778,6 +786,58 @@ function dashboardRedirect(params: Record<string, string>) {
   return url.toString();
 }
 
+function composioCallbackUrl(spaceId: string, toolkit: string) {
+  const url = new URL(`${getAppUrl()}/api/composio/oauth/callback`);
+  url.searchParams.set("space_id", spaceId);
+  url.searchParams.set("toolkit", toolkit);
+  return url.toString();
+}
+
+function htmlEscape(value: string) {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function composioOauthCallbackHtml(url: URL) {
+  const status = url.searchParams.get("status") ?? "success";
+  const toolkit = url.searchParams.get("toolkit") ?? "tool";
+  const ok = status.toLowerCase() !== "failed";
+  const title = ok ? "Tool connected" : "Tool connection failed";
+  const message = ok
+    ? `${toolkitName(toolkit)} is connected. You can return to Tags.`
+    : `Composio could not finish connecting ${toolkitName(toolkit)}. Return to Tags and try again.`;
+
+  return `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>${htmlEscape(title)}</title>
+  <style>
+    :root { color-scheme: dark; font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: #0b0f19; color: #f8fafc; }
+    main { width: min(360px, calc(100vw - 32px)); text-align: center; }
+    .mark { width: 40px; height: 40px; margin: 0 auto 16px; border-radius: 10px; display: grid; place-items: center; background: ${ok ? "#16a34a" : "#dc2626"}; color: white; font-weight: 700; }
+    h1 { margin: 0 0 8px; font-size: 20px; line-height: 1.2; }
+    p { margin: 0; color: #94a3b8; font-size: 14px; line-height: 1.5; }
+  </style>
+</head>
+<body>
+  <main>
+    <div class="mark">${ok ? "✓" : "!"}</div>
+    <h1>${htmlEscape(title)}</h1>
+    <p>${htmlEscape(message)}</p>
+  </main>
+  <script>
+    window.setTimeout(() => window.close(), 900);
+  </script>
+</body>
+</html>`;
+}
+
 async function createSlackOauthState(db: Db, account: AccountContext): Promise<{
   state: string;
   redirectUri: string;
@@ -913,6 +973,10 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, url: URL) {
 
   if (segments[0] === "slack" && segments[1] === "oauth" && segments[2] === "callback") {
     return handleSlackOauthCallback(req, res, url);
+  }
+
+  if (segments[0] === "composio" && segments[1] === "oauth" && segments[2] === "callback") {
+    return sendHtml(res, 200, composioOauthCallbackHtml(url));
   }
 
   if (segments[0] === "slack" && segments[1] === "events") {
@@ -1125,7 +1189,7 @@ async function handleProtectedApi(
         segments[4] === "authorize"
       ) {
         const spaceId = segments[1];
-        const toolkit = segments[3];
+        const toolkit = decodeURIComponent(segments[3] ?? "");
         if (!spaceId || !toolkit) return sendJson(res, 400, { error: "space id and toolkit are required" });
         const space = await requireSpaceInOrg(db, spaceId, organizationId);
         if (!space) return sendJson(res, 404, { error: "Not found" });
@@ -1139,10 +1203,13 @@ async function handleProtectedApi(
           apiKey: process.env.COMPOSIO_API_KEY,
           entityId: spaceId,
           toolkit,
+          callbackUrl: composioCallbackUrl(spaceId, toolkit),
         });
         const result = await updateSpaceConfig(db, spaceId, {
           availableConnections: mergeConnections(current?.availableConnections, current?.enabledConnections, [toolkit]),
-          enabledConnections: mergeConnections(current?.enabledConnections, [toolkit]),
+          enabledConnections: mergeConnections(current?.enabledConnections).filter(
+            (connection) => connection.toLowerCase() !== toolkit.toLowerCase(),
+          ),
         });
         if (!result) return sendJson(res, 404, { error: "Not found" });
 
@@ -1156,12 +1223,44 @@ async function handleProtectedApi(
         });
 
         apiRequestsCompleted.add(1, { route: "spaces.tools.authorize", method, outcome: "success" });
-        span.setAttributes({ outcome: "success", "space.id": spaceId, "toolkit.id": toolkit });
+        span.setAttributes({
+          outcome: "success",
+          "space.id": spaceId,
+          "toolkit.id": toolkit,
+          "composio.connection.id": auth.connectionId ?? "",
+        });
         return sendJson(res, 200, {
           connectUrl: auth.connectUrl,
+          connectionId: auth.connectionId,
           configId: result.configId,
           version: result.version,
         });
+      }
+
+      if (
+        method === "GET" &&
+        segments[0] === "spaces" &&
+        segments[2] === "tools" &&
+        segments[4] === "status"
+      ) {
+        const spaceId = segments[1];
+        const toolkit = decodeURIComponent(segments[3] ?? "");
+        if (!spaceId || !toolkit) return sendJson(res, 400, { error: "space id and toolkit are required" });
+        const space = await requireSpaceInOrg(db, spaceId, organizationId);
+        if (!space) return sendJson(res, 404, { error: "Not found" });
+        const accountStatuses = await listComposioConnectedAccountStatuses({
+          apiKey: process.env.COMPOSIO_API_KEY ?? "",
+          entityId: spaceId,
+        }).catch(() => ({} as Record<string, string>));
+        const authStatus = accountStatuses[toolkit.trim().toLowerCase()] ?? null;
+        const authState = composioAuthState({
+          hasApiKey: Boolean(process.env.COMPOSIO_API_KEY),
+          enabled: true,
+          accountStatus: authStatus,
+        });
+        apiRequestsCompleted.add(1, { route: "spaces.tools.status", method, outcome: "success" });
+        span.setAttributes({ outcome: "success", "space.id": spaceId, "toolkit.id": toolkit, "toolkit.auth_state": authState });
+        return sendJson(res, 200, { authState, authStatus });
       }
 
       if (method === "POST" && segments[0] === "approvals" && segments[2] === "respond") {

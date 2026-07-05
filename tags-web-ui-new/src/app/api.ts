@@ -206,12 +206,18 @@ export function loadSlackChannels() {
 }
 
 export function authorizeComposioTool(spaceId: string, toolkitId: string) {
-  return requestJson<{ connectUrl: string | null; configId: string; version: number }>(
+  return requestJson<{ connectUrl: string | null; connectionId: string | null; configId: string; version: number }>(
     `/api/spaces/${spaceId}/tools/${encodeURIComponent(toolkitId)}/authorize`,
     {
       method: "POST",
       body: JSON.stringify({}),
     },
+  );
+}
+
+export function loadComposioToolStatus(spaceId: string, toolkitId: string) {
+  return requestJson<{ authState: ToolAuthState; authStatus: string | null }>(
+    `/api/spaces/${spaceId}/tools/${encodeURIComponent(toolkitId)}/status`,
   );
 }
 

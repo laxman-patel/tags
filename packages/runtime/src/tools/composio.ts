@@ -28,6 +28,32 @@ export function resolveToolkitConnectionStatus(args: {
   return "needs_auth";
 }
 
+function normalizedConnectedAccountStatus(status: string | null | undefined) {
+  return status?.trim().toUpperCase() ?? "";
+}
+
+function isActiveConnectedAccountStatus(status: string | null | undefined) {
+  const normalizedStatus = normalizedConnectedAccountStatus(status);
+  return (
+    normalizedStatus === "ACTIVE" ||
+    normalizedStatus === "CONNECTED" ||
+    normalizedStatus === "ENABLED"
+  );
+}
+
+function connectedAccountStatusRank(status: string | null | undefined) {
+  const normalizedStatus = normalizedConnectedAccountStatus(status);
+  if (isActiveConnectedAccountStatus(normalizedStatus)) return 100;
+  if (normalizedStatus === "INITIATED" || normalizedStatus === "INITIALIZING") return 50;
+  if (normalizedStatus === "INACTIVE") return 20;
+  if (normalizedStatus === "FAILED" || normalizedStatus === "EXPIRED" || normalizedStatus === "REVOKED") return 10;
+  return normalizedStatus ? 1 : 0;
+}
+
+function bestConnectedAccountStatus(current: string | undefined, next: string) {
+  return connectedAccountStatusRank(next) > connectedAccountStatusRank(current) ? next : current;
+}
+
 /**
  * Starts Composio OAuth for a toolkit scoped to the Space entity id.
  * Returns the hosted connect URL from `session.authorize()`.
@@ -36,17 +62,21 @@ export async function authorizeComposioToolkit(args: {
   apiKey: string;
   entityId: string;
   toolkit: string;
-}): Promise<{ connectUrl: string | null }> {
-  if (!args.apiKey) return { connectUrl: null };
+  callbackUrl?: string;
+}): Promise<{ connectUrl: string | null; connectionId: string | null }> {
+  if (!args.apiKey) return { connectUrl: null, connectionId: null };
 
   const composio = new Composio({ apiKey: args.apiKey });
   const session = await composio.create(args.entityId, {
     mcp: true,
     toolkits: [args.toolkit],
   });
-  const connection = await session.authorize(args.toolkit);
+  const connection = await session.authorize(
+    args.toolkit,
+    args.callbackUrl ? { callbackUrl: args.callbackUrl } : undefined,
+  );
 
-  return { connectUrl: connection.redirectUrl ?? null };
+  return { connectUrl: connection.redirectUrl ?? null, connectionId: connection.id ?? null };
 }
 
 export async function listComposioConnectedAccountStatuses(args: {
@@ -56,13 +86,17 @@ export async function listComposioConnectedAccountStatuses(args: {
   if (!args.apiKey) return {};
 
   const composio = new Composio({ apiKey: args.apiKey });
-  const { items } = await composio.connectedAccounts.list({ userIds: [args.entityId] });
+  const { items } = await composio.connectedAccounts.list({
+    userIds: [args.entityId],
+    accountType: "ALL",
+  });
   const statuses: Record<string, string> = {};
 
   for (const item of items) {
     const slug = item.toolkit?.slug?.trim().toLowerCase();
     if (!slug) continue;
-    statuses[slug] = item.status;
+    const status = item.isDisabled ? "INACTIVE" : item.status;
+    statuses[slug] = bestConnectedAccountStatus(statuses[slug], status) ?? status;
   }
 
   return statuses;

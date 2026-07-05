@@ -85,6 +85,7 @@ import {
   createSpaceSchedule,
   loadControlPlane,
   loadComposioDirectory,
+  loadComposioToolStatus,
   loadSpaceArtifacts,
   loadSpaceSchedules,
   loadSlackChannels,
@@ -1028,8 +1029,8 @@ function SpaceDetailView({
   space: Space;
   runs: Run[];
   onBack: () => void;
-  onAuthTool: (spaceId: string, toolId: string) => Promise<void>;
-  onAddTool: (spaceId: string, composio: ComposioDirectoryTool) => Promise<void>;
+  onAuthTool: (spaceId: string, toolId: string) => Promise<boolean>;
+  onAddTool: (spaceId: string, composio: ComposioDirectoryTool) => Promise<boolean>;
   authLoadingToolId: string | null;
   onToggleTool: (spaceId: string, toolId: string, enabled: boolean) => void;
   onRemoveTool: (spaceId: string, toolId: string) => void;
@@ -1685,8 +1686,8 @@ function SpaceDetailView({
                         loading={authLoading}
                         disabled={authLoading}
                         onClick={async () => {
-                          await onAddTool(space.id, toolkit);
-                          setAddToolOpen(false);
+                          const connected = await onAddTool(space.id, toolkit);
+                          if (connected) setAddToolOpen(false);
                         }}
                       >
                         {isConnected ? "Reconnect" : isAdded ? "Connect" : "Connect"}
@@ -2315,9 +2316,6 @@ function DashboardApp({ clerkEnabled = false }: { clerkEnabled?: boolean }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [authLoadingToolId, setAuthLoadingToolId] = useState<string | null>(null);
-  const authRefreshTimerRef = useRef<number | null>(null);
-  const authRefreshTimeoutsRef = useRef<number[]>([]);
-  const authRefreshCleanupRef = useRef<(() => void) | null>(null);
 
   const refresh = async () => {
     setError(null);
@@ -2327,74 +2325,13 @@ function DashboardApp({ clerkEnabled = false }: { clerkEnabled?: boolean }) {
     setRuns(payload.runs);
     setActivity24h(payload.activity24h);
     setApprovals(payload.approvals);
-  };
-
-  const clearAuthRefreshWatchers = () => {
-    if (authRefreshTimerRef.current !== null) {
-      window.clearInterval(authRefreshTimerRef.current);
-      authRefreshTimerRef.current = null;
-    }
-    for (const timeout of authRefreshTimeoutsRef.current) {
-      window.clearTimeout(timeout);
-    }
-    authRefreshTimeoutsRef.current = [];
-    authRefreshCleanupRef.current?.();
-    authRefreshCleanupRef.current = null;
-  };
-
-  const scheduleAuthReturnRefresh = (popup: Window | null) => {
-    clearAuthRefreshWatchers();
-
-    let refreshScheduled = false;
-    const scheduleRefreshBurst = () => {
-      if (refreshScheduled) return;
-      refreshScheduled = true;
-      if (authRefreshTimerRef.current !== null) {
-        window.clearInterval(authRefreshTimerRef.current);
-        authRefreshTimerRef.current = null;
-      }
-      authRefreshCleanupRef.current?.();
-      authRefreshCleanupRef.current = null;
-
-      authRefreshTimeoutsRef.current = [500, 2_000, 5_000].map((delay) =>
-        window.setTimeout(() => {
-          refresh().catch((err) => setError(err instanceof Error ? err.message : "Failed to refresh tools"));
-        }, delay),
-      );
-    };
-
-    const onFocus = () => scheduleRefreshBurst();
-    const onVisibilityChange = () => {
-      if (document.visibilityState === "visible") scheduleRefreshBurst();
-    };
-
-    window.addEventListener("focus", onFocus);
-    document.addEventListener("visibilitychange", onVisibilityChange);
-    authRefreshCleanupRef.current = () => {
-      window.removeEventListener("focus", onFocus);
-      document.removeEventListener("visibilitychange", onVisibilityChange);
-    };
-
-    if (!popup) return;
-    if (authRefreshTimerRef.current !== null) {
-      window.clearInterval(authRefreshTimerRef.current);
-      authRefreshTimerRef.current = null;
-    }
-    authRefreshTimerRef.current = window.setInterval(() => {
-      if (popup.closed) scheduleRefreshBurst();
-    }, 1000);
+    return payload;
   };
 
   useEffect(() => {
     refresh()
       .catch((err) => setError(err instanceof Error ? err.message : "Failed to load control plane"))
       .finally(() => setLoading(false));
-  }, []);
-
-  useEffect(() => {
-    return () => {
-      clearAuthRefreshWatchers();
-    };
   }, []);
 
   useEffect(() => {
@@ -2417,27 +2354,94 @@ function DashboardApp({ clerkEnabled = false }: { clerkEnabled?: boolean }) {
     await refresh();
   };
 
-  const openConnectUrl = (url: string | null) => {
-    if (!url) return null;
-    return window.open(url, "_blank", "noopener,noreferrer");
+  const delay = (ms: number) => new Promise((resolve) => window.setTimeout(resolve, ms));
+
+  const openConnectPopup = () => {
+    const popup = window.open("", "_blank", "width=520,height=720");
+    if (!popup) return null;
+    try {
+      popup.document.title = "Connect tool";
+      popup.document.body.innerHTML =
+        '<div style="min-height:100vh;display:grid;place-items:center;margin:0;background:#0b0f19;color:#f8fafc;font-family:system-ui,-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif"><div style="text-align:center"><div style="margin-bottom:12px">Connecting...</div><div style="color:#94a3b8;font-size:14px">Waiting for Composio</div></div></div>';
+      popup.opener = null;
+    } catch {
+      // The blank shell is best effort; navigation below is what matters.
+    }
+    return popup;
+  };
+
+  const navigateConnectPopup = (popup: Window | null, url: string | null) => {
+    if (!url) return false;
+    if (popup && !popup.closed) {
+      popup.location.href = url;
+      return true;
+    }
+    const fallback = window.open(url, "_blank", "noopener,noreferrer");
+    return Boolean(fallback);
+  };
+
+  const waitForToolConnection = async (spaceId: string, toolId: string, popup: Window | null) => {
+    const deadline = Date.now() + 3 * 60 * 1000;
+    let popupClosedAt: number | null = null;
+
+    while (Date.now() < deadline) {
+      const status = await loadComposioToolStatus(spaceId, toolId).catch(() => null);
+      if (status?.authState === "connected") return true;
+
+      if (popup?.closed) {
+        popupClosedAt ??= Date.now();
+        if (Date.now() - popupClosedAt > 10_000) return false;
+      }
+
+      await delay(1_500);
+    }
+
+    return false;
+  };
+
+  const enableConnectedTool = async (spaceId: string, toolId: string) => {
+    const payload = await refresh();
+    const space = payload.spaces.find((item) => item.id === spaceId);
+    if (!space) return;
+    const enabledConnections = space.tools
+      .filter((tool) => isComposioTool(tool) && tool.authState === "connected")
+      .filter((tool) => tool.id === toolId || tool.enabled)
+      .map((tool) => tool.id);
+    await updateSpaceConfig(spaceId, { enabledConnections });
+    await refresh();
   };
 
   const handleAuthTool = async (spaceId: string, toolId: string) => {
     const authKey = `${spaceId}:${toolId}`;
+    const popup = openConnectPopup();
     setAuthLoadingToolId(authKey);
     updateSpace(spaceId, (s) => ({
       ...s,
       tools: s.tools.map((t) =>
-        t.id === toolId ? { ...t, authState: "requires_auth", enabled: true } : t
+        t.id === toolId ? { ...t, authState: "requires_auth", enabled: false } : t
       ),
     }));
     try {
       const auth = await authorizeComposioTool(spaceId, toolId);
-      scheduleAuthReturnRefresh(openConnectUrl(auth.connectUrl));
-      await refresh();
+      const opened = navigateConnectPopup(popup, auth.connectUrl);
+      if (!opened && auth.connectUrl) {
+        setError("The Composio popup was blocked. Allow popups for Tags and try again.");
+        await refresh().catch(() => undefined);
+        return false;
+      }
+      const connected = await waitForToolConnection(spaceId, toolId, popup);
+      if (!connected) {
+        setError("Composio authentication did not finish. Complete the connection window and try again.");
+        await refresh().catch(() => undefined);
+        return false;
+      }
+      await enableConnectedTool(spaceId, toolId);
+      return true;
     } catch (err) {
+      if (popup && !popup.closed) popup.close();
       setError(err instanceof Error ? err.message : "Failed to authenticate tool");
       await refresh().catch(() => undefined);
+      return false;
     } finally {
       setAuthLoadingToolId((current) => (current === authKey ? null : current));
     }
@@ -2445,14 +2449,15 @@ function DashboardApp({ clerkEnabled = false }: { clerkEnabled?: boolean }) {
 
   const handleAddTool = async (spaceId: string, composio: ComposioDirectoryTool) => {
     const space = spaces.find((s) => s.id === spaceId);
-    if (!space) return;
+    if (!space) return false;
     const authKey = `${spaceId}:${composio.id}`;
+    const popup = openConnectPopup();
     setAuthLoadingToolId(authKey);
     updateSpace(spaceId, (s) => ({
       ...s,
       tools: s.tools.some((tool) => tool.id === composio.id)
         ? s.tools.map((tool) =>
-            tool.id === composio.id ? { ...tool, authState: "requires_auth", enabled: true } : tool
+            tool.id === composio.id ? { ...tool, authState: "requires_auth", enabled: false } : tool
           )
         : [
             ...s.tools,
@@ -2465,18 +2470,32 @@ function DashboardApp({ clerkEnabled = false }: { clerkEnabled?: boolean }) {
               logoUrl: composio.logoUrl,
               categories: composio.categories,
               toolsCount: composio.toolsCount,
-              enabled: true,
+              enabled: false,
               authState: composio.noAuth ? "connected" : "requires_auth",
             },
           ],
     }));
     try {
       const auth = await authorizeComposioTool(spaceId, composio.id);
-      scheduleAuthReturnRefresh(openConnectUrl(auth.connectUrl));
-      await refresh();
+      const opened = navigateConnectPopup(popup, auth.connectUrl);
+      if (!opened && auth.connectUrl) {
+        setError("The Composio popup was blocked. Allow popups for Tags and try again.");
+        await refresh().catch(() => undefined);
+        return false;
+      }
+      const connected = await waitForToolConnection(spaceId, composio.id, popup);
+      if (!connected) {
+        setError("Composio authentication did not finish. Complete the connection window and try again.");
+        await refresh().catch(() => undefined);
+        return false;
+      }
+      await enableConnectedTool(spaceId, composio.id);
+      return true;
     } catch (err) {
+      if (popup && !popup.closed) popup.close();
       setError(err instanceof Error ? err.message : "Failed to add tool");
       await refresh().catch(() => undefined);
+      return false;
     } finally {
       setAuthLoadingToolId((current) => (current === authKey ? null : current));
     }
@@ -2489,7 +2508,7 @@ function DashboardApp({ clerkEnabled = false }: { clerkEnabled?: boolean }) {
       .filter((tool) => isComposioTool(tool) && tool.id !== toolId)
       .map((tool) => tool.id);
     const enabledConnections = space.tools
-      .filter((tool) => isComposioTool(tool) && tool.id !== toolId && tool.enabled)
+      .filter((tool) => isComposioTool(tool) && tool.id !== toolId && tool.enabled && tool.authState === "connected")
       .map((tool) => tool.id);
     updateSpace(spaceId, (s) => ({
       ...s,
