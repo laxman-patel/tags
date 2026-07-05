@@ -128,7 +128,7 @@ const clerkAccountAppearance = {
 
 function FallbackAccountFooter() {
   return (
-    <div className="flex items-center gap-2 px-2 py-2">
+    <div className="flex items-center gap-2 px-2 py-2 group-data-[state=collapsed]/sidebar:justify-center">
       <div className="w-7 h-7 rounded-full bg-kumo-tint flex items-center justify-center shrink-0">
         <Text size="xs">A</Text>
       </div>
@@ -158,7 +158,7 @@ function ClerkAccountFooter() {
   return (
     <div className="px-2 py-2">
       {isSignedIn ? (
-        <div className="relative flex items-center gap-2">
+        <div className="relative flex items-center gap-2 group-data-[state=collapsed]/sidebar:justify-center">
           <button
             type="button"
             aria-label="Manage account"
@@ -169,7 +169,10 @@ function ClerkAccountFooter() {
                 ?.click();
             }}
           />
-          <div ref={triggerRef} className="absolute left-0 top-1/2 -translate-y-1/2">
+          <div
+            ref={triggerRef}
+            className="absolute left-0 top-1/2 -translate-y-1/2 group-data-[state=collapsed]/sidebar:left-1/2 group-data-[state=collapsed]/sidebar:-translate-x-1/2"
+          >
             <UserButton
               appearance={clerkAccountAppearance}
               userProfileMode="modal"
@@ -186,7 +189,10 @@ function ClerkAccountFooter() {
         </div>
       ) : (
         <SignInButton mode="modal">
-          <button type="button" className="flex w-full items-center gap-2 rounded-md text-left">
+          <button
+            type="button"
+            className="flex w-full items-center gap-2 rounded-md text-left group-data-[state=collapsed]/sidebar:justify-center"
+          >
             <div className="w-7 h-7 rounded-full bg-kumo-tint flex items-center justify-center shrink-0">
               <Text size="xs">A</Text>
             </div>
@@ -2044,7 +2050,7 @@ export default function App({ clerkEnabled = false }: { clerkEnabled?: boolean }
       >
         <Sidebar>
           <Sidebar.Header>
-            <div className="flex items-center gap-2 px-2 py-1">
+            <div className="flex items-center gap-2 px-2 py-1 group-data-[state=collapsed]/sidebar:justify-center">
               <img
                 src={tagsLogo}
                 alt="Tags"
