@@ -2243,7 +2243,7 @@ function DashboardApp({ clerkEnabled = false }: { clerkEnabled?: boolean }) {
               </Sidebar.Menu>
             </Sidebar.Group>
 
-            <Sidebar.Group className="mt-6 border-t border-kumo-hairline pt-4 group-data-[state=collapsed]/sidebar:mt-4 group-data-[state=collapsed]/sidebar:pt-4">
+            <Sidebar.Group className="mt-6 pt-4 group-not-data-[state=collapsed]/sidebar:border-t group-not-data-[state=collapsed]/sidebar:border-kumo-hairline group-data-[state=collapsed]/sidebar:mt-0 group-data-[state=collapsed]/sidebar:pt-0">
               <Sidebar.GroupLabel DANGEROUS_className="group-data-[state=collapsed]/sidebar:hidden">
                 Settings
               </Sidebar.GroupLabel>
