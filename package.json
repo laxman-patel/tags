@@ -2,6 +2,7 @@
   "name": "tags",
   "private": true,
   "scripts": {
+    "dev": "pnpm --filter @tags/control-plane dev",
     "build": "pnpm -r build",
     "test": "vitest run",
     "test:watch": "vitest",

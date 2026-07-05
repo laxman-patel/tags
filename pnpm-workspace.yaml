@@ -1,3 +1,4 @@
 packages:
   - "apps/*"
+  - "tags-web-ui-new"
   - "packages/*"
