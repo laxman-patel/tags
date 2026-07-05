@@ -54,6 +54,7 @@ import {
   and,
   desc,
   eq,
+  gte,
   inArray,
   isNull,
   runs,
@@ -645,7 +646,7 @@ async function buildActivityPayload(db: Db, organizationId: string) {
       status: runs.status,
     })
     .from(runs)
-    .where(and(eq(runs.organizationId, organizationId), sql`${runs.startedAt} >= ${startHour}`));
+    .where(and(eq(runs.organizationId, organizationId), gte(runs.startedAt, startHour)));
 
   for (const row of rows) {
     const bucketDate = new Date(row.startedAt);
