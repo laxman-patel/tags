@@ -6,7 +6,8 @@ import type { RuntimeProviderConfig } from "./providers";
 const runtimeSecretsSchema = z.object({
   DATABASE_URL: z.string().min(1),
   FIREWORKS_API_KEY: z.string().min(1),
-  SLACK_BOT_TOKEN: z.string().min(1),
+  SLACK_BOT_TOKEN: z.string().optional(),
+  TAGS_ENCRYPTION_KEY: z.string().optional(),
   NEXT_PUBLIC_APP_URL: z.url().default("http://localhost:3000"),
   E2B_API_KEY: z.string().optional(),
   E2B_OPENCODE_TEMPLATE: z.string().optional(),
@@ -27,7 +28,8 @@ const runtimeSecretsSchema = z.object({
 export type RuntimeSecrets = {
   databaseUrl: string;
   fireworksApiKey: string;
-  slackBotToken: string;
+  slackBotToken?: string;
+  encryptionKey?: string;
   appUrl: string;
   e2bApiKey?: string;
   e2bOpencodeTemplate?: string;
@@ -61,6 +63,7 @@ export function loadRuntimeSecrets(): RuntimeSecrets {
     databaseUrl: env.DATABASE_URL,
     fireworksApiKey: env.FIREWORKS_API_KEY,
     slackBotToken: env.SLACK_BOT_TOKEN,
+    encryptionKey: env.TAGS_ENCRYPTION_KEY,
     appUrl: env.NEXT_PUBLIC_APP_URL,
     e2bApiKey: env.E2B_API_KEY,
     e2bOpencodeTemplate: env.E2B_OPENCODE_TEMPLATE,
@@ -79,9 +82,12 @@ export function loadRuntimeSecrets(): RuntimeSecrets {
   };
 }
 
-export function buildRuntimeProviderConfig(secrets: RuntimeSecrets): RuntimeProviderConfig {
+export function buildRuntimeProviderConfig(
+  secrets: RuntimeSecrets,
+  overrides?: { slackBotToken?: string },
+): RuntimeProviderConfig {
   const config: RuntimeProviderConfig = {
-    slackBotToken: secrets.slackBotToken,
+    slackBotToken: overrides?.slackBotToken ?? secrets.slackBotToken,
     composioApiKey: secrets.composioApiKey,
     e2bApiKey: secrets.e2bApiKey,
     e2bOpencodeTemplate: secrets.e2bOpencodeTemplate,

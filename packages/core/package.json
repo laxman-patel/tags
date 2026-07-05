@@ -17,12 +17,16 @@
     "./artifacts": "./src/artifacts.ts",
     "./usage": "./src/usage.ts",
     "./policies": "./src/policies.ts",
+    "./users": "./src/users.ts",
     "./schedules": "./src/schedules.ts",
     "./questions": "./src/questions.ts",
     "./space-sandboxes": "./src/space-sandboxes.ts",
     "./session-search": "./src/session-search.ts",
     "./model-labels": "./src/model-labels.ts",
-    "./tools": "./src/tools.ts"
+    "./tools": "./src/tools.ts",
+    "./accounts": "./src/accounts.ts",
+    "./secret-box": "./src/secret-box.ts",
+    "./slack-installations": "./src/slack-installations.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"

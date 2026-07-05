@@ -30,3 +30,15 @@ export { SlackStreamAdapter } from "./stream-adapter";
 export { verifySlackSignature } from "./verify";
 export { syncSlackThreadToDb } from "./sync-thread";
 export { globalSlackRateLimiter } from "./rate-limit";
+export {
+  DEFAULT_SLACK_BOT_SCOPES,
+  buildSlackAuthorizeUrl,
+  exchangeSlackOAuthCode,
+  type SlackOAuthAccessResponse,
+} from "./oauth";
+export {
+  authTest,
+  joinSlackChannel,
+  listSlackChannels,
+  type SlackChannelSummary,
+} from "./channels";

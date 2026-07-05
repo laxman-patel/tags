@@ -1,3 +1,4 @@
+import type { ComponentType, FormEvent, ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
 import {
   SignInButton,
@@ -102,6 +103,14 @@ type View =
   | { page: "runs" }
   | { page: "run-detail"; id: string };
 
+type SlackWorkspace = {
+  id: string;
+  teamId: string;
+  name?: string | null;
+  botUserId?: string | null;
+  scopes: string[];
+};
+
 function FallbackAccountFooter() {
   return (
     <div className="flex items-center gap-2 px-2 py-2 group-data-[state=collapsed]/sidebar:justify-center">
@@ -181,6 +190,56 @@ function ClerkAccountFooter() {
           </button>
         </SignInButton>
       )}
+    </div>
+  );
+}
+
+function SignInScreen() {
+  return (
+    <div data-mode="dark" className="flex min-h-screen items-center justify-center bg-kumo-canvas p-4">
+      <LayerCard className="w-full max-w-sm">
+        <LayerCard.Primary>
+          <div className="flex flex-col items-center gap-4 text-center">
+            <img src={tagsLogo} alt="Tags" className="h-10 w-10 rounded-md object-contain" />
+            <div>
+              <Text variant="heading3" as="h1">Tags</Text>
+              <Text variant="secondary" size="sm" as="p">
+                Sign in to manage your Slack Spaces.
+              </Text>
+            </div>
+            <SignInButton mode="modal">
+              <Button variant="primary">Sign in</Button>
+            </SignInButton>
+          </div>
+        </LayerCard.Primary>
+      </LayerCard>
+    </div>
+  );
+}
+
+function SlackConnectEmpty() {
+  return (
+    <div className="flex min-h-[calc(100vh-3rem)] items-center justify-center p-4">
+      <LayerCard className="w-full max-w-lg">
+        <LayerCard.Primary>
+          <Empty
+            icon={<ChatCircleIcon size={40} />}
+            title="Connect Slack workspace"
+            description="Connect one Slack workspace to this Tags account before creating Spaces."
+          />
+          <div className="mt-5 flex justify-center">
+            <Button
+              variant="primary"
+              icon={ArrowSquareOutIcon}
+              onClick={() => {
+                window.location.href = "/api/slack/oauth/start";
+              }}
+            >
+              Connect Slack
+            </Button>
+          </div>
+        </LayerCard.Primary>
+      </LayerCard>
     </div>
   );
 }
@@ -451,8 +510,8 @@ function PageHeader({
 }: {
   title: string;
   description?: string;
-  actions?: React.ReactNode;
-  breadcrumb?: React.ReactNode;
+  actions?: ReactNode;
+  breadcrumb?: ReactNode;
 }) {
   return (
     <div className="flex items-start justify-between gap-4 mb-6">
@@ -477,7 +536,7 @@ function SectionHeader({
   action,
 }: {
   title: string;
-  action?: React.ReactNode;
+  action?: ReactNode;
 }) {
   return (
     null
@@ -554,7 +613,7 @@ function StatusLine({ space }: { space: Space }) {
 interface Metric {
   label: string;
   value: string | number;
-  icon: React.ReactNode;
+  icon: ReactNode;
   tone?: "default" | "danger";
 }
 
@@ -593,12 +652,14 @@ function MetricGrid({ metrics }: { metrics: Metric[] }) {
 function SpacesView({
   spaces,
   runs,
+  slackWorkspace,
   onSelectSpace,
   onNewSpace,
   onSelectRun,
 }: {
   spaces: Space[];
   runs: Run[];
+  slackWorkspace: SlackWorkspace;
   onSelectSpace: (id: string) => void;
   onNewSpace: () => void;
   onSelectRun: (id: string) => void;
@@ -635,7 +696,19 @@ function SpacesView({
             )}
           </div>
         </div>
-        <div className="shrink-0">
+        <div className="flex shrink-0 flex-col items-stretch gap-2 sm:items-end">
+          <Badge variant="success" appearance="dot">
+            {slackWorkspace.name || slackWorkspace.teamId}
+          </Badge>
+          <Button
+            variant="secondary"
+            icon={ArrowClockwiseIcon}
+            onClick={() => {
+              window.location.href = "/api/slack/oauth/start";
+            }}
+          >
+            Reconnect Slack
+          </Button>
           <Button variant="primary" icon={PlusIcon} onClick={onNewSpace}>
             New Space
           </Button>
@@ -1261,7 +1334,7 @@ function SpaceDetailView({
   );
 }
 
-const SPACE_ICONS: Record<string, React.ComponentType<{ size?: number; weight?: "fill" | "duotone" | "regular"; className?: string }>> = {
+const SPACE_ICONS: Record<string, ComponentType<{ size?: number; weight?: "fill" | "duotone" | "regular"; className?: string }>> = {
   sp_01: HeadsetIcon,
   sp_02: CodeIcon,
   sp_03: ChartLineUpIcon,
@@ -1274,7 +1347,7 @@ function getSpaceIcon(id: string) {
 
 const ACTION_META: Record<
   string,
-  { icon: React.ComponentType<{ size?: number; className?: string }>; variant: "warning" | "info" | "error" | "primary" }
+  { icon: ComponentType<{ size?: number; className?: string }>; variant: "warning" | "info" | "error" | "primary" }
 > = {
   search_thread: { icon: ChatCircleIcon, variant: "info" },
   search_channel: { icon: HashIcon, variant: "info" },
@@ -1512,7 +1585,7 @@ function RunsView({ runs, onSelectRun }: { runs: Run[]; onSelectRun: (id: string
 }
 
 function RunDetailView({ run, events, onBack }: { run: Run; events: RunEvent[]; onBack: () => void }) {
-  const eventIconMap: Record<RunEventType, React.ReactNode> = {
+  const eventIconMap: Record<RunEventType, ReactNode> = {
     start: <PlayIcon size={14} className="text-kumo-subtle" />,
     tool_call: <LightningIcon size={14} className="text-kumo-info" />,
     approval: <ShieldCheckIcon size={14} className="text-kumo-warning" />,
@@ -1607,19 +1680,6 @@ function RunDetailView({ run, events, onBack }: { run: Run; events: RunEvent[]; 
   );
 }
 
-const FALLBACK_SLACK_CHANNELS: SlackChannel[] = [
-  "general",
-  "engineering",
-  "product",
-  "design",
-  "support-bot",
-  "eng-help",
-  "sales-team",
-  "devops-alerts",
-  "incidents",
-  "releases",
-].map((name) => ({ id: name, name, isPrivate: false }));
-
 function NewSpaceDialog({
   open,
   onOpenChange,
@@ -1634,22 +1694,22 @@ function NewSpaceDialog({
   const [name, setName] = useState("");
   const [channelQuery, setChannelQuery] = useState("");
   const [selectedChannel, setSelectedChannel] = useState<SlackChannel | null>(null);
-  const [channels, setChannels] = useState<SlackChannel[]>(FALLBACK_SLACK_CHANNELS);
+  const [channels, setChannels] = useState<SlackChannel[]>([]);
   const [channelsLoading, setChannelsLoading] = useState(false);
-  const [channelSource, setChannelSource] = useState<"slack" | "fallback">("fallback");
+  const [channelError, setChannelError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     if (!open) return;
     setChannelsLoading(true);
+    setChannelError(null);
     loadSlackChannels()
       .then((payload) => {
-        setChannels(payload.channels.length > 0 ? payload.channels : FALLBACK_SLACK_CHANNELS);
-        setChannelSource(payload.source);
+        setChannels(payload.channels);
       })
-      .catch(() => {
-        setChannels(FALLBACK_SLACK_CHANNELS);
-        setChannelSource("fallback");
+      .catch((error) => {
+        setChannels([]);
+        setChannelError(error instanceof Error ? error.message : "Failed to load Slack channels");
       })
       .finally(() => setChannelsLoading(false));
   }, [open]);
@@ -1672,13 +1732,13 @@ function NewSpaceDialog({
     setSubmitting(false);
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    const channelName = selectedChannel?.name ?? channelQuery.trim().replace(/^#/, "");
-    if (!name.trim() || !channelName) return;
+    const channelName = selectedChannel?.name;
+    if (!name.trim() || !selectedChannel || (selectedChannel.isPrivate && !selectedChannel.isMember)) return;
     setSubmitting(true);
     try {
-      await onCreate(name.trim(), channelName, selectedChannel?.id);
+      await onCreate(name.trim(), channelName, selectedChannel.id);
       reset();
       onOpenChange(false);
     } finally {
@@ -1724,7 +1784,7 @@ function NewSpaceDialog({
 
             <Field
               label="Slack channel"
-              description={channelSource === "slack" ? "Select a channel from your Slack workspace." : "Connect Slack to replace these suggestions with workspace channels."}
+              description="Select a channel from your connected Slack workspace."
             >
               <div className="flex flex-col gap-3">
                 <div className="relative">
@@ -1746,6 +1806,10 @@ function NewSpaceDialog({
                     <div className="flex items-center gap-2 px-3 py-3 text-kumo-subtle">
                       <ArrowClockwiseIcon size={14} className="animate-spin" />
                       <Text variant="secondary" size="xs">Loading channels</Text>
+                    </div>
+                  ) : channelError ? (
+                    <div className="px-3 py-3">
+                      <Text variant="error" size="xs">{channelError}</Text>
                     </div>
                   ) : filteredChannels.length === 0 ? (
                     <div className="px-3 py-3">
@@ -1771,14 +1835,22 @@ function NewSpaceDialog({
                             <HashIcon size={14} className="shrink-0" />
                             <Text size="sm" truncate>{channel.name}</Text>
                           </span>
-                          <Badge variant={channel.isPrivate ? "warning" : "neutral"} appearance="dot">
-                            {channel.isPrivate ? "Private" : "Public"}
-                          </Badge>
+                          <span className="flex shrink-0 items-center gap-1">
+                            <Badge variant={channel.isPrivate ? "warning" : "neutral"} appearance="dot">
+                              {channel.isPrivate ? "Private" : "Public"}
+                            </Badge>
+                            {channel.isMember && <Badge variant="success" appearance="dot">Member</Badge>}
+                          </span>
                         </button>
                       );
                     })
                   )}
                 </div>
+                {selectedChannel?.isPrivate && !selectedChannel.isMember && (
+                  <Text variant="secondary" size="xs" as="p">
+                    Invite the Tags app to this private channel in Slack, then refresh channels.
+                  </Text>
+                )}
               </div>
             </Field>
           </div>
@@ -1794,7 +1866,12 @@ function NewSpaceDialog({
             <Button
               variant="primary"
               type="submit"
-              disabled={submitting || !name.trim() || !(selectedChannel?.name ?? channelQuery.trim())}
+              disabled={
+                submitting ||
+                !name.trim() ||
+                !selectedChannel ||
+                (selectedChannel.isPrivate && !selectedChannel.isMember)
+              }
             >
               {submitting ? "Creating" : "Create Space"}
             </Button>
@@ -1807,9 +1884,10 @@ function NewSpaceDialog({
 
 // ===== App =====
 
-export default function App({ clerkEnabled = false }: { clerkEnabled?: boolean }) {
+function DashboardApp({ clerkEnabled = false }: { clerkEnabled?: boolean }) {
   const [view, setView] = useState<View>({ page: "spaces" });
   const [newSpaceOpen, setNewSpaceOpen] = useState(false);
+  const [slackWorkspace, setSlackWorkspace] = useState<SlackWorkspace | null>(null);
   const [spaces, setSpaces] = useState<Space[]>([]);
   const [runs, setRuns] = useState<Run[]>([]);
   const [approvals, setApprovals] = useState<Approval[]>([]);
@@ -1820,6 +1898,7 @@ export default function App({ clerkEnabled = false }: { clerkEnabled?: boolean }
   const refresh = async () => {
     setError(null);
     const payload = await loadControlPlane();
+    setSlackWorkspace(payload.slackWorkspace);
     setSpaces(payload.spaces);
     setRuns(payload.runs);
     setApprovals(payload.approvals);
@@ -2092,57 +2171,86 @@ export default function App({ clerkEnabled = false }: { clerkEnabled?: boolean }
             )}
             {!loading && (
               <>
-            {view.page === "spaces" && (
-              <SpacesView
-                spaces={spaces}
-                runs={runs}
-                onSelectSpace={(id) => setView({ page: "space-detail", id })}
-                onNewSpace={() => setNewSpaceOpen(true)}
-                onSelectRun={(id) => setView({ page: "run-detail", id })}
-              />
-            )}
-            {view.page === "space-detail" && currentSpace && (
-              <SpaceDetailView
-                space={currentSpace}
-                runs={runs}
-                onBack={() => setView({ page: "spaces" })}
-                onAuthTool={handleAuthTool}
-                onAddTool={handleAddTool}
-                onRemoveTool={handleRemoveTool}
-                onAddRepo={handleAddRepo}
-                onSetDefaultRepo={handleSetDefaultRepo}
-                onRemoveRepo={handleRemoveRepo}
-                onSelectRun={(id) => setView({ page: "run-detail", id })}
-              />
-            )}
-            {view.page === "approvals" && (
-              <ApprovalsView
-                approvals={approvals}
-                onApprove={handleApprove}
-                onReject={handleReject}
-              />
-            )}
-            {view.page === "runs" && (
-              <RunsView runs={runs} onSelectRun={(id) => setView({ page: "run-detail", id })} />
-            )}
-            {view.page === "run-detail" && currentRun && (
-              <RunDetailView
-                run={currentRun}
-                events={eventsByRun[currentRun.id] ?? []}
-                onBack={() => setView({ page: "runs" })}
-              />
-            )}
+                {!slackWorkspace ? (
+                  <SlackConnectEmpty />
+                ) : (
+                  <>
+                    {view.page === "spaces" && (
+                      <SpacesView
+                        spaces={spaces}
+                        runs={runs}
+                        slackWorkspace={slackWorkspace}
+                        onSelectSpace={(id) => setView({ page: "space-detail", id })}
+                        onNewSpace={() => setNewSpaceOpen(true)}
+                        onSelectRun={(id) => setView({ page: "run-detail", id })}
+                      />
+                    )}
+                    {view.page === "space-detail" && currentSpace && (
+                      <SpaceDetailView
+                        space={currentSpace}
+                        runs={runs}
+                        onBack={() => setView({ page: "spaces" })}
+                        onAuthTool={handleAuthTool}
+                        onAddTool={handleAddTool}
+                        onRemoveTool={handleRemoveTool}
+                        onAddRepo={handleAddRepo}
+                        onSetDefaultRepo={handleSetDefaultRepo}
+                        onRemoveRepo={handleRemoveRepo}
+                        onSelectRun={(id) => setView({ page: "run-detail", id })}
+                      />
+                    )}
+                    {view.page === "approvals" && (
+                      <ApprovalsView
+                        approvals={approvals}
+                        onApprove={handleApprove}
+                        onReject={handleReject}
+                      />
+                    )}
+                    {view.page === "runs" && (
+                      <RunsView runs={runs} onSelectRun={(id) => setView({ page: "run-detail", id })} />
+                    )}
+                    {view.page === "run-detail" && currentRun && (
+                      <RunDetailView
+                        run={currentRun}
+                        events={eventsByRun[currentRun.id] ?? []}
+                        onBack={() => setView({ page: "runs" })}
+                      />
+                    )}
+                  </>
+                )}
               </>
             )}
           </div>
         </main>
-        <NewSpaceDialog
-          open={newSpaceOpen}
-          onOpenChange={setNewSpaceOpen}
-          onCreate={handleCreateSpace}
-          existingChannels={spaces.map((s) => s.channel)}
-        />
+        {slackWorkspace && (
+          <NewSpaceDialog
+            open={newSpaceOpen}
+            onOpenChange={setNewSpaceOpen}
+            onCreate={handleCreateSpace}
+            existingChannels={spaces.map((s) => s.channel)}
+          />
+        )}
       </Sidebar.Provider>
     </div>
   );
+}
+
+function ClerkGate() {
+  const { isLoaded, isSignedIn } = useUser();
+
+  if (!isLoaded) {
+    return (
+      <div data-mode="dark" className="flex min-h-screen items-center justify-center bg-kumo-canvas">
+        <Loader size="lg" />
+      </div>
+    );
+  }
+
+  if (!isSignedIn) return <SignInScreen />;
+
+  return <DashboardApp clerkEnabled />;
+}
+
+export default function App({ clerkEnabled = false }: { clerkEnabled?: boolean }) {
+  return clerkEnabled ? <ClerkGate /> : <DashboardApp clerkEnabled={false} />;
 }

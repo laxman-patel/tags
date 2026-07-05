@@ -14,7 +14,6 @@ import { createArtifact } from "@tags/core/artifacts";
 import { createDb, newId, runs, threads } from "@tags/db";
 import {
   addReaction,
-  createSlackClient,
   postThreadMessage,
   removeReaction,
   SlackStreamAdapter,
@@ -48,7 +47,8 @@ import {
 import type { AgentSegmentResult } from "../agent/types";
 import { runOpencodeSegment, type OpencodeContinuation } from "../agent/opencode-segment";
 import { createRuntimeProviders } from "../providers";
-import { buildRuntimeProviderConfig, loadRuntimeSecrets } from "../secrets";
+import { loadRuntimeSecrets } from "../secrets";
+import { loadWorkspaceRuntime } from "./workspace-slack";
 import { upsertDemoRecordingCommentWithComposio } from "../integrations/composio-github";
 import { loadComposioTools } from "../tools/composio";
 import type { UICard } from "@tags/core/ui-cards";
@@ -168,6 +168,7 @@ export const tagsRunFunction: InngestFunction.Any = inngest.createFunction(
               await step.run(`finalize-rejected-${segmentIndex}`, () =>
                 finalizeRunStep({
                   runId: setup.runId,
+                  workspaceId: input.workspaceId,
                   channelId: input.channelId,
                   slackMessageTs: setup.slackMessageTs,
                   slackStream: setup.slackStream,
@@ -215,6 +216,7 @@ export const tagsRunFunction: InngestFunction.Any = inngest.createFunction(
               await step.run(`finalize-question-timeout-${segmentIndex}`, () =>
                 finalizeRunStep({
                   runId: setup.runId,
+                  workspaceId: input.workspaceId,
                   channelId: input.channelId,
                   slackMessageTs: setup.slackMessageTs,
                   slackStream: setup.slackStream,
@@ -252,7 +254,7 @@ export const tagsRunFunction: InngestFunction.Any = inngest.createFunction(
       );
       if (!input.isScheduled) {
         await step.run("finalize-reaction", () =>
-          finalizeReactionStep(input.channelId, input.triggerMessageTs, threadStatus),
+          finalizeReactionStep(input.workspaceId, input.channelId, input.triggerMessageTs, threadStatus),
         );
       }
       const durationMs = Date.now() - startedAt;
@@ -295,9 +297,7 @@ async function ingestStep(input: TagsRunInput): Promise<RunSetup> {
         "run.scheduled": Boolean(input.isScheduled),
       });
 
-  const secrets = loadRuntimeSecrets();
-  const db = createDb(secrets.databaseUrl);
-  const slack = createSlackClient(secrets.slackBotToken);
+  const { secrets, db, slack } = await loadWorkspaceRuntime(input.workspaceId);
   const config = await loadActiveSpaceConfig(db, input.spaceId);
 
   if (!config) {
@@ -496,11 +496,8 @@ async function recordDemoStep(
         "run.id": setup.runId,
       });
 
-  const secrets = loadRuntimeSecrets();
+  const { secrets, db, slack } = await loadWorkspaceRuntime(input.workspaceId);
   if (!secrets.demoRecording.enabled) return;
-
-  const db = createDb(secrets.databaseUrl);
-  const slack = createSlackClient(secrets.slackBotToken);
   const emit = async (event: TagsEvent) => {
     await appendRunEvent(db, setup.runId, event);
   };
@@ -698,10 +695,7 @@ async function executeDeterministicMemoryCommand(
 }
 
 async function agentSegmentStep(input: TagsRunInput, setup: RunSetup) {
-  const secrets = loadRuntimeSecrets();
-  const db = createDb(secrets.databaseUrl);
-  const slack = createSlackClient(secrets.slackBotToken);
-  const providerConfig = buildRuntimeProviderConfig(secrets);
+  const { db, slack, providerConfig } = await loadWorkspaceRuntime(input.workspaceId);
 
   return runOpencodeSegment({
     db,
@@ -727,9 +721,7 @@ async function executeApprovedToolStep(
   setup: RunSetup,
   segment: { invocationId: string; toolName: string; toolInput: unknown },
 ) {
-  const secrets = loadRuntimeSecrets();
-  const db = createDb(secrets.databaseUrl);
-  const slack = createSlackClient(secrets.slackBotToken);
+  const { secrets, db, slack, providerConfig } = await loadWorkspaceRuntime(input.workspaceId);
   const stream = new SlackStreamAdapter(slack, input.channelId, setup.slackMessageTs, {
     native: setup.slackStream,
   });
@@ -783,7 +775,6 @@ async function executeApprovedToolStep(
     }
   }
 
-  const providerConfig = buildRuntimeProviderConfig(secrets);
   const providers = await createRuntimeProviders(providerConfig);
   const toolOptions = { appUrl: input.appUrl, providerConfig, ...providers };
 
@@ -814,10 +805,7 @@ async function resumeAfterApprovalStep(
   },
   toolResult: { modelOutput: unknown; uiCard?: UICard },
 ) {
-  const secrets = loadRuntimeSecrets();
-  const db = createDb(secrets.databaseUrl);
-  const slack = createSlackClient(secrets.slackBotToken);
-  const providerConfig = buildRuntimeProviderConfig(secrets);
+  const { db, slack, providerConfig } = await loadWorkspaceRuntime(input.workspaceId);
 
   const continuation: OpencodeContinuation = {
     kind: "approved_tool",
@@ -853,10 +841,7 @@ async function resumeAfterQuestionStep(
   segment: { requestId: string; questionText: string },
   answer: string,
 ) {
-  const secrets = loadRuntimeSecrets();
-  const db = createDb(secrets.databaseUrl);
-  const slack = createSlackClient(secrets.slackBotToken);
-  const providerConfig = buildRuntimeProviderConfig(secrets);
+  const { db, slack, providerConfig } = await loadWorkspaceRuntime(input.workspaceId);
 
   const continuation: OpencodeContinuation = {
     kind: "question_answered",
@@ -914,16 +899,14 @@ async function expireQuestionStep(requestId: string) {
 
 async function finalizeRunStep(args: {
   runId: string;
+  workspaceId: string;
   channelId: string;
   slackMessageTs: string;
   slackStream: boolean;
   summaryText: string;
   appUrl?: string;
 }) {
-  const secrets = loadRuntimeSecrets();
-  const db = createDb(secrets.databaseUrl);
-
-  const slack = createSlackClient(secrets.slackBotToken);
+  const { db, slack } = await loadWorkspaceRuntime(args.workspaceId);
   const stream = new SlackStreamAdapter(slack, args.channelId, args.slackMessageTs, {
     native: args.slackStream,
   });
@@ -963,12 +946,12 @@ async function releaseThreadStep(
 }
 
 async function finalizeReactionStep(
+  workspaceId: string,
   channelId: string,
   triggerMessageTs: string,
   status: "done" | "failed",
 ) {
-  const secrets = loadRuntimeSecrets();
-  const slack = createSlackClient(secrets.slackBotToken);
+  const { slack } = await loadWorkspaceRuntime(workspaceId);
   await removeReaction(slack, channelId, triggerMessageTs, "eyes").catch(() => {});
   await addReaction(
     slack,

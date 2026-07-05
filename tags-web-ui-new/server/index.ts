@@ -1,44 +1,79 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
+import { randomBytes } from "node:crypto";
 import { createReadStream, existsSync, readFileSync } from "node:fs";
 import { stat } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { metrics, SpanStatusCode, trace } from "@opentelemetry/api";
+import { createClerkClient, type ClerkClient } from "@clerk/backend";
+import { metrics, SpanStatusCode, trace, type Span } from "@opentelemetry/api";
+import { serve as serveInngest } from "inngest/node";
 import {
   createSpaceConfigVersion,
   createSpaceWithConfig,
   getSpaceById,
   listSpaces,
 } from "@tags/core/spaces-admin";
-import { loadActiveSpaceConfig } from "@tags/core/spaces";
+import { loadActiveSpaceConfig, resolveSpaceByChannel } from "@tags/core/spaces";
 import { recordAuditEvent } from "@tags/core/audit";
+import {
+  getAccountForClerkUser,
+  resolveOrCreateClerkAccount,
+  type TagsAccount,
+} from "@tags/core/accounts";
+import { canApprove } from "@tags/core/policies";
+import { answerQuestionByRequestId, getQuestionByRequestId } from "@tags/core/questions";
+import {
+  OrganizationSlackWorkspaceConflictError,
+  SlackWorkspaceAlreadyConnectedError,
+  assertWorkspaceConnectable,
+  decryptSlackBotToken,
+  getSlackInstallationByTeamId,
+  getSlackInstallationForOrg,
+  upsertSlackInstallation,
+} from "@tags/core/slack-installations";
 import {
   alwaysEnabledNativeTools,
   isNativeToolId,
   NATIVE_TOOL_METADATA,
 } from "@tags/core/tools";
+import { resolveOrCreateUser } from "@tags/core/users";
 import { getUsageBySpace } from "@tags/core/usage";
 import {
   expireApprovalByRequestId,
   listPendingApprovals,
   listRunEventsAfter,
+  resolveApprovalByRequestId,
   resolveApprovalRequest,
 } from "@tags/core/runs";
 import {
   approvalRequests,
   count,
   createDb,
+  and,
   desc,
   eq,
   inArray,
-  organizations,
+  isNull,
   runs,
+  slackOauthStates,
   spaces,
+  sql,
   toolInvocations,
-  workspaces,
   type Db,
 } from "@tags/db";
-import { APPROVAL_RESOLVED_EVENT, inngest } from "@tags/runtime";
+import {
+  APPROVAL_RESOLVED_EVENT,
+  QUESTION_ANSWERED_EVENT,
+  RUN_REQUESTED_EVENT,
+  buildRuntimeProviderConfig,
+  handleTagsMcpRequest,
+  inngest,
+  loadRuntimeSecrets,
+  passiveLearningTickFunction,
+  scheduleTickFunction,
+  tagsRunFunction,
+  type TagsRunInput,
+} from "@tags/runtime";
 import {
   authorizeComposioToolkit,
   listComposioConnectedAccountStatuses,
@@ -46,7 +81,19 @@ import {
   resolveToolkitConnectionStatus,
   type ComposioToolkitDirectoryItem,
 } from "@tags/runtime/tools/composio";
-import { createSlackClient } from "@tags/slack";
+import {
+  DEFAULT_SLACK_BOT_SCOPES,
+  addReaction,
+  buildSlackAuthorizeUrl,
+  createSlackClient,
+  exchangeSlackOAuthCode,
+  joinSlackChannel,
+  listSlackChannels,
+  postThreadMessage,
+  startStream,
+  updateMessage,
+  verifySlackSignature,
+} from "@tags/slack";
 import { createServer as createViteServer, type ViteDevServer } from "vite";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -58,8 +105,15 @@ const port = Number(process.env.PORT ?? 3000);
 const tracer = trace.getTracer("tags.control_plane");
 const meter = metrics.getMeter("tags.control_plane");
 const apiRequestsCompleted = meter.createCounter("control_plane.api.requests.completed");
+const businessOperationsCompleted = meter.createCounter("control_plane.business.operations.completed");
 
 let db: Db | null = null;
+let clerkClient: ClerkClient | null = null;
+
+const inngestHandler = serveInngest({
+  client: inngest,
+  functions: [tagsRunFunction, scheduleTickFunction, passiveLearningTickFunction],
+});
 
 function loadDotEnv() {
   for (const file of [path.join(workspaceRoot, ".env"), path.join(appRoot, ".env")]) {
@@ -79,6 +133,44 @@ function loadDotEnv() {
 }
 
 loadDotEnv();
+validateRuntimeEnv();
+
+function getAppUrl(): string {
+  return (process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000").replace(/\/$/, "");
+}
+
+function requireEnv(name: string): string {
+  const value = process.env[name];
+  if (!value) throw new Error(`${name} is required`);
+  return value;
+}
+
+function validateRuntimeEnv() {
+  const required = ["DATABASE_URL", "NEXT_PUBLIC_APP_URL"];
+  if (isProduction) {
+    required.push(
+      "SLACK_CLIENT_ID",
+      "SLACK_CLIENT_SECRET",
+      "SLACK_SIGNING_SECRET",
+      "TAGS_ENCRYPTION_KEY",
+      "CLERK_SECRET_KEY",
+      "NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY",
+    );
+  }
+
+  const missing = required.filter((name) => !process.env[name]);
+  if (missing.length > 0) {
+    throw new Error(`Missing required environment variables: ${missing.join(", ")}`);
+  }
+
+  const encryptionKey = process.env.TAGS_ENCRYPTION_KEY;
+  if (encryptionKey) {
+    const key = Buffer.from(encryptionKey, "base64");
+    if (key.byteLength !== 32) {
+      throw new Error("TAGS_ENCRYPTION_KEY must be a base64-encoded 32-byte key");
+    }
+  }
+}
 
 function getDb(): Db {
   if (!db) {
@@ -86,6 +178,16 @@ function getDb(): Db {
     db = createDb(process.env.DATABASE_URL);
   }
   return db;
+}
+
+function getClerkClient(): ClerkClient {
+  if (!clerkClient) {
+    clerkClient = createClerkClient({
+      secretKey: requireEnv("CLERK_SECRET_KEY"),
+      publishableKey: requireEnv("NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY"),
+    });
+  }
+  return clerkClient;
 }
 
 type JsonValue = Record<string, unknown> | unknown[] | string | number | boolean | null;
@@ -99,20 +201,162 @@ function sendJson(res: ServerResponse, status: number, body: JsonValue) {
   res.end(payload);
 }
 
-async function readJson(req: IncomingMessage): Promise<unknown> {
+function sendRedirect(res: ServerResponse, location: string, status = 302) {
+  res.writeHead(status, { location });
+  res.end();
+}
+
+async function readRawBody(req: IncomingMessage): Promise<string> {
   const chunks: Buffer[] = [];
   for await (const chunk of req) chunks.push(Buffer.from(chunk));
-  const body = Buffer.concat(chunks).toString("utf8");
+  return Buffer.concat(chunks).toString("utf8");
+}
+
+async function readJson(req: IncomingMessage): Promise<unknown> {
+  const body = await readRawBody(req);
   if (!body) return {};
   return JSON.parse(body);
 }
 
-function requireAdmin(req: IncomingMessage): boolean {
-  const token = process.env.ADMIN_TOKEN;
-  if (!token) return true;
-  const auth = req.headers.authorization;
-  const header = req.headers["x-tags-admin-token"];
-  return auth === `Bearer ${token}` || header === token;
+async function writeWebResponse(res: ServerResponse, response: Response) {
+  const headers: Record<string, string> = {};
+  response.headers.forEach((value, key) => {
+    headers[key] = value;
+  });
+  res.writeHead(response.status, headers);
+  if (response.body) {
+    const reader = response.body.getReader();
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      res.write(value);
+    }
+  }
+  res.end();
+}
+
+type AccountContext = TagsAccount & {
+  clerkUserId: string;
+};
+
+type SlackEventPayload = {
+  type?: string;
+  challenge?: string;
+  team_id?: string;
+  event?: {
+    type?: string;
+    subtype?: string;
+    bot_id?: string;
+    user?: string;
+    channel?: string;
+    text?: string;
+    ts?: string;
+    thread_ts?: string;
+  };
+};
+
+type SlackBlockActionPayload = {
+  type: "block_actions";
+  team?: { id?: string };
+  user?: { id?: string; username?: string };
+  trigger_id?: string;
+  channel?: { id?: string };
+  message?: { ts?: string };
+  actions?: Array<{ action_id?: string; value?: string }>;
+};
+
+type SlackViewSubmissionPayload = {
+  type: "view_submission";
+  team?: { id?: string };
+  user?: { id?: string };
+  view: {
+    callback_id?: string;
+    private_metadata?: string;
+    state: {
+      values: Record<string, Record<string, { value?: string }>>;
+    };
+  };
+};
+
+type SlackInteractionPayload = SlackBlockActionPayload | SlackViewSubmissionPayload;
+
+function authorizedParties(): string[] {
+  const parties = new Set<string>([
+    getAppUrl(),
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+  ]);
+  try {
+    parties.add(new URL(getAppUrl()).origin);
+  } catch {
+    // validateRuntimeEnv catches malformed production values.
+  }
+  return [...parties];
+}
+
+function incomingHeaders(req: IncomingMessage): Headers {
+  const headers = new Headers();
+  for (const [key, value] of Object.entries(req.headers)) {
+    if (Array.isArray(value)) {
+      for (const item of value) headers.append(key, item);
+    } else if (value !== undefined) {
+      headers.set(key, value);
+    }
+  }
+  return headers;
+}
+
+async function requireAccount(req: IncomingMessage, db: Db): Promise<AccountContext> {
+  return await tracer.startActiveSpan("account.resolve", async (span) => {
+    try {
+      const requestUrl = new URL(req.url ?? "/", `http://${req.headers.host ?? "localhost"}`);
+      const request = new Request(requestUrl.href, {
+        method: req.method ?? "GET",
+        headers: incomingHeaders(req),
+      });
+      const state = await getClerkClient().authenticateRequest(request, {
+        authorizedParties: authorizedParties(),
+      });
+
+      if (!state.isAuthenticated) {
+        businessOperationsCompleted.add(1, { operation: "account.resolve", outcome: "unauthorized" });
+        throw Object.assign(new Error("Unauthorized"), { statusCode: 401 });
+      }
+
+      const auth = state.toAuth();
+      if (!auth || !auth.userId) {
+        businessOperationsCompleted.add(1, { operation: "account.resolve", outcome: "unauthorized" });
+        throw Object.assign(new Error("Unauthorized"), { statusCode: 401 });
+      }
+
+      const clerkUser = await getClerkClient().users.getUser(auth.userId);
+      const account = await resolveOrCreateClerkAccount(db, {
+        id: clerkUser.id,
+        fullName: clerkUser.fullName,
+        username: clerkUser.username,
+        primaryEmailAddress: clerkUser.primaryEmailAddress,
+      });
+
+      span.setAttributes({
+        "organization.id": account.organization.id,
+        "user.id": account.user.id,
+        outcome: "success",
+      });
+      businessOperationsCompleted.add(1, { operation: "account.resolve", outcome: "success" });
+      return { ...account, clerkUserId: auth.userId };
+    } catch (error) {
+      span.recordException(error as Error);
+      span.setStatus({ code: SpanStatusCode.ERROR });
+      if ((error as { statusCode?: number }).statusCode !== 401) {
+        businessOperationsCompleted.add(1, { operation: "account.resolve", outcome: "failure" });
+      }
+      throw error;
+    } finally {
+      span.end();
+    }
+  });
 }
 
 function slugify(value: string) {
@@ -126,27 +370,6 @@ function slugify(value: string) {
 function asStringArray(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
   return value.map((entry) => (typeof entry === "string" ? entry.trim() : "")).filter(Boolean);
-}
-
-async function getDefaultOrgId(db: Db) {
-  const orgsWithSpaces = await db
-    .select({ id: organizations.id })
-    .from(organizations)
-    .innerJoin(spaces, eq(spaces.organizationId, organizations.id))
-    .limit(1);
-  if (orgsWithSpaces[0]?.id) return orgsWithSpaces[0].id;
-
-  const rows = await db.select().from(organizations).limit(1);
-  return rows[0]?.id ?? "";
-}
-
-async function getDefaultWorkspace(db: Db, organizationId: string) {
-  const rows = await db
-    .select()
-    .from(workspaces)
-    .where(eq(workspaces.organizationId, organizationId))
-    .limit(1);
-  return rows[0] ?? null;
 }
 
 function formatDate(value: Date | string | null | undefined) {
@@ -211,19 +434,6 @@ const FALLBACK_COMPOSIO_DIRECTORY: ComposioToolkitDirectoryItem[] = [
   { id: "dropbox", name: "Dropbox", description: "Find, read, and manage Dropbox files.", categories: ["Storage"], toolsCount: 12 },
 ];
 
-const FALLBACK_SLACK_CHANNELS = [
-  "general",
-  "engineering",
-  "product",
-  "design",
-  "support-bot",
-  "eng-help",
-  "sales-team",
-  "devops-alerts",
-  "incidents",
-  "releases",
-].map((name) => ({ id: name, name, isPrivate: false }));
-
 function toolkitName(toolkitId: string) {
   return toolkitId
     .split(/[_-]/g)
@@ -260,41 +470,35 @@ async function loadComposioDirectory() {
   }
 }
 
-async function loadSlackChannels() {
-  const token = process.env.SLACK_BOT_TOKEN ?? "";
-  if (!token) return { channels: FALLBACK_SLACK_CHANNELS, source: "fallback" as const };
+async function getAccountSlackClient(db: Db, organizationId: string) {
+  const installation = await getSlackInstallationForOrg(db, organizationId);
+  if (!installation) return null;
+  const token = decryptSlackBotToken(installation, requireEnv("TAGS_ENCRYPTION_KEY"));
+  return { installation, client: createSlackClient(token), token };
+}
 
-  const client = createSlackClient(token);
-  const channels: Array<{ id: string; name: string; isPrivate: boolean }> = [];
-  let cursor: string | undefined;
-
-  try {
-    do {
-      const page = await client.conversations.list({
-        cursor,
-        exclude_archived: true,
-        limit: 200,
-        types: "public_channel,private_channel",
-      });
-      for (const channel of page.channels ?? []) {
-        if (!channel.id || !channel.name) continue;
-        channels.push({
-          id: channel.id,
-          name: channel.name,
-          isPrivate: Boolean(channel.is_private),
-        });
+async function loadSlackChannelsForAccount(db: Db, organizationId: string) {
+  return await tracer.startActiveSpan("slack.channels.list", async (span) => {
+    try {
+      span.setAttribute("organization.id", organizationId);
+      const slack = await getAccountSlackClient(db, organizationId);
+      if (!slack) {
+        businessOperationsCompleted.add(1, { operation: "slack.channels.list", outcome: "not_connected" });
+        return { channels: [], source: "slack" as const };
       }
-      cursor = page.response_metadata?.next_cursor || undefined;
-    } while (cursor);
-  } catch (error) {
-    console.warn("[control-plane] failed to load Slack channels", error);
-    return { channels: FALLBACK_SLACK_CHANNELS, source: "fallback" as const };
-  }
-
-  return {
-    channels: channels.length > 0 ? channels : FALLBACK_SLACK_CHANNELS,
-    source: channels.length > 0 ? ("slack" as const) : ("fallback" as const),
-  };
+      const channels = await listSlackChannels(slack.client);
+      businessOperationsCompleted.add(1, { operation: "slack.channels.list", outcome: "success" });
+      span.setAttributes({ outcome: "success", "slack.channels.count": channels.length });
+      return { channels, source: "slack" as const };
+    } catch (error) {
+      span.recordException(error as Error);
+      span.setStatus({ code: SpanStatusCode.ERROR });
+      businessOperationsCompleted.add(1, { operation: "slack.channels.list", outcome: "failure" });
+      throw error;
+    } finally {
+      span.end();
+    }
+  });
 }
 
 function legacyComposioConnections(enabledTools: string[] | undefined) {
@@ -435,15 +639,31 @@ async function buildApprovalsPayload(db: Db, organizationId: string) {
   });
 }
 
-async function loadControlPlane(db: Db, req: IncomingMessage) {
-  const organizationId = String(req.headers["x-tags-org-id"] ?? "") || (await getDefaultOrgId(db));
-  if (!organizationId) return { organizationId: "", spaces: [], runs: [], approvals: [] };
-  const [spaceItems, runItems, approvalItems] = await Promise.all([
+async function loadControlPlane(db: Db, organizationId: string) {
+  if (!organizationId) {
+    return { organizationId: "", spaces: [], runs: [], approvals: [], slackWorkspace: null };
+  }
+  const [spaceItems, runItems, approvalItems, slackInstallation] = await Promise.all([
     buildSpacesPayload(db, organizationId),
     buildRunsPayload(db, organizationId),
     buildApprovalsPayload(db, organizationId),
+    getSlackInstallationForOrg(db, organizationId),
   ]);
-  return { organizationId, spaces: spaceItems, runs: runItems, approvals: approvalItems };
+  return {
+    organizationId,
+    spaces: spaceItems,
+    runs: runItems,
+    approvals: approvalItems,
+    slackWorkspace: slackInstallation
+      ? {
+          id: slackInstallation.id,
+          teamId: slackInstallation.externalWorkspaceId,
+          name: slackInstallation.name,
+          botUserId: slackInstallation.botUserId,
+          scopes: slackInstallation.botScopes,
+        }
+      : null,
+  };
 }
 
 async function updateSpaceConfig(
@@ -486,9 +706,175 @@ async function updateSpaceConfig(
   return result;
 }
 
-async function handleApi(req: IncomingMessage, res: ServerResponse, url: URL) {
-  if (!requireAdmin(req)) return sendJson(res, 401, { error: "Unauthorized" });
+function dashboardRedirect(params: Record<string, string>) {
+  const url = new URL(getAppUrl());
+  for (const [key, value] of Object.entries(params)) url.searchParams.set(key, value);
+  return url.toString();
+}
 
+async function createSlackOauthState(db: Db, account: AccountContext): Promise<{
+  state: string;
+  redirectUri: string;
+}> {
+  return await tracer.startActiveSpan("slack.oauth.start", async (span) => {
+    try {
+      const state = randomBytes(32).toString("base64url");
+      const redirectUri = `${getAppUrl()}/api/slack/oauth/callback`;
+      const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+      await db.insert(slackOauthStates).values({
+        state,
+        clerkUserId: account.clerkUserId,
+        organizationId: account.organization.id,
+        redirectUri,
+        expiresAt,
+      });
+      span.setAttributes({
+        "organization.id": account.organization.id,
+        outcome: "success",
+      });
+      businessOperationsCompleted.add(1, { operation: "slack.oauth.start", outcome: "success" });
+      return { state, redirectUri };
+    } catch (error) {
+      span.recordException(error as Error);
+      span.setStatus({ code: SpanStatusCode.ERROR });
+      businessOperationsCompleted.add(1, { operation: "slack.oauth.start", outcome: "failure" });
+      throw error;
+    } finally {
+      span.end();
+    }
+  });
+}
+
+async function consumeSlackOauthState(db: Db, state: string) {
+  const [row] = await db
+    .update(slackOauthStates)
+    .set({ consumedAt: new Date() })
+    .where(
+      and(
+        eq(slackOauthStates.state, state),
+        isNull(slackOauthStates.consumedAt),
+        sql`${slackOauthStates.expiresAt} > now()`,
+      ),
+    )
+    .returning();
+  return row ?? null;
+}
+
+function isUniqueViolation(error: unknown, constraint?: string): boolean {
+  if (!(error instanceof Error) || !("code" in error)) return false;
+  const code = (error as { code?: string; constraint?: string }).code;
+  const actualConstraint = (error as { constraint?: string }).constraint;
+  return code === "23505" && (!constraint || actualConstraint === constraint);
+}
+
+async function requireSpaceInOrg(db: Db, spaceId: string, organizationId: string) {
+  const space = await getSpaceById(db, spaceId);
+  if (!space || space.organizationId !== organizationId) return null;
+  return space;
+}
+
+function verifySlackRequest(req: IncomingMessage, rawBody: string): boolean {
+  const timestamp = String(req.headers["x-slack-request-timestamp"] ?? "");
+  const signature = String(req.headers["x-slack-signature"] ?? "");
+  return verifySlackSignature(requireEnv("SLACK_SIGNING_SECRET"), rawBody, timestamp, signature);
+}
+
+function slackErrorRedirect(error: unknown) {
+  const code =
+    error instanceof SlackWorkspaceAlreadyConnectedError
+      ? "workspace_already_connected"
+      : error instanceof OrganizationSlackWorkspaceConflictError
+        ? "account_already_connected"
+        : error instanceof Error
+          ? error.message
+          : "slack_oauth_failed";
+  return dashboardRedirect({ slack_error: code });
+}
+
+function approvalResolvedBlocks(args: {
+  decision: "approved" | "rejected";
+  toolName: string;
+  actorSlackUserId: string;
+}) {
+  const decisionText = args.decision === "approved" ? "Approved" : "Rejected";
+  return [
+    {
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text: `${decisionText} \`${args.toolName}\` by <@${args.actorSlackUserId}>.`,
+      },
+    },
+  ];
+}
+
+function questionAnsweredBlocks(args: { actorSlackUserId: string }) {
+  return [
+    {
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text: `Answered by <@${args.actorSlackUserId}>.`,
+      },
+    },
+  ];
+}
+
+function getFirstModalAnswer(payload: SlackViewSubmissionPayload): string {
+  const values = payload.view.state.values;
+  for (const block of Object.values(values)) {
+    for (const action of Object.values(block)) {
+      if (typeof action.value === "string") return action.value.trim();
+    }
+  }
+  return "";
+}
+
+async function handleApi(req: IncomingMessage, res: ServerResponse, url: URL) {
+  const method = req.method ?? "GET";
+  const segments = url.pathname.split("/").filter(Boolean).slice(1);
+
+  if (segments[0] === "inngest") {
+    if (!["GET", "POST", "PUT"].includes(method)) {
+      return sendJson(res, 405, { error: "Method not allowed" });
+    }
+    return inngestHandler(req, res);
+  }
+
+  if (segments[0] === "mcp" && segments[1] === "tags") {
+    return handleMcpApi(req, res, url);
+  }
+
+  if (segments[0] === "slack" && segments[1] === "oauth" && segments[2] === "callback") {
+    return handleSlackOauthCallback(req, res, url);
+  }
+
+  if (segments[0] === "slack" && segments[1] === "events") {
+    return handleSlackEvents(req, res);
+  }
+
+  if (segments[0] === "slack" && segments[1] === "interactions") {
+    return handleSlackInteractions(req, res);
+  }
+
+  const db = getDb();
+  let account: AccountContext;
+  try {
+    account = await requireAccount(req, db);
+  } catch (error) {
+    const status = (error as { statusCode?: number }).statusCode ?? 401;
+    return sendJson(res, status, { error: "Unauthorized" });
+  }
+
+  return handleProtectedApi(req, res, url, account);
+}
+
+async function handleProtectedApi(
+  req: IncomingMessage,
+  res: ServerResponse,
+  url: URL,
+  account: AccountContext,
+) {
   const method = req.method ?? "GET";
   const segments = url.pathname.split("/").filter(Boolean).slice(1);
 
@@ -496,13 +882,31 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, url: URL) {
     const started = performance.now();
     try {
       const db = getDb();
-      span.setAttributes({ "http.method": method, "http.route": url.pathname });
+      const organizationId = account.organization.id;
+      span.setAttributes({
+        "http.method": method,
+        "http.route": url.pathname,
+        "organization.id": organizationId,
+      });
 
       if (method === "GET" && segments[0] === "control-plane") {
-        const payload = await loadControlPlane(db, req);
+        const payload = await loadControlPlane(db, organizationId);
         apiRequestsCompleted.add(1, { route: "control-plane", method, outcome: "success" });
         span.setAttributes({ outcome: "success", "spaces.count": payload.spaces.length, "runs.count": payload.runs.length });
         return sendJson(res, 200, payload);
+      }
+
+      if (method === "GET" && segments[0] === "slack" && segments[1] === "oauth" && segments[2] === "start") {
+        const oauthState = await createSlackOauthState(db, account);
+        const existing = await getSlackInstallationForOrg(db, organizationId);
+        const authorizeUrl = buildSlackAuthorizeUrl({
+          clientId: requireEnv("SLACK_CLIENT_ID"),
+          redirectUri: oauthState.redirectUri,
+          state: oauthState.state,
+          scopes: [...DEFAULT_SLACK_BOT_SCOPES],
+          teamId: existing?.externalWorkspaceId,
+        });
+        return sendRedirect(res, authorizeUrl);
       }
 
       if (method === "GET" && segments[0] === "composio" && segments[1] === "toolkits") {
@@ -513,48 +917,21 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, url: URL) {
       }
 
       if (method === "GET" && segments[0] === "slack" && segments[1] === "channels") {
-        const payload = await loadSlackChannels();
+        const payload = await loadSlackChannelsForAccount(db, organizationId);
         apiRequestsCompleted.add(1, { route: "slack.channels", method, outcome: "success" });
         span.setAttributes({ outcome: "success", "slack.channels.count": payload.channels.length, "slack.channels.source": payload.source });
         return sendJson(res, 200, payload);
       }
 
       if (method === "POST" && segments[0] === "spaces" && segments.length === 1) {
-        const body = (await readJson(req)) as { name?: string; channel?: string; channelId?: string; organizationId?: string; workspaceId?: string };
-        const organizationId = body.organizationId || (await getDefaultOrgId(db));
-        const workspace = body.workspaceId ? null : await getDefaultWorkspace(db, organizationId);
-        const workspaceId = body.workspaceId ?? workspace?.id;
-        const channelName = body.channel?.replace(/^#/, "").trim();
-        const externalSpaceId = body.channelId?.trim() || channelName;
-        if (!organizationId || !workspaceId || !body.name || !channelName || !externalSpaceId) {
-          apiRequestsCompleted.add(1, { route: "spaces", method, outcome: "validation_error" });
-          return sendJson(res, 400, { error: "name, channel, organization, and workspace are required" });
-        }
-        const slug = slugify(channelName);
-        const result = await createSpaceWithConfig(db, {
-          organizationId,
-          workspaceId,
-          externalSpaceId,
-          name: body.name,
-          slug,
-          modelId: "accounts/fireworks/models/kimi-k2-instruct",
-          instructions: "You are Tags, an AI teammate for this Slack channel.",
-        });
-        await recordAuditEvent(db, {
-          organizationId,
-          spaceId: result.spaceId,
-          actorType: "human",
-          eventType: "space.created",
-          payload: { source: "control_plane", slug },
-        });
-        apiRequestsCompleted.add(1, { route: "spaces", method, outcome: "success" });
-        span.setAttributes({ outcome: "success", "space.id": result.spaceId });
-        return sendJson(res, 201, result);
+        return createSpaceForAccount(req, res, db, account, span);
       }
 
       if (method === "PATCH" && segments[0] === "spaces" && segments[2] === "config") {
         const spaceId = segments[1];
         if (!spaceId) return sendJson(res, 400, { error: "space id is required" });
+        const space = await requireSpaceInOrg(db, spaceId, organizationId);
+        if (!space) return sendJson(res, 404, { error: "Not found" });
         const body = (await readJson(req)) as { enabledTools?: unknown; enabledConnections?: unknown; repoUrls?: unknown };
         const result = await updateSpaceConfig(db, spaceId, {
           enabledTools: body.enabledTools !== undefined ? asStringArray(body.enabledTools) : undefined,
@@ -576,6 +953,8 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, url: URL) {
         const spaceId = segments[1];
         const toolkit = segments[3];
         if (!spaceId || !toolkit) return sendJson(res, 400, { error: "space id and toolkit are required" });
+        const space = await requireSpaceInOrg(db, spaceId, organizationId);
+        if (!space) return sendJson(res, 404, { error: "Not found" });
         if (!process.env.COMPOSIO_API_KEY) {
           apiRequestsCompleted.add(1, { route: "spaces.tools.authorize", method, outcome: "missing_config" });
           return sendJson(res, 400, { error: "COMPOSIO_API_KEY is required to authenticate Composio tools" });
@@ -592,16 +971,14 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, url: URL) {
         });
         if (!result) return sendJson(res, 404, { error: "Not found" });
 
-        const space = await getSpaceById(db, spaceId);
-        if (space) {
-          await recordAuditEvent(db, {
-            organizationId: space.organizationId,
-            spaceId,
-            actorType: "human",
-            eventType: "tool.authorize.started",
-            payload: { source: "control_plane", toolkit },
-          });
-        }
+        await recordAuditEvent(db, {
+          organizationId,
+          spaceId,
+          actorUserId: account.user.id,
+          actorType: "human",
+          eventType: "tool.authorize.started",
+          payload: { source: "control_plane", toolkit },
+        });
 
         apiRequestsCompleted.add(1, { route: "spaces.tools.authorize", method, outcome: "success" });
         span.setAttributes({ outcome: "success", "space.id": spaceId, "toolkit.id": toolkit });
@@ -621,16 +998,19 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, url: URL) {
         }
         const pending = await db.select().from(approvalRequests).where(eq(approvalRequests.id, approvalId)).limit(1);
         const approval = pending[0];
-        if (!approval || approval.status !== "pending") return sendJson(res, 404, { error: "Not found or already resolved" });
+        if (!approval || approval.organizationId !== organizationId || approval.status !== "pending") {
+          return sendJson(res, 404, { error: "Not found or already resolved" });
+        }
         if (approval.expiresAt < new Date()) {
           await expireApprovalByRequestId(db, approval.requestId);
           return sendJson(res, 410, { error: "Approval expired" });
         }
-        const resolved = await resolveApprovalRequest(db, approvalId, body.decision);
+        const resolved = await resolveApprovalRequest(db, approvalId, body.decision, account.user.id);
         if (!resolved) return sendJson(res, 404, { error: "Not found or already resolved" });
         await recordAuditEvent(db, {
-          organizationId: resolved.organizationId,
+          organizationId,
           spaceId: resolved.spaceId,
+          actorUserId: account.user.id,
           actorType: "human",
           eventType: "approval.resolved",
           payload: { approvalId, decision: body.decision, source: "control_plane" },
@@ -644,8 +1024,18 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, url: URL) {
       if (method === "GET" && segments[0] === "runs" && segments[2] === "events") {
         const runId = segments[1];
         if (!runId) return sendJson(res, 400, { error: "run id is required" });
+        const runRows = await db
+          .select()
+          .from(runs)
+          .where(and(eq(runs.id, runId), eq(runs.organizationId, organizationId)))
+          .limit(1);
+        const run = runRows[0];
+        if (!run) return sendJson(res, 404, { error: "Not found" });
         const afterSeq = Number(url.searchParams.get("afterSeq") ?? "0");
-        const events = await listRunEventsAfter(db, runId, afterSeq);
+        const events = await listRunEventsAfter(db, runId, afterSeq, {
+          organizationId,
+          spaceId: run.spaceId,
+        });
         apiRequestsCompleted.add(1, { route: "runs.events", method, outcome: "success" });
         span.setAttributes({ outcome: "success", "run.id": runId, "events.count": events.length });
         return sendJson(res, 200, {
@@ -667,11 +1057,522 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, url: URL) {
       span.setStatus({ code: SpanStatusCode.ERROR });
       apiRequestsCompleted.add(1, { route: "error", method, outcome: "failure" });
       console.error("[control-plane] request failed", { path: url.pathname, elapsedMs: Math.round(performance.now() - started), error });
+      const status = (error as { statusCode?: number }).statusCode ?? 500;
+      return sendJson(res, status, { error: error instanceof Error ? error.message : "Internal server error" });
+    } finally {
+      span.end();
+    }
+  });
+}
+
+async function createSpaceForAccount(
+  req: IncomingMessage,
+  res: ServerResponse,
+  db: Db,
+  account: AccountContext,
+  parentSpan: Span,
+) {
+  return await tracer.startActiveSpan("space.create", async (span) => {
+    try {
+      const organizationId = account.organization.id;
+      const body = (await readJson(req)) as { name?: string; channel?: string; channelId?: string };
+      const name = body.name?.trim();
+      const channelInput = body.channel?.replace(/^#/, "").trim();
+      if (!name || (!body.channelId && !channelInput)) {
+        businessOperationsCompleted.add(1, { operation: "space.create", outcome: "validation_error" });
+        return sendJson(res, 400, { error: "name and a Slack channel are required" });
+      }
+
+      const slack = await getAccountSlackClient(db, organizationId);
+      if (!slack) {
+        businessOperationsCompleted.add(1, { operation: "space.create", outcome: "slack_not_connected" });
+        return sendJson(res, 400, { error: "Connect Slack before creating a Space" });
+      }
+
+      const channels = await listSlackChannels(slack.client);
+      const selected = channels.find((channel) =>
+        body.channelId ? channel.id === body.channelId : channel.name === channelInput,
+      );
+      if (!selected) {
+        businessOperationsCompleted.add(1, { operation: "space.create", outcome: "channel_not_found" });
+        return sendJson(res, 404, {
+          error: "Slack channel not found",
+          code: "channel_not_found",
+        });
+      }
+
+      if (selected.isPrivate && !selected.isMember) {
+        businessOperationsCompleted.add(1, { operation: "space.create", outcome: "private_channel_invite_required" });
+        return sendJson(res, 409, {
+          error: "Invite the Tags app to this private channel in Slack, then refresh channels.",
+          code: "private_channel_invite_required",
+        });
+      }
+
+      const existing = await db
+        .select({ id: spaces.id })
+        .from(spaces)
+        .where(and(eq(spaces.workspaceId, slack.installation.id), eq(spaces.externalSpaceId, selected.id)))
+        .limit(1);
+      if (existing[0]) {
+        businessOperationsCompleted.add(1, { operation: "space.create", outcome: "conflict" });
+        return sendJson(res, 409, { error: "A Space already exists for this Slack channel" });
+      }
+
+      if (!selected.isPrivate) {
+        try {
+          await joinSlackChannel(slack.client, selected.id);
+        } catch (error) {
+          businessOperationsCompleted.add(1, { operation: "space.create", outcome: "join_failed" });
+          return sendJson(res, 400, {
+            error: error instanceof Error ? error.message : "Failed to join Slack channel",
+          });
+        }
+      }
+
+      const slug = slugify(selected.name);
+      let result: { spaceId: string; configId: string };
+      try {
+        result = await createSpaceWithConfig(db, {
+          organizationId,
+          workspaceId: slack.installation.id,
+          externalSpaceId: selected.id,
+          name,
+          slug,
+          modelId: "accounts/fireworks/models/kimi-k2-instruct",
+          instructions: "You are Tags, an AI teammate for this Slack channel.",
+        });
+      } catch (error) {
+        if (isUniqueViolation(error)) {
+          businessOperationsCompleted.add(1, { operation: "space.create", outcome: "conflict" });
+          return sendJson(res, 409, { error: "A Space already exists for this Slack channel" });
+        }
+        throw error;
+      }
+
+      await recordAuditEvent(db, {
+        organizationId,
+        spaceId: result.spaceId,
+        actorUserId: account.user.id,
+        actorType: "human",
+        eventType: "space.created",
+        payload: { source: "control_plane", slug, slackChannelId: selected.id },
+      });
+      businessOperationsCompleted.add(1, { operation: "space.create", outcome: "success" });
+      span.setAttributes({ outcome: "success", "space.id": result.spaceId, "slack.channel.id": selected.id });
+      parentSpan.setAttributes({ outcome: "success", "space.id": result.spaceId });
+      return sendJson(res, 201, result);
+    } catch (error) {
+      span.recordException(error as Error);
+      span.setStatus({ code: SpanStatusCode.ERROR });
+      businessOperationsCompleted.add(1, { operation: "space.create", outcome: "failure" });
+      throw error;
+    } finally {
+      span.end();
+    }
+  });
+}
+
+async function handleSlackOauthCallback(_req: IncomingMessage, res: ServerResponse, url: URL) {
+  const db = getDb();
+  return await tracer.startActiveSpan("slack.oauth.complete", async (span) => {
+    try {
+      const error = url.searchParams.get("error");
+      if (error) return sendRedirect(res, dashboardRedirect({ slack_error: error }));
+
+      const code = url.searchParams.get("code");
+      const stateValue = url.searchParams.get("state");
+      if (!code || !stateValue) {
+        return sendRedirect(res, dashboardRedirect({ slack_error: "missing_oauth_code" }));
+      }
+
+      const state = await consumeSlackOauthState(db, stateValue);
+      if (!state) return sendRedirect(res, dashboardRedirect({ slack_error: "invalid_or_expired_state" }));
+
+      const oauth = await exchangeSlackOAuthCode({
+        clientId: requireEnv("SLACK_CLIENT_ID"),
+        clientSecret: requireEnv("SLACK_CLIENT_SECRET"),
+        code,
+        redirectUri: state.redirectUri,
+      });
+
+      const teamId = oauth.team?.id;
+      const botAccessToken = oauth.access_token;
+      if (!teamId || !botAccessToken) {
+        return sendRedirect(res, dashboardRedirect({ slack_error: "missing_slack_installation" }));
+      }
+
+      await assertWorkspaceConnectable(db, {
+        organizationId: state.organizationId,
+        teamId,
+      });
+      const account = await getAccountForClerkUser(db, state.clerkUserId);
+
+      await upsertSlackInstallation(db, {
+        organizationId: state.organizationId,
+        teamId,
+        teamName: oauth.team?.name,
+        botAccessToken,
+        botRefreshToken: oauth.refresh_token,
+        botTokenExpiresAt: oauth.expires_in
+          ? new Date(Date.now() + oauth.expires_in * 1000)
+          : null,
+        botUserId: oauth.bot_user_id,
+        appId: oauth.app_id,
+        botScopes: oauth.scope?.split(",").map((scope) => scope.trim()).filter(Boolean) ?? [],
+        installedBySlackUserId: oauth.authed_user?.id,
+        installedByUserId: account?.user.id,
+        encryptionKey: requireEnv("TAGS_ENCRYPTION_KEY"),
+      });
+
+      span.setAttributes({
+        "organization.id": state.organizationId,
+        "slack.team.id": teamId,
+        outcome: "success",
+      });
+      businessOperationsCompleted.add(1, { operation: "slack.oauth.complete", outcome: "success" });
+      return sendRedirect(res, dashboardRedirect({ slack: "connected" }));
+    } catch (error) {
+      span.recordException(error as Error);
+      span.setStatus({ code: SpanStatusCode.ERROR });
+      businessOperationsCompleted.add(1, { operation: "slack.oauth.complete", outcome: "failure" });
+      return sendRedirect(res, slackErrorRedirect(error));
+    } finally {
+      span.end();
+    }
+  });
+}
+
+async function handleSlackEvents(req: IncomingMessage, res: ServerResponse) {
+  const rawBody = await readRawBody(req);
+  if (!verifySlackRequest(req, rawBody)) {
+    return sendJson(res, 401, { error: "Invalid Slack signature" });
+  }
+
+  return await tracer.startActiveSpan("slack.event.receive", async (span) => {
+    try {
+      const payload = JSON.parse(rawBody) as SlackEventPayload;
+      if (payload.type === "url_verification") {
+        businessOperationsCompleted.add(1, { operation: "slack.event.receive", outcome: "url_verification" });
+        return sendJson(res, 200, { challenge: payload.challenge });
+      }
+
+      const event = payload.event;
+      const teamId = payload.team_id;
+      if (!teamId || !event) return sendJson(res, 200, { ok: true });
+      span.setAttribute("slack.team.id", teamId);
+
+      const db = getDb();
+      const installation = await getSlackInstallationByTeamId(db, teamId);
+      if (!installation) {
+        businessOperationsCompleted.add(1, { operation: "slack.event.receive", outcome: "unknown_installation" });
+        return sendJson(res, 404, { error: "Unknown Slack installation" });
+      }
+
+      if (
+        event.bot_id ||
+        event.subtype ||
+        (installation.botUserId && event.user === installation.botUserId)
+      ) {
+        businessOperationsCompleted.add(1, { operation: "slack.event.receive", outcome: "ignored_bot" });
+        return sendJson(res, 200, { ok: true });
+      }
+
+      if (event.type !== "app_mention" || !event.channel || !event.ts || !event.user) {
+        businessOperationsCompleted.add(1, { operation: "slack.event.receive", outcome: "ignored" });
+        return sendJson(res, 200, { ok: true });
+      }
+
+      const token = decryptSlackBotToken(installation, requireEnv("TAGS_ENCRYPTION_KEY"));
+      const slack = createSlackClient(token);
+      const resolved = await resolveSpaceByChannel(db, teamId, event.channel);
+      const threadTs = event.thread_ts ?? event.ts;
+
+      if (!resolved) {
+        await postThreadMessage(
+          slack,
+          event.channel,
+          threadTs,
+          "This channel is not connected to a Tags Space yet. Create a Space for this Slack channel in the Tags dashboard first.",
+        );
+        businessOperationsCompleted.add(1, { operation: "slack.event.receive", outcome: "unmapped_channel" });
+        return sendJson(res, 200, { ok: true });
+      }
+
+      let placeholderMessageTs: string | undefined;
+      let placeholderIsStream = false;
+      try {
+        const stream = await startStream(slack, {
+          channelId: event.channel,
+          threadTs,
+          recipientTeamId: teamId,
+          recipientUserId: event.user,
+        });
+        placeholderMessageTs = stream.messageTs;
+        placeholderIsStream = true;
+      } catch {
+        const message = await postThreadMessage(slack, event.channel, threadTs, "Tags is working...");
+        placeholderMessageTs = message.messageTs;
+      }
+
+      await addReaction(slack, event.channel, event.ts, "eyes").catch(() => {});
+
+      const data: TagsRunInput = {
+        organizationId: resolved.space.organizationId,
+        workspaceId: resolved.workspace.id,
+        spaceId: resolved.space.id,
+        spaceName: resolved.space.name,
+        channelId: event.channel,
+        teamId,
+        threadTs,
+        rootMessageTs: threadTs,
+        triggerText: event.text ?? "",
+        triggerMessageTs: event.ts,
+        actorSlackUserId: event.user,
+        idempotencyKey: `slack:${teamId}:${event.channel}:${threadTs}:${event.ts}`,
+        appUrl: getAppUrl(),
+        trigger: "mention",
+        placeholderMessageTs,
+        placeholderIsStream,
+      };
+
+      await inngest.send({ name: RUN_REQUESTED_EVENT, data });
+      span.setAttributes({
+        "organization.id": resolved.space.organizationId,
+        "workspace.id": resolved.workspace.id,
+        "space.id": resolved.space.id,
+        "slack.channel.id": event.channel,
+        outcome: "success",
+      });
+      businessOperationsCompleted.add(1, { operation: "slack.event.receive", outcome: "success" });
+      return sendJson(res, 200, { ok: true });
+    } catch (error) {
+      span.recordException(error as Error);
+      span.setStatus({ code: SpanStatusCode.ERROR });
+      businessOperationsCompleted.add(1, { operation: "slack.event.receive", outcome: "failure" });
       return sendJson(res, 500, { error: error instanceof Error ? error.message : "Internal server error" });
     } finally {
       span.end();
     }
   });
+}
+
+async function handleSlackInteractions(req: IncomingMessage, res: ServerResponse) {
+  const rawBody = await readRawBody(req);
+  if (!verifySlackRequest(req, rawBody)) {
+    return sendJson(res, 401, { error: "Invalid Slack signature" });
+  }
+
+  return await tracer.startActiveSpan("slack.interaction.resolve", async (span) => {
+    try {
+      const form = new URLSearchParams(rawBody);
+      const rawPayload = form.get("payload");
+      if (!rawPayload) return sendJson(res, 400, { error: "Missing Slack payload" });
+      const payload = JSON.parse(rawPayload) as SlackInteractionPayload;
+      const teamId = payload.team?.id;
+      if (!teamId) return sendJson(res, 400, { error: "Missing Slack team" });
+
+      const db = getDb();
+      const installation = await getSlackInstallationByTeamId(db, teamId);
+      if (!installation) return sendJson(res, 404, { error: "Unknown Slack installation" });
+      const slack = createSlackClient(decryptSlackBotToken(installation, requireEnv("TAGS_ENCRYPTION_KEY")));
+
+      if (payload.type === "block_actions") {
+        const action = payload.actions?.[0];
+        if (!action?.action_id) return sendJson(res, 200, { ok: true });
+        if (action.action_id.startsWith("approval:")) {
+          await handleApprovalInteraction(db, slack, payload, action);
+        } else if (action.action_id.startsWith("question:answer:")) {
+          await handleQuestionAction(slack, payload, action);
+        }
+        businessOperationsCompleted.add(1, { operation: "slack.interaction.resolve", outcome: "success" });
+        span.setAttribute("outcome", "success");
+        return sendJson(res, 200, { ok: true });
+      }
+
+      if (payload.type === "view_submission") {
+        await handleQuestionSubmission(db, slack, payload);
+        businessOperationsCompleted.add(1, { operation: "slack.interaction.resolve", outcome: "success" });
+        span.setAttribute("outcome", "success");
+        return sendJson(res, 200, { response_action: "clear" });
+      }
+
+      return sendJson(res, 200, { ok: true });
+    } catch (error) {
+      span.recordException(error as Error);
+      span.setStatus({ code: SpanStatusCode.ERROR });
+      businessOperationsCompleted.add(1, { operation: "slack.interaction.resolve", outcome: "failure" });
+      return sendJson(res, 500, { error: error instanceof Error ? error.message : "Internal server error" });
+    } finally {
+      span.end();
+    }
+  });
+}
+
+async function handleApprovalInteraction(
+  db: Db,
+  slack: ReturnType<typeof createSlackClient>,
+  payload: SlackBlockActionPayload,
+  action: { action_id?: string; value?: string },
+) {
+  const [, verb, approvalId] = action.action_id?.split(":") ?? [];
+  const decision = verb === "approve" ? "approved" : verb === "reject" ? "rejected" : null;
+  const actorSlackUserId = payload.user?.id;
+  if (!decision || !actorSlackUserId) return;
+
+  const approvalRows = approvalId
+    ? await db.select().from(approvalRequests).where(eq(approvalRequests.id, approvalId)).limit(1)
+    : [];
+  let approval = approvalRows[0];
+  if (!approval && action.value) {
+    const rows = await db
+      .select()
+      .from(approvalRequests)
+      .where(eq(approvalRequests.requestId, action.value))
+      .limit(1);
+    approval = rows[0];
+  }
+  if (!approval || approval.status !== "pending") return;
+
+  if (approval.expiresAt < new Date()) {
+    await expireApprovalByRequestId(db, approval.requestId);
+    return;
+  }
+
+  const actor = await resolveOrCreateUser(db, {
+    organizationId: approval.organizationId,
+    slackUserId: actorSlackUserId,
+    displayName: payload.user?.username,
+  });
+  const allowed = await canApprove(db, {
+    organizationId: approval.organizationId,
+    spaceId: approval.spaceId,
+    slackUserId: actorSlackUserId,
+    requesterSlackUserId: approval.requestedBySlackUserId ?? undefined,
+  });
+  if (!allowed) {
+    if (payload.channel?.id) {
+      await slack.chat.postEphemeral({
+        channel: payload.channel.id,
+        user: actorSlackUserId,
+        text: "Tags approval policy does not allow you to resolve this request.",
+      }).catch(() => {});
+    }
+    return;
+  }
+
+  const resolved = approvalId
+    ? await resolveApprovalRequest(db, approvalId, decision, actor.id)
+    : await resolveApprovalByRequestId(db, approval.requestId, decision, actor.id);
+  if (!resolved) return;
+
+  await recordAuditEvent(db, {
+    organizationId: resolved.organizationId,
+    spaceId: resolved.spaceId,
+    actorUserId: actor.id,
+    actorType: "human",
+    eventType: "approval.resolved",
+    payload: { approvalId: resolved.id, decision, source: "slack_interaction" },
+  });
+  await inngest.send({ name: APPROVAL_RESOLVED_EVENT, data: { requestId: resolved.requestId, decision } });
+
+  if (payload.channel?.id && payload.message?.ts) {
+    await updateMessage(
+      slack,
+      payload.channel.id,
+      payload.message.ts,
+      `${decision === "approved" ? "Approved" : "Rejected"} ${resolved.toolName}.`,
+      approvalResolvedBlocks({ decision, toolName: resolved.toolName, actorSlackUserId }),
+    );
+  }
+}
+
+async function handleQuestionAction(
+  slack: ReturnType<typeof createSlackClient>,
+  payload: SlackBlockActionPayload,
+  action: { action_id?: string; value?: string },
+) {
+  if (!payload.trigger_id || !action.value) return;
+  const db = getDb();
+  const question = await getQuestionByRequestId(db, action.value);
+  const questionText = question?.questionText ?? "Answer the question for Tags.";
+  await slack.views.open({
+    trigger_id: payload.trigger_id,
+    view: {
+      type: "modal",
+      callback_id: "tags_question_answer",
+      title: { type: "plain_text", text: "Answer Tags" },
+      submit: { type: "plain_text", text: "Submit" },
+      close: { type: "plain_text", text: "Cancel" },
+      private_metadata: JSON.stringify({
+        requestId: action.value,
+        channelId: payload.channel?.id,
+        messageTs: payload.message?.ts,
+      }),
+      blocks: [
+        {
+          type: "input",
+          block_id: "answer",
+          label: { type: "plain_text", text: questionText.slice(0, 2000) },
+          element: {
+            type: "plain_text_input",
+            action_id: "value",
+            multiline: true,
+          },
+        },
+      ],
+    },
+  });
+}
+
+async function handleQuestionSubmission(
+  db: Db,
+  slack: ReturnType<typeof createSlackClient>,
+  payload: SlackViewSubmissionPayload,
+) {
+  if (payload.view.callback_id !== "tags_question_answer") return;
+  const metadata = JSON.parse(payload.view.private_metadata || "{}") as {
+    requestId?: string;
+    channelId?: string;
+    messageTs?: string;
+  };
+  const answer = getFirstModalAnswer(payload);
+  if (!metadata.requestId || !answer) return;
+
+  const question = await answerQuestionByRequestId(db, metadata.requestId, answer);
+  if (!question) return;
+  await inngest.send({
+    name: QUESTION_ANSWERED_EVENT,
+    data: { requestId: question.requestId, answer },
+  });
+
+  if (metadata.channelId && metadata.messageTs && payload.user?.id) {
+    await updateMessage(
+      slack,
+      metadata.channelId,
+      metadata.messageTs,
+      "Question answered.",
+      questionAnsweredBlocks({ actorSlackUserId: payload.user.id }),
+    ).catch(() => {});
+  }
+}
+
+async function handleMcpApi(req: IncomingMessage, res: ServerResponse, url: URL) {
+  const rawBody = await readRawBody(req);
+  const request = new Request(url.href, {
+    method: req.method,
+    headers: incomingHeaders(req),
+    ...(rawBody && req.method !== "GET" && req.method !== "HEAD" ? { body: rawBody } : {}),
+  });
+  const secrets = loadRuntimeSecrets();
+  const response = await handleTagsMcpRequest(request, {
+    signingSecret: secrets.mcpSigningKey ?? "",
+    db: createDb(secrets.databaseUrl),
+    providerConfig: buildRuntimeProviderConfig(secrets),
+    encryptionKey: secrets.encryptionKey,
+    appUrl: secrets.appUrl,
+  });
+  return writeWebResponse(res, response);
 }
 
 const mimeTypes: Record<string, string> = {

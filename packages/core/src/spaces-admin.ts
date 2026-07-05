@@ -1,6 +1,14 @@
 import { desc, eq, max } from "drizzle-orm";
 import type { Db } from "@tags/db";
-import { newId, spaceConfigs, spaces, workspaces } from "@tags/db";
+import {
+  approvalPolicies,
+  budgetPolicies,
+  memoryPolicies,
+  newId,
+  spaceConfigs,
+  spaces,
+  workspaces,
+} from "@tags/db";
 import { parseRuntimeMode, parsePassiveLearningMode, loadActiveSpaceConfig, type RuntimeMode, type PassiveLearningMode } from "./spaces";
 import { alwaysEnabledNativeTools } from "./tools";
 
@@ -15,6 +23,9 @@ export type CreateSpaceInput = {
   enabledTools?: string[];
   runtimeMode?: RuntimeMode;
   passiveLearningMode?: PassiveLearningMode;
+  approvalPolicyId?: string | null;
+  budgetPolicyId?: string | null;
+  memoryPolicyId?: string | null;
 };
 
 export async function listSpaces(db: Db, organizationId: string) {
@@ -37,6 +48,32 @@ export async function getSpaceById(db: Db, spaceId: string) {
 export async function createSpaceWithConfig(db: Db, input: CreateSpaceInput) {
   const spaceId = newId();
   const configId = newId();
+  const [approvalPolicy, budgetPolicy, memoryPolicy] = await Promise.all([
+    input.approvalPolicyId
+      ? Promise.resolve({ id: input.approvalPolicyId })
+      : db
+          .select({ id: approvalPolicies.id })
+          .from(approvalPolicies)
+          .where(eq(approvalPolicies.organizationId, input.organizationId))
+          .limit(1)
+          .then((rows) => rows[0]),
+    input.budgetPolicyId
+      ? Promise.resolve({ id: input.budgetPolicyId })
+      : db
+          .select({ id: budgetPolicies.id })
+          .from(budgetPolicies)
+          .where(eq(budgetPolicies.organizationId, input.organizationId))
+          .limit(1)
+          .then((rows) => rows[0]),
+    input.memoryPolicyId
+      ? Promise.resolve({ id: input.memoryPolicyId })
+      : db
+          .select({ id: memoryPolicies.id })
+          .from(memoryPolicies)
+          .where(eq(memoryPolicies.organizationId, input.organizationId))
+          .limit(1)
+          .then((rows) => rows[0]),
+  ]);
 
   await db.insert(spaces).values({
     id: spaceId,
@@ -46,6 +83,9 @@ export async function createSpaceWithConfig(db: Db, input: CreateSpaceInput) {
     externalSpaceId: input.externalSpaceId,
     name: input.name,
     slug: input.slug,
+    approvalPolicyId: approvalPolicy?.id,
+    budgetPolicyId: budgetPolicy?.id,
+    memoryPolicyId: memoryPolicy?.id,
   });
 
   await db.insert(spaceConfigs).values({

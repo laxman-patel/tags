@@ -30,6 +30,7 @@ export interface SlackChannel {
   id: string;
   name: string;
   isPrivate: boolean;
+  isMember: boolean;
 }
 
 export interface Repo {
@@ -89,6 +90,13 @@ export interface RunEvent {
 
 export interface ControlPlanePayload {
   organizationId: string;
+  slackWorkspace: {
+    id: string;
+    teamId: string;
+    name?: string | null;
+    botUserId?: string | null;
+    scopes: string[];
+  } | null;
   spaces: Space[];
   runs: Run[];
   approvals: Approval[];
@@ -132,7 +140,7 @@ export function loadComposioDirectory() {
 }
 
 export function loadSlackChannels() {
-  return requestJson<{ channels: SlackChannel[]; source: "slack" | "fallback" }>("/api/slack/channels");
+  return requestJson<{ channels: SlackChannel[]; source: "slack" }>("/api/slack/channels");
 }
 
 export function authorizeComposioTool(spaceId: string, toolkitId: string) {

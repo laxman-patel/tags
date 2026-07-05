@@ -1,6 +1,7 @@
 import { appendRunEvent } from "@tags/core/runs";
 import type { TagsEvent } from "@tags/core/events";
-import type { Db } from "@tags/db";
+import { eq, workspaces, type Db } from "@tags/db";
+import { decryptSlackBotToken } from "@tags/core/slack-installations";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 import { z } from "zod";
@@ -12,7 +13,7 @@ import {
   type TagsMcpRunClaims,
   verifyTagsMcpRunToken,
 } from "./tags-mcp-token";
-import type { RuntimeProviderConfig, RuntimeProviders } from "../providers";
+import { createRuntimeProviders, type RuntimeProviderConfig, type RuntimeProviders } from "../providers";
 import { ApprovalPauseError, QuestionPauseError } from "../agent/types";
 
 /** Native tools that cannot run inside the opencode sandbox MCP bridge. */
@@ -143,8 +144,9 @@ export async function handleTagsMcpRequest(
   deps: {
     signingSecret: string;
     db: Db;
-    providers: RuntimeProviders;
+    providers?: RuntimeProviders;
     providerConfig: RuntimeProviderConfig;
+    encryptionKey?: string;
     appUrl: string;
   },
 ): Promise<Response> {
@@ -158,12 +160,33 @@ export async function handleTagsMcpRequest(
     return new Response("Unauthorized", { status: 401 });
   }
 
+  let providerConfig = deps.providerConfig;
+  if (!providerConfig.slackBotToken) {
+    const rows = await deps.db
+      .select()
+      .from(workspaces)
+      .where(eq(workspaces.id, claims.workspaceId))
+      .limit(1);
+    const workspace = rows[0];
+    if (workspace?.botAccessTokenCiphertext) {
+      if (!deps.encryptionKey) {
+        return new Response("Slack token encryption key is not configured", { status: 500 });
+      }
+      providerConfig = {
+        ...providerConfig,
+        slackBotToken: decryptSlackBotToken(workspace, deps.encryptionKey),
+      };
+    }
+  }
+
+  const providers = deps.providers ?? (await createRuntimeProviders(providerConfig));
+
   const emit = async (event: TagsEvent) => {
     await appendRunEvent(deps.db, claims.runId, event);
   };
 
   const toolCtx: ToolContext = {
-    ...deps.providers,
+    ...providers,
     organizationId: claims.organizationId,
     workspaceId: claims.workspaceId,
     spaceId: claims.spaceId,
@@ -177,8 +200,8 @@ export async function handleTagsMcpRequest(
 
   const tools = resolveTools(deps.db, claims.enabledTools, {
     appUrl: deps.appUrl,
-    providerConfig: deps.providerConfig,
-    ...deps.providers,
+    providerConfig,
+    ...providers,
   }).filter((tool) => !OPENCODE_MCP_EXCLUDED_TOOLS.has(tool.name));
 
   const server = new McpServer(

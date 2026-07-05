@@ -52,9 +52,11 @@ Subscribe to `app_mention`. Map your test channel via seed env vars or update th
 
 ### Environment
 
-Set `NEXT_PUBLIC_APP_URL` to your public Railway URL **before** building (e.g. `https://tags-production.up.railway.app`). Run links posted to Slack and schedule evaluation depend on it.
+Set `NEXT_PUBLIC_APP_URL` to your public Railway URL **before** building (e.g. `https://tags-production.up.railway.app`). Slack OAuth redirects, run links posted to Slack, schedule evaluation, Inngest, and MCP depend on it.
 
-Required at boot: `DATABASE_URL`, `FIREWORKS_API_KEY`, `SLACK_SIGNING_SECRET`, `SLACK_BOT_TOKEN`, `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY`, `INNGEST_EVENT_KEY`, `INNGEST_SIGNING_KEY`, `NEXT_PUBLIC_APP_URL`.
+Required at production boot: `DATABASE_URL`, `FIREWORKS_API_KEY`, `SLACK_CLIENT_ID`, `SLACK_CLIENT_SECRET`, `SLACK_SIGNING_SECRET`, `TAGS_ENCRYPTION_KEY`, `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY`, `INNGEST_EVENT_KEY`, `INNGEST_SIGNING_KEY`, `NEXT_PUBLIC_APP_URL`.
+
+`SLACK_BOT_TOKEN` is a legacy/dev-only fallback. Production Slack access is installed per account through OAuth and stored encrypted with `TAGS_ENCRYPTION_KEY`.
 
 Migrations run automatically via `preDeployCommand` when `DATABASE_MIGRATE_URL` (owner role) is set.
 

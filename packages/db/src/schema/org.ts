@@ -9,6 +9,7 @@ import {
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 import { providerEnum, userRoleEnum } from "./enums";
 
 export const organizations = pgTable("organizations", {
@@ -37,6 +38,9 @@ export const users = pgTable(
       table.externalProvider,
       table.externalUserId,
     ),
+    uniqueIndex("users_clerk_external_unique_idx")
+      .on(table.externalUserId)
+      .where(sql`${table.externalProvider} = 'clerk'`),
   ],
 );
 
@@ -51,15 +55,40 @@ export const workspaces = pgTable(
     externalWorkspaceId: text("external_workspace_id").notNull(),
     connectInstallationId: text("connect_installation_id"),
     name: text("name"),
+    botAccessTokenCiphertext: text("bot_access_token_ciphertext"),
+    botRefreshTokenCiphertext: text("bot_refresh_token_ciphertext"),
+    botTokenExpiresAt: timestamp("bot_token_expires_at", { withTimezone: true }),
+    botUserId: text("bot_user_id"),
+    appId: text("app_id"),
+    botScopes: jsonb("bot_scopes").$type<string[]>().notNull().default([]),
+    installedBySlackUserId: text("installed_by_slack_user_id"),
+    installedByUserId: uuid("installed_by_user_id").references(() => users.id),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [
     uniqueIndex("workspaces_provider_external_idx").on(
       table.provider,
       table.externalWorkspaceId,
     ),
+    uniqueIndex("workspaces_org_provider_unique_idx").on(
+      table.organizationId,
+      table.provider,
+    ),
   ],
 );
+
+export const slackOauthStates = pgTable("slack_oauth_states", {
+  state: text("state").primaryKey(),
+  clerkUserId: text("clerk_user_id").notNull(),
+  organizationId: uuid("organization_id")
+    .notNull()
+    .references(() => organizations.id),
+  redirectUri: text("redirect_uri").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  consumedAt: timestamp("consumed_at", { withTimezone: true }),
+});
 
 export const spaces = pgTable(
   "spaces",
