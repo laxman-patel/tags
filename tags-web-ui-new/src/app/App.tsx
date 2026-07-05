@@ -21,6 +21,7 @@ import {
   Tabs,
   Surface,
   Dialog,
+  Collapsible,
   cn,
 } from "@cloudflare/kumo";
 import {
@@ -32,6 +33,7 @@ import {
   PlusIcon,
   CaretRightIcon,
   CaretLeftIcon,
+  CaretDownIcon,
   CheckIcon,
   XIcon,
   ArrowClockwiseIcon,
@@ -652,98 +654,109 @@ function MetricGrid({ metrics }: { metrics: Metric[] }) {
 
 // ===== Views =====
 
+function LiveConnectionDot() {
+  return (
+    <span className="relative flex h-2 w-2 shrink-0" aria-hidden="true">
+      <span className="ws-live-ring absolute inline-flex h-full w-full rounded-full bg-kumo-success" />
+      <span className="relative inline-flex h-2 w-2 rounded-full bg-kumo-success" />
+    </span>
+  );
+}
+
 function WorkspaceView({
   slackWorkspace,
 }: {
   slackWorkspace: SlackWorkspace | null;
 }) {
-  const scopes = slackWorkspace?.scopes ?? [];
-  const workspaceName = slackWorkspace?.name || "Unnamed workspace";
+  const reconnect = () => {
+    window.location.href = "/api/slack/oauth/start";
+  };
 
   return (
-    <div className="max-w-3xl">
+    <div className="mx-auto max-w-2xl">
       <PageHeader
         title="Workspace"
-        description="The Slack workspace connected to this Tags account."
+        description="The Slack workspace connected to Tags."
       />
 
       {!slackWorkspace ? (
         <SlackConnectEmpty />
       ) : (
-        <LayerCard className="overflow-hidden">
-          <LayerCard.Primary>
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-              <div className="flex min-w-0 items-center gap-3">
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-kumo-hairline bg-kumo-recessed text-kumo-subtle">
-                  <SlackLogoIcon size={20} />
-                </div>
-                <div className="min-w-0">
-                  <Text variant="heading3" as="h2" truncate>
-                    {workspaceName}
-                  </Text>
-                  <Text variant="secondary" size="sm" truncate>
-                    Slack team {slackWorkspace.teamId}
-                  </Text>
-                </div>
-              </div>
-              <div className="flex shrink-0 items-center gap-2">
-                <Badge variant="success" appearance="dot">Connected</Badge>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  icon={ArrowClockwiseIcon}
-                  onClick={() => {
-                    window.location.href = "/api/slack/oauth/start";
-                  }}
-                >
-                  Reconnect
-                </Button>
-              </div>
-            </div>
-          </LayerCard.Primary>
-
-          <div className="border-t border-kumo-hairline px-4 py-2 sm:px-5">
-            <WorkspaceInfoRow label="Workspace name" value={workspaceName} />
-            <WorkspaceInfoRow label="Slack team ID" value={slackWorkspace.teamId} />
-            <WorkspaceInfoRow label="Bot user ID" value={slackWorkspace.botUserId || "Not available"} />
-            <WorkspaceInfoRow label="Installation ID" value={slackWorkspace.id} />
-          </div>
-
-          <div className="border-t border-kumo-hairline px-4 py-4 sm:px-5">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <Text bold>Slack permissions</Text>
-                <Text variant="secondary" size="sm" as="p">
-                  Scopes granted to the Tags Slack app.
-                </Text>
-              </div>
-              <Badge variant="info">{scopes.length} scopes</Badge>
-            </div>
-            {scopes.length > 0 && (
-              <div className="mt-3 flex flex-wrap gap-1.5">
-                {scopes.map((scope) => (
-                  <span
-                    key={scope}
-                    className="rounded-md border border-kumo-hairline bg-kumo-recessed px-2 py-1 text-xs text-kumo-subtle"
-                  >
-                    {scope}
-                  </span>
-                ))}
-              </div>
-            )}
-          </div>
-        </LayerCard>
+        <WorkspaceConnectionCard slackWorkspace={slackWorkspace} onReconnect={reconnect} />
       )}
     </div>
   );
 }
 
-function WorkspaceInfoRow({ label, value }: { label: string; value: string }) {
+function WorkspaceConnectionCard({
+  slackWorkspace,
+  onReconnect,
+}: {
+  slackWorkspace: SlackWorkspace;
+  onReconnect: () => void;
+}) {
+  const workspaceName = slackWorkspace.name || "Unnamed workspace";
+  const scopes = slackWorkspace.scopes ?? [];
+
   return (
-    <div className="grid gap-1 border-b border-kumo-hairline py-3 last:border-b-0 sm:grid-cols-[150px_minmax(0,1fr)] sm:gap-4">
-      <Text variant="secondary" size="sm">{label}</Text>
-      <Text size="sm" DANGEROUS_className="min-w-0 break-all">{value}</Text>
-    </div>
+    <LayerCard className="ws-rise overflow-hidden p-0">
+      <div className="flex items-center gap-4 p-5">
+        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-kumo-hairline bg-gradient-to-b from-kumo-base to-kumo-recessed text-kumo-default shadow-sm">
+          <SlackLogoIcon size={24} weight="fill" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <Text variant="heading3" as="h2" truncate>
+            {workspaceName}
+          </Text>
+          <div className="mt-1 flex min-w-0 items-center gap-2 text-kumo-subtle">
+            <LiveConnectionDot />
+            <Text variant="secondary" size="sm">Connected</Text>
+            <span aria-hidden="true" className="text-kumo-hairline">·</span>
+            <span className="truncate font-mono text-xs text-kumo-subtle">{slackWorkspace.teamId}</span>
+          </div>
+        </div>
+        <Button
+          variant="secondary"
+          size="sm"
+          icon={ArrowClockwiseIcon}
+          onClick={onReconnect}
+          className="shrink-0"
+        >
+          Reconnect
+        </Button>
+      </div>
+
+      {scopes.length > 0 && (
+        <Collapsible.Root className="border-t border-kumo-hairline">
+          <Collapsible.Trigger className="group flex w-full cursor-pointer items-center justify-between gap-3 px-5 py-3.5 text-left transition-colors duration-150 ease-out hover:bg-kumo-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-kumo-focus">
+            <span className="flex items-center gap-2.5">
+              <ShieldCheckIcon size={16} className="text-kumo-subtle" />
+              <Text size="sm">Permissions</Text>
+            </span>
+            <span className="flex items-center gap-2 text-kumo-subtle">
+              <Text variant="secondary" size="xs">{scopes.length} granted</Text>
+              <CaretDownIcon
+                size={14}
+                className="transition-transform duration-200 ease-out [[data-panel-open]_&]:rotate-180"
+              />
+            </span>
+          </Collapsible.Trigger>
+          <Collapsible.Panel className="ws-perms-panel">
+            <div className="flex flex-wrap gap-1.5 px-5 pb-5 pt-0.5">
+              {scopes.map((scope, i) => (
+                <span
+                  key={scope}
+                  className="ws-chip rounded-md border border-kumo-hairline bg-kumo-recessed px-2 py-1 font-mono text-xs text-kumo-subtle"
+                  style={{ animationDelay: `${Math.min(i * 25, 200)}ms` }}
+                >
+                  {scope}
+                </span>
+              ))}
+            </div>
+          </Collapsible.Panel>
+        </Collapsible.Root>
+      )}
+    </LayerCard>
   );
 }
 

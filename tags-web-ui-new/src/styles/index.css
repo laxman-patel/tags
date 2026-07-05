@@ -43,3 +43,96 @@ body,
 .cl-userButtonPopoverUserPreviewSecondaryIdentifier {
   color: #9aa0aa;
 }
+
+/* ===== Workspace page motion =====
+   Custom curves per the design-agent spec: strong ease-out, sub-300ms,
+   transform/opacity only, and reduced-motion aware. */
+
+@keyframes ws-rise {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.ws-rise {
+  animation: ws-rise 320ms cubic-bezier(0.23, 1, 0.32, 1) both;
+}
+
+/* Live "connected" indicator — a slow, subtle pulsing ring that reads as
+   an always-on status rather than a loading spinner. */
+@keyframes ws-live-ring {
+  0% {
+    transform: scale(1);
+    opacity: 0.45;
+  }
+  70%,
+  100% {
+    transform: scale(2.6);
+    opacity: 0;
+  }
+}
+
+.ws-live-ring {
+  animation: ws-live-ring 2.4s cubic-bezier(0, 0, 0.2, 1) infinite;
+}
+
+/* Permissions disclosure — height driven by Base UI's collapsible var so the
+   reveal is exact, blended with a short fade to avoid a jarring pop. */
+.ws-perms-panel {
+  overflow: hidden;
+  height: var(--collapsible-panel-height);
+  transition: height 220ms cubic-bezier(0.23, 1, 0.32, 1),
+    opacity 160ms ease-out;
+}
+
+.ws-perms-panel[data-starting-style],
+.ws-perms-panel[data-ending-style] {
+  height: 0;
+  opacity: 0;
+}
+
+/* Scope chips cascade in each time the panel opens (data-open toggles). */
+@keyframes ws-chip-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.ws-chip {
+  opacity: 0;
+  transform: translateY(4px);
+}
+
+.ws-perms-panel[data-open] .ws-chip {
+  animation-name: ws-chip-in;
+  animation-duration: 260ms;
+  animation-timing-function: cubic-bezier(0.23, 1, 0.32, 1);
+  animation-fill-mode: forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ws-rise,
+  .ws-live-ring,
+  .ws-perms-panel[data-open] .ws-chip {
+    animation: none;
+  }
+
+  .ws-chip {
+    opacity: 1;
+    transform: none;
+  }
+
+  .ws-perms-panel {
+    transition: none;
+  }
+}
