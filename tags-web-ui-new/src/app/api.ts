@@ -160,6 +160,12 @@ export function createSpace(input: { name: string; channel: string; channelId?: 
   });
 }
 
+export function deleteSpace(spaceId: string) {
+  return requestJson<{ ok: true }>(`/api/spaces/${spaceId}`, {
+    method: "DELETE",
+  });
+}
+
 export function updateSpaceConfig(spaceId: string, input: { enabledTools?: string[]; enabledConnections?: string[]; repoUrls?: string[] }) {
   return requestJson<{ configId: string; version: number }>(`/api/spaces/${spaceId}/config`, {
     method: "PATCH",

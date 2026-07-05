@@ -1,12 +1,25 @@
-import { desc, eq, max } from "drizzle-orm";
+import { and, desc, eq, inArray, max } from "drizzle-orm";
 import type { Db } from "@tags/db";
 import {
+  approvalRequests,
+  artifacts,
+  auditEvents,
   approvalPolicies,
   budgetPolicies,
+  memories,
   memoryPolicies,
+  messages,
   newId,
+  questionRequests,
+  runEvents,
+  runs,
+  schedules,
   spaceConfigs,
+  spaceSandboxSessions,
   spaces,
+  threads,
+  toolInvocations,
+  usageRecords,
   workspaces,
 } from "@tags/db";
 import { parseRuntimeMode, parsePassiveLearningMode, loadActiveSpaceConfig, type RuntimeMode, type PassiveLearningMode } from "./spaces";
@@ -43,6 +56,40 @@ export async function listSpaces(db: Db, organizationId: string) {
 export async function getSpaceById(db: Db, spaceId: string) {
   const rows = await db.select().from(spaces).where(eq(spaces.id, spaceId)).limit(1);
   return rows[0];
+}
+
+export async function deleteSpace(db: Db, input: { spaceId: string; organizationId: string }) {
+  const rows = await db
+    .select({ id: spaces.id })
+    .from(spaces)
+    .where(and(eq(spaces.id, input.spaceId), eq(spaces.organizationId, input.organizationId)))
+    .limit(1);
+  if (!rows[0]) return null;
+
+  await db.transaction(async (tx) => {
+    const runRows = await tx.select({ id: runs.id }).from(runs).where(eq(runs.spaceId, input.spaceId));
+    const runIds = runRows.map((run) => run.id);
+
+    await tx.delete(approvalRequests).where(eq(approvalRequests.spaceId, input.spaceId));
+    await tx.delete(questionRequests).where(eq(questionRequests.spaceId, input.spaceId));
+    await tx.delete(toolInvocations).where(eq(toolInvocations.spaceId, input.spaceId));
+    if (runIds.length > 0) {
+      await tx.delete(runEvents).where(inArray(runEvents.runId, runIds));
+    }
+    await tx.delete(artifacts).where(eq(artifacts.spaceId, input.spaceId));
+    await tx.delete(usageRecords).where(eq(usageRecords.spaceId, input.spaceId));
+    await tx.delete(spaceSandboxSessions).where(eq(spaceSandboxSessions.spaceId, input.spaceId));
+    await tx.delete(runs).where(eq(runs.spaceId, input.spaceId));
+    await tx.delete(memories).where(eq(memories.spaceId, input.spaceId));
+    await tx.delete(messages).where(eq(messages.spaceId, input.spaceId));
+    await tx.delete(threads).where(eq(threads.spaceId, input.spaceId));
+    await tx.delete(schedules).where(eq(schedules.spaceId, input.spaceId));
+    await tx.delete(spaceConfigs).where(eq(spaceConfigs.spaceId, input.spaceId));
+    await tx.delete(auditEvents).where(eq(auditEvents.spaceId, input.spaceId));
+    await tx.delete(spaces).where(eq(spaces.id, input.spaceId));
+  });
+
+  return { deleted: true as const };
 }
 
 export async function createSpaceWithConfig(db: Db, input: CreateSpaceInput) {

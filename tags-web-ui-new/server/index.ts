@@ -10,6 +10,7 @@ import { serve as serveInngest } from "inngest/node";
 import {
   createSpaceConfigVersion,
   createSpaceWithConfig,
+  deleteSpace,
   getSpaceById,
   listSpaces,
 } from "@tags/core/spaces-admin";
@@ -979,6 +980,23 @@ async function handleProtectedApi(
 
       if (method === "POST" && segments[0] === "spaces" && segments.length === 1) {
         return createSpaceForAccount(req, res, db, account, span);
+      }
+
+      if (method === "DELETE" && segments[0] === "spaces" && segments.length === 2) {
+        const spaceId = segments[1];
+        if (!spaceId) return sendJson(res, 400, { error: "space id is required" });
+        const result = await deleteSpace(db, { spaceId, organizationId });
+        if (!result) return sendJson(res, 404, { error: "Not found" });
+        await recordAuditEvent(db, {
+          organizationId,
+          actorUserId: account.user.id,
+          actorType: "human",
+          eventType: "space.deleted",
+          payload: { spaceId, source: "control_plane" },
+        });
+        apiRequestsCompleted.add(1, { route: "spaces.delete", method, outcome: "success" });
+        span.setAttributes({ outcome: "success", "space.id": spaceId });
+        return sendJson(res, 200, { ok: true });
       }
 
       if (method === "GET" && segments[0] === "spaces" && segments[2] === "schedules") {

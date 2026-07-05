@@ -22,11 +22,12 @@ import {
   Tabs,
   Surface,
   Dialog,
+  DropdownMenu,
   Collapsible,
   cn,
 } from "@cloudflare/kumo";
 import {
-  RobotIcon,
+  BrainIcon,
   HashIcon,
   StackIcon,
   ShieldCheckIcon,
@@ -59,6 +60,8 @@ import {
   HeadsetIcon,
   CodeIcon,
   ChartLineUpIcon,
+  DotsThreeIcon,
+  TrashIcon,
 } from "@phosphor-icons/react";
 import {
   Area,
@@ -76,6 +79,7 @@ import {
 } from "recharts";
 import {
   createSpace,
+  deleteSpace as deleteSpaceRequest,
   authorizeComposioTool,
   createSpaceSchedule,
   loadControlPlane,
@@ -620,14 +624,11 @@ function ToolLogo({
 }
 
 function StatusLine({ space }: { space: Space }) {
-  const totalTools = space.tools.length;
-  const readyTools = space.tools.filter((tool) => tool.authState === "connected").length;
-
   return (
     <div className="flex min-w-0 items-center gap-2 text-kumo-subtle">
       <span className={cn("h-1.5 w-1.5 rounded-full shrink-0", statusTone(space.status))} />
       <Text variant="secondary" size="xs" truncate>
-        {space.status === "active" ? "production" : space.status} · {readyTools}/{totalTools} ready
+        {space.status === "active" ? "production" : space.status}
       </Text>
     </div>
   );
@@ -782,16 +783,17 @@ function SpacesView({
   spaces,
   runs,
   onSelectSpace,
+  onDeleteSpace,
   onNewSpace,
 }: {
   spaces: Space[];
   runs: Run[];
   onSelectSpace: (id: string) => void;
+  onDeleteSpace: (id: string) => Promise<void>;
   onNewSpace: () => void;
 }) {
   const activeCount = spaces.filter((s) => s.status === "active").length;
   const errorCount = spaces.filter((s) => s.status === "error").length;
-  const composioCount = spaces.reduce((count, space) => count + space.tools.filter(isComposioTool).length, 0);
 
   return (
     <div>
@@ -808,10 +810,6 @@ function SpacesView({
             <span className="inline-flex items-center gap-1.5 rounded-md border border-kumo-hairline bg-kumo-base px-2 py-1">
               <ActivityIcon size={14} />
               <Text variant="secondary" size="xs">{activeCount} active</Text>
-            </span>
-            <span className="inline-flex items-center gap-1.5 rounded-md border border-kumo-hairline bg-kumo-base px-2 py-1">
-              <WrenchIcon size={14} />
-              <Text variant="secondary" size="xs">{composioCount} Composio</Text>
             </span>
             {errorCount > 0 && (
               <span className="inline-flex items-center gap-1.5 rounded-md border border-kumo-hairline bg-kumo-base px-2 py-1 text-kumo-danger">
@@ -835,6 +833,7 @@ function SpacesView({
             space={space}
             recentRun={runs.find((run) => run.spaceId === space.id)}
             onClick={() => onSelectSpace(space.id)}
+            onDelete={() => onDeleteSpace(space.id)}
           />
         ))}
       </div>
@@ -846,12 +845,15 @@ function SpaceProjectCard({
   space,
   recentRun,
   onClick,
+  onDelete,
 }: {
   space: Space;
   recentRun?: Run;
   onClick: () => void;
+  onDelete: () => Promise<void>;
 }) {
-  const Icon = getSpaceIcon(space.id);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const composioTools = space.tools.filter(isComposioTool);
   const nativeTools = space.tools.filter((tool) => !isComposioTool(tool));
   const centerTools = [
@@ -859,85 +861,158 @@ function SpaceProjectCard({
     ...composioTools.slice(0, 2),
   ];
 
+  const handleDelete = async () => {
+    setDeleting(true);
+    try {
+      await onDelete();
+      setConfirmOpen(false);
+    } catch {
+      // The parent owns the error banner and state rollback.
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   return (
-    <LayerCard
-      role="button"
-      tabIndex={0}
-      onClick={onClick}
-      onKeyDown={(event) => {
-        if (event.key === "Enter" || event.key === " ") {
-          event.preventDefault();
-          onClick();
-        }
-      }}
-      className="group w-[calc(100vw-2rem)] min-w-0 cursor-pointer overflow-hidden p-0 transition-colors hover:bg-kumo-base focus-visible:ring-2 focus-visible:ring-kumo-focus md:w-full"
-    >
-      <div className="flex items-center justify-between gap-3 px-4 py-3">
-        <div className="min-w-0">
-          <Text bold truncate as="div">{space.name}</Text>
-          <div className="mt-1 flex items-center gap-1.5 text-kumo-subtle">
-            <HashIcon size={12} />
-            <Text variant="secondary" size="xs" truncate>{space.channel}</Text>
-          </div>
-        </div>
-        <div className="flex h-8 w-8 items-center justify-center rounded-md border border-kumo-hairline bg-kumo-base text-kumo-subtle">
-          <Icon size={16} weight="regular" />
-        </div>
-      </div>
-
-      <div className="px-2 pb-2">
-        <div className="relative h-44 overflow-hidden rounded-md border border-kumo-hairline bg-kumo-recessed">
-          <div
-            className="absolute inset-0 opacity-60"
-            style={{
-              backgroundImage: "radial-gradient(var(--color-kumo-line) 1px, transparent 1px)",
-              backgroundSize: "10px 10px",
-            }}
-          />
-          <div className="absolute inset-0 flex items-center justify-center">
-            <div className="flex items-center gap-2">
-              {centerTools.map((tool) => (
-                <div
-                  key={tool.id}
-                  className="flex h-10 w-10 items-center justify-center rounded-md border border-kumo-line bg-kumo-base text-kumo-default shadow-sm transition-transform group-hover:-translate-y-0.5"
-                >
-                  {tool.id === "tags" ? (
-                    <RobotIcon size={20} weight="duotone" />
-                  ) : (
-                    <ToolLogo tool={tool} size="base" />
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
-          <div className="absolute inset-x-3 bottom-3 flex items-center justify-between gap-3">
-            <StatusLine space={space} />
-            <div className="hidden items-center gap-2 text-kumo-subtle sm:flex">
-              <span className="inline-flex items-center gap-1">
-                <WrenchIcon size={12} />
-                <Text variant="secondary" size="xs">{displayToolCount(nativeTools.length + composioTools.length)}</Text>
-              </span>
-              <span className="inline-flex items-center gap-1">
-                <ActivityIcon size={12} />
-                <Text variant="secondary" size="xs">{space.runCount.toLocaleString()}</Text>
-              </span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {recentRun && (
-        <div className="flex items-center justify-between gap-3 border-t border-kumo-hairline px-4 py-2.5">
+    <>
+      <LayerCard
+        role="button"
+        tabIndex={0}
+        onClick={onClick}
+        onKeyDown={(event) => {
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            onClick();
+          }
+        }}
+        className="group w-[calc(100vw-2rem)] min-w-0 cursor-pointer overflow-hidden p-0 transition-colors hover:bg-kumo-base focus-visible:ring-2 focus-visible:ring-kumo-focus md:w-full"
+      >
+        <div className="flex items-center justify-between gap-3 px-4 py-3">
           <div className="min-w-0">
-            <Text variant="secondary" size="xs" truncate>{recentRun.triggeredBy}</Text>
+            <Text bold truncate as="div">{space.name}</Text>
+            <div className="mt-1 flex items-center gap-1.5 text-kumo-subtle">
+              <HashIcon size={12} />
+              <Text variant="secondary" size="xs" truncate>{space.channel}</Text>
+            </div>
           </div>
-          <div className="flex items-center gap-1.5 text-kumo-subtle">
-            <ClockIcon size={12} />
-            <Text variant="secondary" size="xs" truncate>{space.lastRun}</Text>
+          <DropdownMenu>
+            <DropdownMenu.Trigger
+              render={(
+                <Button
+                  variant="ghost"
+                  shape="square"
+                  size="sm"
+                  icon={DotsThreeIcon}
+                  aria-label={`Open menu for ${space.name}`}
+                  onClick={(event) => event.stopPropagation()}
+                  onKeyDown={(event) => event.stopPropagation()}
+                  className="shrink-0"
+                />
+              )}
+            />
+            <DropdownMenu.Content onClick={(event) => event.stopPropagation()}>
+              <DropdownMenu.Item
+                variant="danger"
+                icon={TrashIcon}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  setConfirmOpen(true);
+                }}
+              >
+                Delete
+              </DropdownMenu.Item>
+            </DropdownMenu.Content>
+          </DropdownMenu>
+        </div>
+
+        <div className="px-2 pb-2">
+          <div className="relative h-44 overflow-hidden rounded-md border border-kumo-hairline bg-kumo-recessed">
+            <div
+              className="absolute inset-0 opacity-60"
+              style={{
+                backgroundImage: "radial-gradient(var(--color-kumo-line) 1px, transparent 1px)",
+                backgroundSize: "10px 10px",
+              }}
+            />
+            <div className="absolute inset-0 flex items-center justify-center">
+              <div className="flex items-center gap-2">
+                {centerTools.map((tool) => (
+                  <div
+                    key={tool.id}
+                    className="flex h-10 w-10 items-center justify-center rounded-md border border-kumo-line bg-kumo-base text-kumo-default shadow-sm transition-transform group-hover:-translate-y-0.5"
+                  >
+                    {tool.id === "tags" ? (
+                      <BrainIcon size={20} weight="duotone" />
+                    ) : (
+                      <ToolLogo tool={tool} size="base" />
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="absolute inset-x-3 bottom-3 flex items-center justify-between gap-3">
+              <StatusLine space={space} />
+              <div className="hidden items-center gap-2 text-kumo-subtle sm:flex">
+                <span className="inline-flex items-center gap-1">
+                  <WrenchIcon size={12} />
+                  <Text variant="secondary" size="xs">{displayToolCount(nativeTools.length + composioTools.length)}</Text>
+                </span>
+                <span className="inline-flex items-center gap-1">
+                  <ActivityIcon size={12} />
+                  <Text variant="secondary" size="xs">{space.runCount.toLocaleString()}</Text>
+                </span>
+              </div>
+            </div>
           </div>
         </div>
-      )}
-    </LayerCard>
+
+        {recentRun && (
+          <div className="flex items-center justify-between gap-3 border-t border-kumo-hairline px-4 py-2.5">
+            <div className="min-w-0">
+              <Text variant="secondary" size="xs" truncate>{recentRun.triggeredBy}</Text>
+            </div>
+            <div className="flex items-center gap-1.5 text-kumo-subtle">
+              <ClockIcon size={12} />
+              <Text variant="secondary" size="xs" truncate>{space.lastRun}</Text>
+            </div>
+          </div>
+        )}
+      </LayerCard>
+
+      <Dialog.Root open={confirmOpen} onOpenChange={setConfirmOpen}>
+        <Dialog className="max-w-md p-6">
+          <div className="mb-4 flex items-start gap-3">
+            <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-kumo-danger/30 bg-kumo-danger/10 text-kumo-danger">
+              <TrashIcon size={16} />
+            </div>
+            <div className="min-w-0">
+              <Dialog.Title>Delete {space.name}?</Dialog.Title>
+              <Dialog.Description>
+                This deletes the space and its runs, messages, schedules, tools, memory, and artifacts from Tags.
+              </Dialog.Description>
+            </div>
+          </div>
+          <div className="flex justify-end gap-2">
+            <Dialog.Close
+              render={(p) => (
+                <Button {...p} variant="ghost" type="button" disabled={deleting}>
+                  Cancel
+                </Button>
+              )}
+            />
+            <Button
+              variant="primary"
+              type="button"
+              onClick={handleDelete}
+              disabled={deleting}
+              className="bg-kumo-danger text-white hover:bg-kumo-danger/90"
+            >
+              {deleting ? "Deleting" : "Delete"}
+            </Button>
+          </div>
+        </Dialog>
+      </Dialog.Root>
+    </>
   );
 }
 
@@ -1308,7 +1383,7 @@ function SpaceDetailView({
 
             <div className="px-5 py-4">
               <div className="mb-3 flex items-center gap-2">
-                <RobotIcon size={16} className="text-kumo-subtle" />
+                <BrainIcon size={16} className="text-kumo-subtle" />
                 <div>
                   <Text bold>Built in</Text>
                   <Text variant="secondary" size="xs" as="p">Always on</Text>
@@ -1693,17 +1768,6 @@ function SpaceDetailView({
   );
 }
 
-const SPACE_ICONS: Record<string, ComponentType<{ size?: number; weight?: "fill" | "duotone" | "regular"; className?: string }>> = {
-  sp_01: HeadsetIcon,
-  sp_02: CodeIcon,
-  sp_03: ChartLineUpIcon,
-  sp_04: RocketIcon,
-};
-
-function getSpaceIcon(id: string) {
-  return SPACE_ICONS[id] ?? RobotIcon;
-}
-
 const ACTION_META: Record<
   string,
   { icon: ComponentType<{ size?: number; className?: string }>; variant: "warning" | "info" | "error" | "primary" }
@@ -1815,7 +1879,7 @@ function ApprovalsView({
                   </Text>
                   <div className="flex items-center gap-4 flex-wrap">
                     <span className="inline-flex items-center gap-1 text-kumo-subtle">
-                      <RobotIcon size={12} />
+                      <BrainIcon size={12} />
                       <Text variant="secondary" size="xs">{apr.spaceName}</Text>
                     </span>
                     <span className="inline-flex items-center gap-1 text-kumo-subtle">
@@ -1983,7 +2047,7 @@ function RunDetailView({ run, events, onBack }: { run: Run; events: RunEvent[]; 
           { label: "Started", value: run.startedAt, icon: <ClockIcon size={14} /> },
           { label: "Duration", value: run.duration, icon: <ActivityIcon size={14} /> },
           { label: "Tool calls", value: run.toolCalls, icon: <LightningIcon size={14} /> },
-          { label: "Triggered by", value: run.triggeredBy, icon: <RobotIcon size={14} /> },
+          { label: "Triggered by", value: run.triggeredBy, icon: <BrainIcon size={14} /> },
         ]}
       />
 
@@ -2453,6 +2517,24 @@ function DashboardApp({ clerkEnabled = false }: { clerkEnabled?: boolean }) {
     }
   };
 
+  const handleDeleteSpace = async (id: string) => {
+    const previousSpaces = spaces;
+    const previousRuns = runs;
+    setSpaces((prev) => prev.filter((space) => space.id !== id));
+    setRuns((prev) => prev.filter((run) => run.spaceId !== id));
+    if (view.page === "space-detail" && view.id === id) setView({ page: "spaces" });
+    try {
+      await deleteSpaceRequest(id);
+      await refresh();
+    } catch (err) {
+      setSpaces(previousSpaces);
+      setRuns(previousRuns);
+      setError(err instanceof Error ? err.message : "Failed to delete space");
+      await refresh().catch(() => undefined);
+      throw err;
+    }
+  };
+
   const handleCreateSpace = async (name: string, channel: string, channelId?: string) => {
     try {
       await createSpace({ name, channel, channelId });
@@ -2577,6 +2659,7 @@ function DashboardApp({ clerkEnabled = false }: { clerkEnabled?: boolean }) {
                         spaces={spaces}
                         runs={runs}
                         onSelectSpace={(id) => setView({ page: "space-detail", id })}
+                        onDeleteSpace={handleDeleteSpace}
                         onNewSpace={() => setNewSpaceOpen(true)}
                       />
                     )}
