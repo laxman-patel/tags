@@ -7,7 +7,6 @@ import {
   Button,
   Badge,
   Text,
-  Meter,
   Empty,
   Field,
   Input,
@@ -40,7 +39,6 @@ import {
   ArrowSquareOutIcon,
   CoinsIcon,
   CpuIcon,
-  TerminalWindowIcon,
   EnvelopeIcon,
   GitPullRequestIcon,
   RocketIcon,
@@ -48,7 +46,6 @@ import {
   DatabaseIcon,
   ChatCircleIcon,
   WrenchIcon,
-  GearIcon,
   HeadsetIcon,
   CodeIcon,
   ChartLineUpIcon,
@@ -508,51 +505,55 @@ function SpacesView({
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 mb-6">
         {spaces.map((space) => {
           const statusRing = {
-            active: "ring-kumo-success/20 bg-kumo-success/10 text-kumo-success",
-            paused: "ring-kumo-warning/20 bg-kumo-warning/10 text-kumo-warning",
-            error: "ring-kumo-danger/20 bg-kumo-danger/10 text-kumo-danger",
+            active: "bg-kumo-success",
+            paused: "bg-kumo-warning",
+            error: "bg-kumo-danger",
           }[space.status];
+          const Icon = getSpaceIcon(space.id);
+
           return (
             <button
               key={space.id}
               type="button"
               onClick={() => onSelectSpace(space.id)}
-              className="group text-left rounded-xl border border-kumo-hairline bg-kumo-base p-5 hover:border-kumo-line hover:shadow-sm transition-all cursor-pointer"
+              className="group text-left rounded-lg border border-kumo-hairline bg-kumo-base p-4 hover:border-kumo-line hover:bg-kumo-tint/40 transition-colors cursor-pointer"
             >
-              <div className="flex items-start justify-between gap-3 mb-4">
-                {(() => {
-                  const Icon = getSpaceIcon(space.id);
-                  return (
-                    <div className={cn("w-10 h-10 rounded-lg flex items-center justify-center ring-1 shrink-0", statusRing)}>
-                      <Icon size={20} weight="duotone" />
-                    </div>
-                  );
-                })()}
-                <SpaceStatusBadge status={space.status} />
+              <div className="flex items-start gap-3">
+                <div className="flex h-9 w-9 items-center justify-center rounded-md border border-kumo-hairline bg-kumo-canvas text-kumo-subtle shrink-0">
+                  <Icon size={18} weight="regular" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <Text bold truncate as="div">{space.name}</Text>
+                    <span className={cn("h-1.5 w-1.5 rounded-full shrink-0", statusRing)} />
+                  </div>
+                  <div className="mt-1 inline-flex items-center gap-1 text-kumo-subtle">
+                    <HashIcon size={12} />
+                    <Text variant="mono-secondary" size="xs">{space.channel}</Text>
+                  </div>
+                </div>
+                <CaretRightIcon
+                  size={14}
+                  className="mt-2.5 text-kumo-inactive transition-transform group-hover:translate-x-0.5 group-hover:text-kumo-subtle"
+                />
               </div>
 
-              <Text bold truncate as="div">{space.name}</Text>
-              <div className="inline-flex items-center gap-1 text-kumo-subtle mt-0.5">
-                <HashIcon size={12} />
-                <Text variant="mono-secondary" size="xs">{space.channel}</Text>
-              </div>
-
-              <div className="flex items-center gap-4 mt-4 pt-4 border-t border-kumo-hairline text-kumo-subtle">
-                <div className="flex items-center gap-1.5">
+              <div className="mt-3 grid grid-cols-3 gap-2 border-t border-kumo-hairline pt-3 text-kumo-subtle">
+                <div className="flex min-w-0 items-center gap-1.5">
                   <PlayIcon size={12} />
                   <Text variant="mono-secondary" size="xs">
                     {space.runCount.toLocaleString()}
                   </Text>
                 </div>
-                <div className="flex items-center gap-1.5">
+                <div className="flex min-w-0 items-center gap-1.5">
                   <CoinsIcon size={12} />
                   <Text variant="mono-secondary" size="xs">
                     ${space.cost.toFixed(2)}
                   </Text>
                 </div>
-                <div className="flex items-center gap-1.5 ml-auto">
+                <div className="flex min-w-0 items-center justify-end gap-1.5">
                   <ClockIcon size={12} />
-                  <Text variant="mono-secondary" size="xs">
+                  <Text variant="mono-secondary" size="xs" truncate>
                     {space.lastRun}
                   </Text>
                 </div>
@@ -604,14 +605,9 @@ function SpaceDetailView({
         title={space.name}
         description={`#${space.channel}`}
         actions={
-          <>
-            <Button variant="secondary" icon={ArrowClockwiseIcon}>
-              Restart
-            </Button>
-            <Button variant="ghost" icon={TerminalWindowIcon}>
-              Settings
-            </Button>
-          </>
+          <Button variant="secondary" icon={ArrowClockwiseIcon}>
+            Restart
+          </Button>
         }
       />
 
@@ -643,54 +639,56 @@ function SpaceDetailView({
       />
 
       {tab === "overview" && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <LayerCard>
-            <LayerCard.Secondary className="flex items-center gap-2">
-              <PlayIcon size={14} className="text-kumo-subtle" />
-              <Text bold>Runs — last 7 days</Text>
-            </LayerCard.Secondary>
-            <LayerCard.Primary>
-              <div className="h-36 -mx-2">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={SPACE_RUNS_PER_DAY} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="2 4" stroke="var(--color-kumo-hairline)" vertical={false} />
-                    <XAxis dataKey="d" tick={{ fontSize: 10, fill: CHART_MUTED }} axisLine={false} tickLine={false} />
-                    <YAxis tick={{ fontSize: 10, fill: CHART_MUTED }} axisLine={false} tickLine={false} width={28} />
-                    <Tooltip {...ChartTooltipStyle()} cursor={{ fill: "var(--color-kumo-tint)" }} />
-                    <Bar dataKey="runs" fill={CHART_BRAND} radius={[3, 3, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            </LayerCard.Primary>
-          </LayerCard>
+        <div className="flex flex-col gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <LayerCard>
+              <LayerCard.Secondary className="flex items-center gap-2">
+                <PlayIcon size={14} className="text-kumo-subtle" />
+                <Text bold>Runs — last 7 days</Text>
+              </LayerCard.Secondary>
+              <LayerCard.Primary>
+                <div className="h-36 -mx-2">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={SPACE_RUNS_PER_DAY} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="2 4" stroke="var(--color-kumo-hairline)" vertical={false} />
+                      <XAxis dataKey="d" tick={{ fontSize: 10, fill: CHART_MUTED }} axisLine={false} tickLine={false} />
+                      <YAxis tick={{ fontSize: 10, fill: CHART_MUTED }} axisLine={false} tickLine={false} width={28} />
+                      <Tooltip {...ChartTooltipStyle()} cursor={{ fill: "var(--color-kumo-tint)" }} />
+                      <Bar dataKey="runs" fill={CHART_BRAND} radius={[3, 3, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </LayerCard.Primary>
+            </LayerCard>
+
+            <LayerCard>
+              <LayerCard.Secondary className="flex items-center gap-2">
+                <CpuIcon size={14} className="text-kumo-subtle" />
+                <Text bold>Tokens — last 7 days (k)</Text>
+              </LayerCard.Secondary>
+              <LayerCard.Primary>
+                <div className="h-36 -mx-2">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={SPACE_TOKEN_TREND} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
+                      <defs>
+                        <linearGradient id="tokGrad" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor={CHART_BRAND} stopOpacity={0.35} />
+                          <stop offset="100%" stopColor={CHART_BRAND} stopOpacity={0} />
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="2 4" stroke="var(--color-kumo-hairline)" vertical={false} />
+                      <XAxis dataKey="d" tick={{ fontSize: 10, fill: CHART_MUTED }} axisLine={false} tickLine={false} />
+                      <YAxis tick={{ fontSize: 10, fill: CHART_MUTED }} axisLine={false} tickLine={false} width={28} />
+                      <Tooltip {...ChartTooltipStyle()} />
+                      <Area type="monotone" dataKey="tokens" stroke={CHART_BRAND} strokeWidth={2} fill="url(#tokGrad)" />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </div>
+              </LayerCard.Primary>
+            </LayerCard>
+          </div>
 
           <LayerCard>
-            <LayerCard.Secondary className="flex items-center gap-2">
-              <CpuIcon size={14} className="text-kumo-subtle" />
-              <Text bold>Tokens — last 7 days (k)</Text>
-            </LayerCard.Secondary>
-            <LayerCard.Primary>
-              <div className="h-36 -mx-2">
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={SPACE_TOKEN_TREND} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
-                    <defs>
-                      <linearGradient id="tokGrad" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor={CHART_BRAND} stopOpacity={0.35} />
-                        <stop offset="100%" stopColor={CHART_BRAND} stopOpacity={0} />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="2 4" stroke="var(--color-kumo-hairline)" vertical={false} />
-                    <XAxis dataKey="d" tick={{ fontSize: 10, fill: CHART_MUTED }} axisLine={false} tickLine={false} />
-                    <YAxis tick={{ fontSize: 10, fill: CHART_MUTED }} axisLine={false} tickLine={false} width={28} />
-                    <Tooltip {...ChartTooltipStyle()} />
-                    <Area type="monotone" dataKey="tokens" stroke={CHART_BRAND} strokeWidth={2} fill="url(#tokGrad)" />
-                  </AreaChart>
-                </ResponsiveContainer>
-              </div>
-            </LayerCard.Primary>
-          </LayerCard>
-
-          <LayerCard className="md:col-span-2">
             <LayerCard.Secondary className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <GitBranchIcon size={14} className="text-kumo-subtle" />
@@ -738,20 +736,6 @@ function SpaceDetailView({
                   ))}
                 </div>
               )}
-            </LayerCard.Primary>
-          </LayerCard>
-
-          <LayerCard>
-            <LayerCard.Secondary className="flex items-center gap-2">
-              <CoinsIcon size={14} className="text-kumo-subtle" />
-              <Text bold>Token budget</Text>
-            </LayerCard.Secondary>
-            <LayerCard.Primary>
-              <Meter
-                label="Monthly usage"
-                value={Math.min(100, (space.tokenUsage / 10_000_000) * 100)}
-                customValue={`${(space.tokenUsage / 1_000_000).toFixed(2)}M / 10.00M`}
-              />
             </LayerCard.Primary>
           </LayerCard>
         </div>
@@ -1692,12 +1676,6 @@ export default function App() {
               </Sidebar.Menu>
             </Sidebar.Group>
 
-            <Sidebar.Group>
-              <Sidebar.GroupLabel>Settings</Sidebar.GroupLabel>
-              <Sidebar.Menu>
-                <Sidebar.MenuButton icon={GearIcon}>Workspace</Sidebar.MenuButton>
-              </Sidebar.Menu>
-            </Sidebar.Group>
           </Sidebar.Content>
 
           <Sidebar.Footer>
@@ -1716,13 +1694,6 @@ export default function App() {
         </Sidebar>
 
         <main className="flex-1 overflow-y-auto bg-kumo-canvas">
-          <div className="sticky top-0 z-10 bg-kumo-canvas/80 backdrop-blur border-b border-kumo-hairline px-4 py-2 flex items-center gap-2">
-            <Text variant="mono-secondary" size="xs">tags.acme</Text>
-            <span className="text-kumo-inactive">/</span>
-            <Text variant="mono-secondary" size="xs" className="capitalize">
-              {view.page.replace("-", " ")}
-            </Text>
-          </div>
           <div className="p-6 max-w-6xl mx-auto">
             {error && (
               <LayerCard className="mb-4 border-kumo-danger/40">
