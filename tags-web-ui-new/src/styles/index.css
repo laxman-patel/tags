@@ -13,3 +13,33 @@ body,
 #root {
   min-height: 100vh;
 }
+
+.cl-userButtonPopoverCard,
+.cl-userButtonPopoverMain,
+.cl-modalContent,
+.cl-card {
+  color: #e2e4ea;
+}
+
+.cl-userButtonPopoverCard p,
+.cl-userButtonPopoverCard span,
+.cl-userButtonPopoverCard button,
+.cl-userButtonPopoverCard svg,
+.cl-modalContent p,
+.cl-modalContent span,
+.cl-modalContent label,
+.cl-modalContent button,
+.cl-modalContent svg {
+  color: inherit;
+}
+
+.cl-userButtonPopoverActionButton,
+.cl-userButtonPopoverActionButtonText,
+.cl-userButtonPopoverUserPreviewMainIdentifier {
+  color: #f4f5f8;
+}
+
+.cl-userButtonPopoverActionButtonIcon,
+.cl-userButtonPopoverUserPreviewSecondaryIdentifier {
+  color: #9aa0aa;
+}

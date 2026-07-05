@@ -90,6 +90,7 @@ import {
   type Tool,
   type ToolAuthState,
 } from "./api";
+import { clerkAppearance } from "./clerkAppearance";
 
 // ===== Types =====
 
@@ -99,32 +100,6 @@ type View =
   | { page: "approvals" }
   | { page: "runs" }
   | { page: "run-detail"; id: string };
-
-const clerkAccountAppearance = {
-  variables: {
-    colorBackground: "#0a0c11",
-    colorText: "#e2e4ea",
-    colorTextSecondary: "#9aa0aa",
-    colorPrimary: "#7c6fff",
-    colorInputBackground: "#10131a",
-    colorInputText: "#e2e4ea",
-    colorNeutral: "#1a1d28",
-    borderRadius: "8px",
-  },
-  elements: {
-    cardBox: "bg-[#0a0c11] border border-white/10 shadow-2xl",
-    card: "bg-[#0a0c11]",
-    modalContent: "bg-[#0a0c11] text-[#e2e4ea]",
-    modalCloseButton: "text-[#e2e4ea] hover:bg-white/10",
-    navbar: "bg-[#0a0c11] border-white/10",
-    navbarButton: "text-[#e2e4ea] hover:bg-white/10",
-    formButtonPrimary: "bg-[#7c6fff] text-white hover:bg-[#6b60e8]",
-    userButtonPopoverCard: "bg-[#0a0c11] border border-white/10 text-[#e2e4ea]",
-    userButtonPopoverActionButton: "text-[#e2e4ea] hover:bg-white/10",
-    userButtonPopoverActionButtonText: "text-[#e2e4ea]",
-    userButtonPopoverFooter: "hidden",
-  },
-};
 
 function FallbackAccountFooter() {
   return (
@@ -174,9 +149,9 @@ function ClerkAccountFooter() {
             className="absolute left-0 top-1/2 -translate-y-1/2 group-data-[state=collapsed]/sidebar:left-1/2 group-data-[state=collapsed]/sidebar:-translate-x-1/2"
           >
             <UserButton
-              appearance={clerkAccountAppearance}
+              appearance={clerkAppearance}
               userProfileMode="modal"
-              userProfileProps={{ appearance: clerkAccountAppearance }}
+              userProfileProps={{ appearance: clerkAppearance }}
             />
           </div>
           <div className="w-7 h-7 shrink-0" aria-hidden="true" />
