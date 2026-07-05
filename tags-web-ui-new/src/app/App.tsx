@@ -653,116 +653,86 @@ function MetricGrid({ metrics }: { metrics: Metric[] }) {
 // ===== Views =====
 
 function WorkspaceView({
-  organizationId,
   slackWorkspace,
-  spaces,
-  runs,
-  approvals,
 }: {
-  organizationId: string;
   slackWorkspace: SlackWorkspace | null;
-  spaces: Space[];
-  runs: Run[];
-  approvals: Approval[];
 }) {
-  const activeSpaces = spaces.filter((space) => space.status === "active").length;
-  const connectedTools = spaces.reduce(
-    (count, space) => count + space.tools.filter((tool) => tool.authState === "connected").length,
-    0,
-  );
   const scopes = slackWorkspace?.scopes ?? [];
+  const workspaceName = slackWorkspace?.name || "Unnamed workspace";
 
   return (
-    <div>
+    <div className="max-w-3xl">
       <PageHeader
         title="Workspace"
-        description="Slack connection, workspace identity, and account-level settings for Tags."
-        actions={
-          slackWorkspace ? (
-            <Button
-              variant="secondary"
-              icon={ArrowClockwiseIcon}
-              onClick={() => {
-                window.location.href = "/api/slack/oauth/start";
-              }}
-            >
-              Reconnect Slack
-            </Button>
-          ) : undefined
-        }
+        description="The Slack workspace connected to this Tags account."
       />
 
       {!slackWorkspace ? (
         <SlackConnectEmpty />
       ) : (
-        <div className="flex flex-col gap-4">
-          <MetricGrid
-            metrics={[
-              { label: "Spaces", value: spaces.length.toLocaleString(), icon: <StackIcon size={14} /> },
-              { label: "Active", value: activeSpaces.toLocaleString(), icon: <ActivityIcon size={14} /> },
-              { label: "Runs", value: runs.length.toLocaleString(), icon: <PlayIcon size={14} /> },
-              { label: "Pending approvals", value: approvals.length.toLocaleString(), icon: <ShieldCheckIcon size={14} /> },
-            ]}
-          />
-
-          <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1.1fr)_minmax(280px,0.9fr)]">
-            <LayerCard>
-              <LayerCard.Secondary className="flex items-center justify-between gap-3">
-                <div className="flex min-w-0 items-center gap-2">
-                  <SlackLogoIcon size={16} className="text-kumo-subtle shrink-0" />
-                  <Text bold truncate>Slack workspace</Text>
+        <LayerCard className="overflow-hidden">
+          <LayerCard.Primary>
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+              <div className="flex min-w-0 items-center gap-3">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-kumo-hairline bg-kumo-recessed text-kumo-subtle">
+                  <SlackLogoIcon size={20} />
                 </div>
+                <div className="min-w-0">
+                  <Text variant="heading3" as="h2" truncate>
+                    {workspaceName}
+                  </Text>
+                  <Text variant="secondary" size="sm" truncate>
+                    Slack team {slackWorkspace.teamId}
+                  </Text>
+                </div>
+              </div>
+              <div className="flex shrink-0 items-center gap-2">
                 <Badge variant="success" appearance="dot">Connected</Badge>
-              </LayerCard.Secondary>
-              <LayerCard.Primary>
-                <div className="flex flex-col divide-y divide-kumo-hairline">
-                  <WorkspaceInfoRow label="Workspace name" value={slackWorkspace.name || "Unnamed workspace"} />
-                  <WorkspaceInfoRow label="Slack team ID" value={slackWorkspace.teamId} />
-                  <WorkspaceInfoRow label="Tags workspace ID" value={slackWorkspace.id} />
-                  <WorkspaceInfoRow label="Bot user ID" value={slackWorkspace.botUserId || "Not available"} />
-                  <WorkspaceInfoRow label="Organization ID" value={organizationId || "Not available"} />
-                </div>
-              </LayerCard.Primary>
-            </LayerCard>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  icon={ArrowClockwiseIcon}
+                  onClick={() => {
+                    window.location.href = "/api/slack/oauth/start";
+                  }}
+                >
+                  Reconnect
+                </Button>
+              </div>
+            </div>
+          </LayerCard.Primary>
 
-            <LayerCard>
-              <LayerCard.Secondary className="flex items-center gap-2">
-                <WrenchIcon size={14} className="text-kumo-subtle" />
-                <Text bold>Workspace summary</Text>
-              </LayerCard.Secondary>
-              <LayerCard.Primary>
-                <div className="flex flex-col gap-3">
-                  <div className="rounded-md border border-kumo-hairline bg-kumo-recessed p-3">
-                    <Text variant="secondary" size="xs">Connected tools across Spaces</Text>
-                    <Text variant="heading3" as="div">{connectedTools.toLocaleString()}</Text>
-                  </div>
-                  <div className="rounded-md border border-kumo-hairline bg-kumo-recessed p-3">
-                    <Text variant="secondary" size="xs">OAuth scopes</Text>
-                    <Text variant="heading3" as="div">{scopes.length.toLocaleString()}</Text>
-                  </div>
-                </div>
-              </LayerCard.Primary>
-            </LayerCard>
+          <div className="border-t border-kumo-hairline px-4 py-2 sm:px-5">
+            <WorkspaceInfoRow label="Workspace name" value={workspaceName} />
+            <WorkspaceInfoRow label="Slack team ID" value={slackWorkspace.teamId} />
+            <WorkspaceInfoRow label="Bot user ID" value={slackWorkspace.botUserId || "Not available"} />
+            <WorkspaceInfoRow label="Installation ID" value={slackWorkspace.id} />
           </div>
 
-          <LayerCard>
-            <LayerCard.Secondary className="flex items-center gap-2">
-              <ShieldCheckIcon size={14} className="text-kumo-subtle" />
-              <Text bold>Slack OAuth scopes</Text>
-            </LayerCard.Secondary>
-            <LayerCard.Primary>
-              {scopes.length === 0 ? (
-                <Text variant="secondary" size="sm">No scopes were returned for this installation.</Text>
-              ) : (
-                <div className="flex flex-wrap gap-2">
-                  {scopes.map((scope) => (
-                    <Badge key={scope} variant="default">{scope}</Badge>
-                  ))}
-                </div>
-              )}
-            </LayerCard.Primary>
-          </LayerCard>
-        </div>
+          <div className="border-t border-kumo-hairline px-4 py-4 sm:px-5">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <Text bold>Slack permissions</Text>
+                <Text variant="secondary" size="sm" as="p">
+                  Scopes granted to the Tags Slack app.
+                </Text>
+              </div>
+              <Badge variant="info">{scopes.length} scopes</Badge>
+            </div>
+            {scopes.length > 0 && (
+              <div className="mt-3 flex flex-wrap gap-1.5">
+                {scopes.map((scope) => (
+                  <span
+                    key={scope}
+                    className="rounded-md border border-kumo-hairline bg-kumo-recessed px-2 py-1 text-xs text-kumo-subtle"
+                  >
+                    {scope}
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+        </LayerCard>
       )}
     </div>
   );
@@ -770,7 +740,7 @@ function WorkspaceView({
 
 function WorkspaceInfoRow({ label, value }: { label: string; value: string }) {
   return (
-    <div className="grid gap-1 py-3 sm:grid-cols-[160px_minmax(0,1fr)] sm:gap-4">
+    <div className="grid gap-1 border-b border-kumo-hairline py-3 last:border-b-0 sm:grid-cols-[150px_minmax(0,1fr)] sm:gap-4">
       <Text variant="secondary" size="sm">{label}</Text>
       <Text size="sm" DANGEROUS_className="min-w-0 break-all">{value}</Text>
     </div>
@@ -1999,7 +1969,6 @@ function NewSpaceDialog({
 function DashboardApp({ clerkEnabled = false }: { clerkEnabled?: boolean }) {
   const [view, setView] = useState<View>({ page: "spaces" });
   const [newSpaceOpen, setNewSpaceOpen] = useState(false);
-  const [organizationId, setOrganizationId] = useState("");
   const [slackWorkspace, setSlackWorkspace] = useState<SlackWorkspace | null>(null);
   const [spaces, setSpaces] = useState<Space[]>([]);
   const [runs, setRuns] = useState<Run[]>([]);
@@ -2011,7 +1980,6 @@ function DashboardApp({ clerkEnabled = false }: { clerkEnabled?: boolean }) {
   const refresh = async () => {
     setError(null);
     const payload = await loadControlPlane();
-    setOrganizationId(payload.organizationId);
     setSlackWorkspace(payload.slackWorkspace);
     setSpaces(payload.spaces);
     setRuns(payload.runs);
@@ -2264,8 +2232,10 @@ function DashboardApp({ clerkEnabled = false }: { clerkEnabled?: boolean }) {
               </Sidebar.Menu>
             </Sidebar.Group>
 
-            <Sidebar.Group className="mt-6 pt-4 border-t border-kumo-hairline">
-              <Sidebar.GroupLabel>Settings</Sidebar.GroupLabel>
+            <Sidebar.Group className="mt-6 border-t border-kumo-hairline pt-4 group-data-[state=collapsed]/sidebar:mt-4 group-data-[state=collapsed]/sidebar:pt-4">
+              <Sidebar.GroupLabel DANGEROUS_className="group-data-[state=collapsed]/sidebar:hidden">
+                Settings
+              </Sidebar.GroupLabel>
               <Sidebar.Menu>
                 <Sidebar.MenuButton
                   icon={GearSixIcon}
@@ -2301,11 +2271,7 @@ function DashboardApp({ clerkEnabled = false }: { clerkEnabled?: boolean }) {
               <>
                 {!slackWorkspace || view.page === "workspace" ? (
                   <WorkspaceView
-                    organizationId={organizationId}
                     slackWorkspace={slackWorkspace}
-                    spaces={spaces}
-                    runs={runs}
-                    approvals={approvals}
                   />
                 ) : (
                   <>
