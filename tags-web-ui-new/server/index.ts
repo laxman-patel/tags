@@ -171,9 +171,9 @@ function duration(startedAt: Date, finishedAt: Date | null) {
 }
 
 function runStatus(status: string) {
-  if (status === "succeeded") return "success";
+  if (status === "done") return "success";
   if (status === "failed") return "failed";
-  if (status === "running") return "running";
+  if (status === "streaming" || status === "waiting") return "running";
   return "pending";
 }
 
