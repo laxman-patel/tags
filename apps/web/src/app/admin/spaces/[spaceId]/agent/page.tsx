@@ -6,5 +6,5 @@ export default async function SpaceAgentRedirect({
   params: Promise<{ spaceId: string }>;
 }) {
   const { spaceId } = await params;
-  redirect(`/admin/spaces/${spaceId}/codebase`);
+  redirect(`/?space=${encodeURIComponent(spaceId)}&tab=codebase`);
 }

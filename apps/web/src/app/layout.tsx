@@ -1,5 +1,4 @@
 import { ClerkProvider } from "@clerk/nextjs";
-import { SiteHeader } from "@/components/site-header";
 import "./globals.css";
 import { Geist, Geist_Mono } from "next/font/google";
 import { cn } from "@/lib/utils";
@@ -17,7 +16,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en" className={cn("dark font-sans", geist.variable, geistMono.variable)}>
       <body>
         <ClerkProvider>
-          <SiteHeader />
           {children}
         </ClerkProvider>
       </body>
