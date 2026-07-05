@@ -1,4 +1,10 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import {
+  SignInButton,
+  UserButton,
+  useOrganization,
+  useUser,
+} from "@clerk/react";
 import tagsLogo from "../imports/Group_101__5_.png";
 import {
   Sidebar,
@@ -93,6 +99,109 @@ type View =
   | { page: "approvals" }
   | { page: "runs" }
   | { page: "run-detail"; id: string };
+
+const clerkAccountAppearance = {
+  variables: {
+    colorBackground: "#0a0c11",
+    colorText: "#e2e4ea",
+    colorTextSecondary: "#9aa0aa",
+    colorPrimary: "#7c6fff",
+    colorInputBackground: "#10131a",
+    colorInputText: "#e2e4ea",
+    colorNeutral: "#1a1d28",
+    borderRadius: "8px",
+  },
+  elements: {
+    cardBox: "bg-[#0a0c11] border border-white/10 shadow-2xl",
+    card: "bg-[#0a0c11]",
+    modalContent: "bg-[#0a0c11] text-[#e2e4ea]",
+    modalCloseButton: "text-[#e2e4ea] hover:bg-white/10",
+    navbar: "bg-[#0a0c11] border-white/10",
+    navbarButton: "text-[#e2e4ea] hover:bg-white/10",
+    formButtonPrimary: "bg-[#7c6fff] text-white hover:bg-[#6b60e8]",
+    userButtonPopoverCard: "bg-[#0a0c11] border border-white/10 text-[#e2e4ea]",
+    userButtonPopoverActionButton: "text-[#e2e4ea] hover:bg-white/10",
+    userButtonPopoverActionButtonText: "text-[#e2e4ea]",
+    userButtonPopoverFooter: "hidden",
+  },
+};
+
+function FallbackAccountFooter() {
+  return (
+    <div className="flex items-center gap-2 px-2 py-2">
+      <div className="w-7 h-7 rounded-full bg-kumo-tint flex items-center justify-center shrink-0">
+        <Text size="xs">A</Text>
+      </div>
+      <div className="min-w-0 group-data-[state=collapsed]/sidebar:hidden">
+        <Text size="sm" truncate>Admin</Text>
+        <Text variant="secondary" size="xs" truncate>
+          acme.workspace
+        </Text>
+      </div>
+    </div>
+  );
+}
+
+function ClerkAccountFooter() {
+  const triggerRef = useRef<HTMLDivElement>(null);
+  const { isSignedIn, user } = useUser();
+  const { organization } = useOrganization();
+  const displayName =
+    user?.fullName ||
+    user?.primaryEmailAddress?.emailAddress ||
+    user?.username ||
+    "Admin";
+  const workspaceName = organization?.name
+    ? `${organization.name}.workspace`
+    : "acme.workspace";
+
+  return (
+    <div className="px-2 py-2">
+      {isSignedIn ? (
+        <div className="relative flex items-center gap-2">
+          <button
+            type="button"
+            aria-label="Manage account"
+            className="absolute inset-0 z-10 rounded-md"
+            onClick={() => {
+              triggerRef.current
+                ?.querySelector<HTMLButtonElement>("button")
+                ?.click();
+            }}
+          />
+          <div ref={triggerRef} className="absolute left-0 top-1/2 -translate-y-1/2">
+            <UserButton
+              appearance={clerkAccountAppearance}
+              userProfileMode="modal"
+              userProfileProps={{ appearance: clerkAccountAppearance }}
+            />
+          </div>
+          <div className="w-7 h-7 shrink-0" aria-hidden="true" />
+          <div className="min-w-0 group-data-[state=collapsed]/sidebar:hidden">
+            <Text size="sm" truncate>{displayName}</Text>
+            <Text variant="secondary" size="xs" truncate>
+              {workspaceName}
+            </Text>
+          </div>
+        </div>
+      ) : (
+        <SignInButton mode="modal">
+          <button type="button" className="flex w-full items-center gap-2 rounded-md text-left">
+            <div className="w-7 h-7 rounded-full bg-kumo-tint flex items-center justify-center shrink-0">
+              <Text size="xs">A</Text>
+            </div>
+            <div className="min-w-0 group-data-[state=collapsed]/sidebar:hidden">
+              <Text size="sm" truncate>Sign in</Text>
+              <Text variant="secondary" size="xs" truncate>
+                Manage account
+              </Text>
+            </div>
+          </button>
+        </SignInButton>
+      )}
+    </div>
+  );
+}
 
 // ===== Mock Data =====
 
@@ -1716,7 +1825,7 @@ function NewSpaceDialog({
 
 // ===== App =====
 
-export default function App() {
+export default function App({ clerkEnabled = false }: { clerkEnabled?: boolean }) {
   const [view, setView] = useState<View>({ page: "spaces" });
   const [newSpaceOpen, setNewSpaceOpen] = useState(false);
   const [spaces, setSpaces] = useState<Space[]>([]);
@@ -1928,12 +2037,12 @@ export default function App() {
   return (
     <div data-mode="dark" className="min-h-screen w-full bg-kumo-canvas">
       <Sidebar.Provider
-        defaultOpen
+        defaultOpen={false}
         collapsible="icon"
-        contained
+        peekable
         className="min-h-screen"
       >
-        <Sidebar variant="sidebar">
+        <Sidebar>
           <Sidebar.Header>
             <div className="flex items-center gap-2 px-2 py-1">
               <img
@@ -1981,17 +2090,7 @@ export default function App() {
           </Sidebar.Content>
 
           <Sidebar.Footer>
-            <div className="flex items-center gap-2 px-2 py-2">
-              <div className="w-7 h-7 rounded-full bg-kumo-tint flex items-center justify-center shrink-0">
-                <Text size="xs">A</Text>
-              </div>
-              <div className="min-w-0">
-                <Text size="sm" truncate>Admin</Text>
-                <Text variant="secondary" size="xs" truncate>
-                  acme.workspace
-                </Text>
-              </div>
-            </div>
+            {clerkEnabled ? <ClerkAccountFooter /> : <FallbackAccountFooter />}
           </Sidebar.Footer>
         </Sidebar>
 

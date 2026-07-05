@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.server.json"
   },
   "dependencies": {
+    "@clerk/react": "^6.11.3",
     "@cloudflare/kumo": "^2.6.0",
     "@emotion/react": "11.14.0",
     "@emotion/styled": "11.14.1",
