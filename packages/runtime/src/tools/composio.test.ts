@@ -22,6 +22,18 @@ describe("resolveToolkitConnectionStatus", () => {
     ).toBe("connected");
   });
 
+  it("normalizes connected account statuses", () => {
+    for (const accountStatus of ["active", " CONNECTED ", "enabled"]) {
+      expect(
+        resolveToolkitConnectionStatus({
+          hasApiKey: true,
+          enabled: true,
+          accountStatus,
+        }),
+      ).toBe("connected");
+    }
+  });
+
   it("reports needs_auth when enabled but not connected", () => {
     expect(
       resolveToolkitConnectionStatus({

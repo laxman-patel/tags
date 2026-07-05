@@ -16,7 +16,14 @@ export function resolveToolkitConnectionStatus(args: {
 }): ComposioToolkitConnectionStatus {
   if (!args.hasApiKey) return "missing_api_key";
   if (!args.enabled) return "available";
-  if (args.accountStatus === "ACTIVE") return "connected";
+  const normalizedStatus = args.accountStatus?.trim().toLowerCase();
+  if (
+    normalizedStatus === "active" ||
+    normalizedStatus === "connected" ||
+    normalizedStatus === "enabled"
+  ) {
+    return "connected";
+  }
   if (args.accountStatus) return "needs_auth";
   return "needs_auth";
 }
@@ -53,7 +60,7 @@ export async function listComposioConnectedAccountStatuses(args: {
   const statuses: Record<string, string> = {};
 
   for (const item of items) {
-    const slug = item.toolkit?.slug;
+    const slug = item.toolkit?.slug?.trim().toLowerCase();
     if (!slug) continue;
     statuses[slug] = item.status;
   }

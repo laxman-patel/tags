@@ -2285,6 +2285,9 @@ function DashboardApp({ clerkEnabled = false }: { clerkEnabled?: boolean }) {
   const [eventsByRun, setEventsByRun] = useState<Record<string, RunEvent[]>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const authRefreshTimerRef = useRef<number | null>(null);
+  const authRefreshTimeoutsRef = useRef<number[]>([]);
+  const authRefreshCleanupRef = useRef<(() => void) | null>(null);
 
   const refresh = async () => {
     setError(null);
@@ -2296,10 +2299,72 @@ function DashboardApp({ clerkEnabled = false }: { clerkEnabled?: boolean }) {
     setApprovals(payload.approvals);
   };
 
+  const clearAuthRefreshWatchers = () => {
+    if (authRefreshTimerRef.current !== null) {
+      window.clearInterval(authRefreshTimerRef.current);
+      authRefreshTimerRef.current = null;
+    }
+    for (const timeout of authRefreshTimeoutsRef.current) {
+      window.clearTimeout(timeout);
+    }
+    authRefreshTimeoutsRef.current = [];
+    authRefreshCleanupRef.current?.();
+    authRefreshCleanupRef.current = null;
+  };
+
+  const scheduleAuthReturnRefresh = (popup: Window | null) => {
+    clearAuthRefreshWatchers();
+
+    let refreshScheduled = false;
+    const scheduleRefreshBurst = () => {
+      if (refreshScheduled) return;
+      refreshScheduled = true;
+      if (authRefreshTimerRef.current !== null) {
+        window.clearInterval(authRefreshTimerRef.current);
+        authRefreshTimerRef.current = null;
+      }
+      authRefreshCleanupRef.current?.();
+      authRefreshCleanupRef.current = null;
+
+      authRefreshTimeoutsRef.current = [500, 2_000, 5_000].map((delay) =>
+        window.setTimeout(() => {
+          refresh().catch((err) => setError(err instanceof Error ? err.message : "Failed to refresh tools"));
+        }, delay),
+      );
+    };
+
+    const onFocus = () => scheduleRefreshBurst();
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "visible") scheduleRefreshBurst();
+    };
+
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    authRefreshCleanupRef.current = () => {
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+    };
+
+    if (!popup) return;
+    if (authRefreshTimerRef.current !== null) {
+      window.clearInterval(authRefreshTimerRef.current);
+      authRefreshTimerRef.current = null;
+    }
+    authRefreshTimerRef.current = window.setInterval(() => {
+      if (popup.closed) scheduleRefreshBurst();
+    }, 1000);
+  };
+
   useEffect(() => {
     refresh()
       .catch((err) => setError(err instanceof Error ? err.message : "Failed to load control plane"))
       .finally(() => setLoading(false));
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      clearAuthRefreshWatchers();
+    };
   }, []);
 
   useEffect(() => {
@@ -2323,7 +2388,8 @@ function DashboardApp({ clerkEnabled = false }: { clerkEnabled?: boolean }) {
   };
 
   const openConnectUrl = (url: string | null) => {
-    if (url) window.open(url, "_blank", "noopener,noreferrer");
+    if (!url) return null;
+    return window.open(url, "_blank", "noopener,noreferrer");
   };
 
   const handleAuthTool = async (spaceId: string, toolId: string) => {
@@ -2335,7 +2401,7 @@ function DashboardApp({ clerkEnabled = false }: { clerkEnabled?: boolean }) {
     }));
     try {
       const auth = await authorizeComposioTool(spaceId, toolId);
-      openConnectUrl(auth.connectUrl);
+      scheduleAuthReturnRefresh(openConnectUrl(auth.connectUrl));
       await refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to authenticate tool");
@@ -2370,7 +2436,7 @@ function DashboardApp({ clerkEnabled = false }: { clerkEnabled?: boolean }) {
     }));
     try {
       const auth = await authorizeComposioTool(spaceId, composio.id);
-      openConnectUrl(auth.connectUrl);
+      scheduleAuthReturnRefresh(openConnectUrl(auth.connectUrl));
       await refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to add tool");
