@@ -1058,7 +1058,6 @@ function SpaceDetailView({
   const [directorySource, setDirectorySource] = useState<"composio" | "fallback">("fallback");
   const [directoryLoading, setDirectoryLoading] = useState(false);
   const [composioDirectory, setComposioDirectory] = useState<ComposioDirectoryTool[]>([]);
-  const nativeTools = space.tools.filter((tool) => !isComposioTool(tool));
   const composioTools = space.tools.filter(isComposioTool);
   const connectedComposioTools = composioTools.filter((tool) => tool.authState === "connected");
   const dailyUsage = space.dailyUsage.map((point) => ({
@@ -1295,10 +1294,23 @@ function SpaceDetailView({
       {tab === "tools" && (
         <LayerCard className="p-0 overflow-hidden">
           <div className="flex flex-col gap-4 border-b border-kumo-hairline px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <Text bold>Tools</Text>
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                <Text bold>Tools</Text>
+                {composioTools.length > 0 && (
+                  <Text variant="secondary" size="xs">
+                    {connectedComposioTools.length} of {composioTools.length} ready
+                  </Text>
+                )}
+                {composioTools.length > 0 && connectedComposioTools.length !== composioTools.length && (
+                  <span className="inline-flex items-center gap-1 text-kumo-warning">
+                    <WarningIcon size={14} />
+                    <Text size="xs">Action needed</Text>
+                  </span>
+                )}
+              </div>
               <Text variant="secondary" size="sm" as="p">
-                Connect external services. Built-in Tags tools are always available.
+                Connect external services for this Space.
               </Text>
             </div>
             <Button
@@ -1310,97 +1322,59 @@ function SpaceDetailView({
             </Button>
           </div>
 
-          <div className="grid grid-cols-1 gap-0 lg:grid-cols-[minmax(0,1fr)_360px]">
-            <div className="border-b border-kumo-hairline lg:border-b-0 lg:border-r">
-              <div className="flex items-center justify-between gap-3 border-b border-kumo-hairline px-5 py-3">
-                <div>
-                  <Text bold>Connected tools</Text>
-                  <Text variant="secondary" size="xs" as="p">
-                    {connectedComposioTools.length} of {composioTools.length} ready
-                  </Text>
+          <div>
+            {composioTools.length === 0 ? (
+              <div className="px-5 py-12">
+                <Empty
+                  icon={<WrenchIcon size={40} />}
+                  title="No external tools"
+                  description="Add GitHub or another service when this Space needs access outside Slack."
+                />
+                <div className="mt-5 flex justify-center">
+                  <Button variant="primary" icon={PlusIcon} onClick={() => setAddToolOpen(true)}>
+                    Add tool
+                  </Button>
                 </div>
-                {composioTools.length > 0 && connectedComposioTools.length !== composioTools.length && (
-                  <div className="flex items-center gap-2 text-kumo-warning">
-                    <WarningIcon size={14} />
-                    <Text size="xs">Action needed</Text>
-                  </div>
-                )}
               </div>
-
-              {composioTools.length === 0 ? (
-                <div className="px-5 py-12">
-                  <Empty
-                    icon={<WrenchIcon size={40} />}
-                    title="No external tools"
-                    description="Add GitHub or another service when this Space needs access outside Slack."
-                  />
-                  <div className="mt-5 flex justify-center">
-                    <Button variant="primary" icon={PlusIcon} onClick={() => setAddToolOpen(true)}>
-                      Add tool
-                    </Button>
-                  </div>
-                </div>
-              ) : (
-                <div className="divide-y divide-kumo-hairline">
-                  {composioTools.map((tool) => (
-                    <div key={tool.id} className="grid grid-cols-[auto_minmax(0,1fr)] gap-3 px-5 py-4 sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:items-center">
-                      <ToolLogo tool={tool} />
-                      <div className="min-w-0">
-                        <div className="flex min-w-0 items-center gap-2">
-                          <Text bold size="sm" truncate>{tool.name}</Text>
-                          <span className={cn("h-1.5 w-1.5 shrink-0 rounded-full", authStateTone(tool.authState))} />
-                          <Text variant="secondary" size="xs" truncate>
-                            {authStateLabel(tool.authState)}
-                            {tool.toolsCount ? ` · ${displayToolCount(tool.toolsCount)}` : ""}
-                          </Text>
-                        </div>
-                        <Text variant="secondary" size="xs" truncate as="p">
-                          {tool.description}
+            ) : (
+              <div className="divide-y divide-kumo-hairline">
+                {composioTools.map((tool) => (
+                  <div key={tool.id} className="grid grid-cols-[auto_minmax(0,1fr)] gap-3 px-5 py-4 sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:items-center">
+                    <ToolLogo tool={tool} />
+                    <div className="min-w-0">
+                      <div className="flex min-w-0 items-center gap-2">
+                        <Text bold size="sm" truncate>{tool.name}</Text>
+                        <span className={cn("h-1.5 w-1.5 shrink-0 rounded-full", authStateTone(tool.authState))} />
+                        <Text variant="secondary" size="xs" truncate>
+                          {authStateLabel(tool.authState)}
+                          {tool.toolsCount ? ` · ${displayToolCount(tool.toolsCount)}` : ""}
                         </Text>
                       </div>
-                      <div className="col-span-2 flex items-center gap-1 sm:col-span-1 sm:justify-end">
-                        <Button
-                          variant="secondary"
-                          size="sm"
-                          onClick={() => onAuthTool(space.id, tool.id)}
-                        >
-                          {tool.authState === "connected" ? "Reconnect" : "Connect"}
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          shape="square"
-                          icon={XIcon}
-                          aria-label={`Remove ${tool.name}`}
-                          onClick={() => onRemoveTool(space.id, tool.id)}
-                        />
-                      </div>
+                      <Text variant="secondary" size="xs" truncate as="p">
+                        {tool.description}
+                      </Text>
                     </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            <div className="px-5 py-4">
-              <div className="mb-3 flex items-center gap-2">
-                <BrainIcon size={16} className="text-kumo-subtle" />
-                <div>
-                  <Text bold>Built in</Text>
-                  <Text variant="secondary" size="xs" as="p">Always on</Text>
-                </div>
-              </div>
-              <div className="flex flex-col gap-3">
-                {nativeTools.map((tool) => (
-                  <div key={tool.id} className="flex min-w-0 items-start gap-3">
-                    <ToolLogo tool={tool} size="sm" />
-                    <div className="min-w-0">
-                      <Text size="sm" truncate>{tool.name}</Text>
-                      <Text variant="secondary" size="xs" truncate as="p">{tool.description}</Text>
+                    <div className="col-span-2 flex items-center gap-1 sm:col-span-1 sm:justify-end">
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => onAuthTool(space.id, tool.id)}
+                      >
+                        {tool.authState === "connected" ? "Reconnect" : "Connect"}
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        shape="square"
+                        icon={XIcon}
+                        aria-label={`Remove ${tool.name}`}
+                        onClick={() => onRemoveTool(space.id, tool.id)}
+                      />
                     </div>
                   </div>
                 ))}
               </div>
-            </div>
+            )}
           </div>
         </LayerCard>
       )}
