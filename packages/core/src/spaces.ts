@@ -1,6 +1,7 @@
 import { and, eq } from "drizzle-orm";
 import type { Db } from "@tags/db";
 import { spaceConfigs, spaces, workspaces } from "@tags/db";
+import { alwaysEnabledNativeTools, isNativeToolId } from "./tools";
 
 export const RUNTIME_MODES = ["opencode", "orchestrator"] as const;
 export type RuntimeMode = (typeof RUNTIME_MODES)[number];
@@ -82,6 +83,8 @@ export async function loadActiveSpaceConfig(
   const row = rows[0];
   if (!row) return null;
 
+  const legacyConnections = row.enabledTools.filter((toolId) => !isNativeToolId(toolId));
+
   return {
     id: row.id,
     organizationId: row.organizationId,
@@ -91,8 +94,8 @@ export async function loadActiveSpaceConfig(
     reasoning: row.reasoning,
     instructions: row.instructions,
     enabledSkills: row.enabledSkills,
-    enabledTools: row.enabledTools,
-    enabledConnections: row.enabledConnections,
+    enabledTools: alwaysEnabledNativeTools(),
+    enabledConnections: Array.from(new Set([...(row.enabledConnections ?? []), ...legacyConnections])),
     maxSteps: row.maxSteps,
     runtimeMode: parseRuntimeMode(row.runtimeMode),
     repoUrl: row.repoUrl,

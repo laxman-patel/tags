@@ -12,6 +12,11 @@ import {
 } from "@tags/core/spaces-admin";
 import { loadActiveSpaceConfig } from "@tags/core/spaces";
 import { recordAuditEvent } from "@tags/core/audit";
+import {
+  alwaysEnabledNativeTools,
+  isNativeToolId,
+  NATIVE_TOOL_METADATA,
+} from "@tags/core/tools";
 import { getUsageBySpace } from "@tags/core/usage";
 import {
   expireApprovalByRequestId,
@@ -34,6 +39,13 @@ import {
   type Db,
 } from "@tags/db";
 import { APPROVAL_RESOLVED_EVENT, inngest } from "@tags/runtime";
+import {
+  authorizeComposioToolkit,
+  listComposioConnectedAccountStatuses,
+  listComposioToolkits,
+  resolveToolkitConnectionStatus,
+  type ComposioToolkitDirectoryItem,
+} from "@tags/runtime/tools/composio";
 import { createServer as createViteServer, type ViteDevServer } from "vite";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -171,18 +183,82 @@ function repoName(repoUrl: string) {
     .replace(/\.git$/, "");
 }
 
-function toolMetadata(toolId: string) {
-  const byId: Record<string, { name: string; description: string; provider: string }> = {
-    search_thread: { name: "search_thread", description: "Search messages in the current thread", provider: "Tags" },
-    search_channel: { name: "search_channel", description: "Search Slack channel history", provider: "Slack" },
-    search_memory: { name: "search_memory", description: "Search saved memory for this space", provider: "Tags" },
-    save_memory: { name: "save_memory", description: "Save durable memory from a run", provider: "Tags" },
-    session_search: { name: "session_search", description: "Search previous coding sessions", provider: "Tags" },
-    create_artifact: { name: "create_artifact", description: "Create files, reports, and rich artifacts", provider: "Tags" },
-    github: { name: "github", description: "Read and write GitHub resources", provider: "GitHub" },
-    slack_post: { name: "slack_post", description: "Post messages to Slack channels", provider: "Slack" },
+const FALLBACK_COMPOSIO_DIRECTORY: ComposioToolkitDirectoryItem[] = [
+  { id: "github", name: "GitHub", description: "Read and write repositories, issues, pull requests, and comments.", categories: ["Developer tools"], toolsCount: 42 },
+  { id: "linear", name: "Linear", description: "Create, search, and update Linear issues and projects.", categories: ["Project management"], toolsCount: 27 },
+  { id: "slack", name: "Slack", description: "Read channels and send messages through Slack.", categories: ["Communication"], toolsCount: 18 },
+  { id: "notion", name: "Notion", description: "Read and write Notion pages, databases, and comments.", categories: ["Knowledge"], toolsCount: 31 },
+  { id: "jira", name: "Jira", description: "Search, create, and update Jira issues.", categories: ["Project management"], toolsCount: 28 },
+  { id: "googlecalendar", name: "Google Calendar", description: "Read calendars and create events.", categories: ["Productivity"], toolsCount: 14 },
+  { id: "gmail", name: "Gmail", description: "Search, draft, and send email with Gmail.", categories: ["Communication"], toolsCount: 24 },
+  { id: "googledrive", name: "Google Drive", description: "Find, read, and manage Drive files.", categories: ["Storage"], toolsCount: 22 },
+  { id: "sentry", name: "Sentry", description: "Inspect issues, events, releases, and project health.", categories: ["Observability"], toolsCount: 16 },
+  { id: "pagerduty", name: "PagerDuty", description: "Create, acknowledge, and resolve incidents.", categories: ["Incident response"], toolsCount: 13 },
+  { id: "datadog", name: "Datadog", description: "Query monitors, dashboards, logs, and metrics.", categories: ["Observability"], toolsCount: 20 },
+  { id: "stripe", name: "Stripe", description: "Find customers, payments, subscriptions, and invoices.", categories: ["Payments"], toolsCount: 25 },
+  { id: "hubspot", name: "HubSpot", description: "Read and update CRM contacts, companies, and deals.", categories: ["CRM"], toolsCount: 30 },
+  { id: "zendesk", name: "Zendesk", description: "Search, create, and update support tickets.", categories: ["Support"], toolsCount: 21 },
+  { id: "intercom", name: "Intercom", description: "Read and manage conversations, users, and tickets.", categories: ["Support"], toolsCount: 18 },
+  { id: "figma", name: "Figma", description: "Read files, comments, and design metadata.", categories: ["Design"], toolsCount: 10 },
+  { id: "vercel", name: "Vercel", description: "Inspect deployments, projects, teams, and logs.", categories: ["Developer tools"], toolsCount: 15 },
+  { id: "salesforce", name: "Salesforce", description: "Query CRM accounts, leads, opportunities, and cases.", categories: ["CRM"], toolsCount: 26 },
+  { id: "airtable", name: "Airtable", description: "Read and update bases, tables, and records.", categories: ["Data"], toolsCount: 19 },
+  { id: "asana", name: "Asana", description: "Create and update tasks, projects, and comments.", categories: ["Project management"], toolsCount: 17 },
+  { id: "clickup", name: "ClickUp", description: "Manage tasks, lists, docs, and comments.", categories: ["Project management"], toolsCount: 18 },
+  { id: "trello", name: "Trello", description: "Read and update boards, cards, lists, and members.", categories: ["Project management"], toolsCount: 16 },
+  { id: "microsoftteams", name: "Microsoft Teams", description: "Read and send Teams messages.", categories: ["Communication"], toolsCount: 12 },
+  { id: "dropbox", name: "Dropbox", description: "Find, read, and manage Dropbox files.", categories: ["Storage"], toolsCount: 12 },
+];
+
+function toolkitName(toolkitId: string) {
+  return toolkitId
+    .split(/[_-]/g)
+    .filter(Boolean)
+    .map((part) => part[0]?.toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
+function fallbackToolkitMetadata(toolkitId: string) {
+  const fallback = FALLBACK_COMPOSIO_DIRECTORY.find((toolkit) => toolkit.id === toolkitId);
+  return {
+    name: fallback?.name ?? toolkitName(toolkitId),
+    description: fallback?.description ?? `Connect ${toolkitName(toolkitId)} through Composio.`,
+    provider: "Composio",
+    logoUrl: fallback?.logoUrl,
+    toolsCount: fallback?.toolsCount,
+    categories: fallback?.categories ?? [],
   };
-  return byId[toolId] ?? { name: toolId, description: `Use ${toolId} through the agent runtime`, provider: "Composio" };
+}
+
+async function loadComposioDirectory() {
+  const apiKey = process.env.COMPOSIO_API_KEY ?? "";
+  if (!apiKey) return { items: FALLBACK_COMPOSIO_DIRECTORY, source: "fallback" as const };
+
+  try {
+    const items = await listComposioToolkits({ apiKey });
+    return {
+      items: items.length > 0 ? items : FALLBACK_COMPOSIO_DIRECTORY,
+      source: items.length > 0 ? ("composio" as const) : ("fallback" as const),
+    };
+  } catch (error) {
+    console.warn("[control-plane] failed to load Composio toolkits", error);
+    return { items: FALLBACK_COMPOSIO_DIRECTORY, source: "fallback" as const };
+  }
+}
+
+function legacyComposioConnections(enabledTools: string[] | undefined) {
+  return (enabledTools ?? []).filter((toolId) => !isNativeToolId(toolId));
+}
+
+function mergeConnections(...groups: Array<string[] | undefined>) {
+  return Array.from(new Set(groups.flatMap((group) => group ?? []).map((item) => item.trim()).filter(Boolean)));
+}
+
+function composioAuthState(args: { hasApiKey: boolean; enabled: boolean; accountStatus?: string | null }) {
+  const status = resolveToolkitConnectionStatus(args);
+  if (status === "connected") return "connected";
+  if (status === "needs_auth" || status === "missing_api_key") return "requires_auth";
+  return "not_authenticated";
 }
 
 async function buildSpacesPayload(db: Db, organizationId: string) {
@@ -199,7 +275,17 @@ async function buildSpacesPayload(db: Db, organizationId: string) {
         name: repoName(url),
         isDefault: index === 0,
       }));
-      const enabledTools = config?.enabledTools ?? [];
+      const enabledConnections = mergeConnections(
+        config?.enabledConnections,
+        legacyComposioConnections(config?.enabledTools),
+      );
+      const accountStatuses =
+        enabledConnections.length > 0
+          ? await listComposioConnectedAccountStatuses({
+              apiKey: process.env.COMPOSIO_API_KEY ?? "",
+              entityId: row.space.id,
+            }).catch(() => ({} as Record<string, string>))
+          : {};
       return {
         id: row.space.id,
         name: row.space.name,
@@ -210,12 +296,25 @@ async function buildSpacesPayload(db: Db, organizationId: string) {
         tokenUsage: totalTokens,
         cost: costMicroUsd / 1_000_000,
         recentActivity: runCount > 0 ? `${runCount} recorded runs` : "No runs yet",
-        tools: enabledTools.map((toolId) => ({
-          id: toolId,
-          enabled: true,
-          authState: "connected",
-          ...toolMetadata(toolId),
-        })),
+        tools: [
+          ...alwaysEnabledNativeTools().map((toolId) => ({
+            ...NATIVE_TOOL_METADATA[toolId],
+            kind: "native",
+            enabled: true,
+            authState: "connected",
+          })),
+          ...enabledConnections.map((toolkitId) => ({
+            id: toolkitId,
+            kind: "composio",
+            enabled: true,
+            authState: composioAuthState({
+              hasApiKey: Boolean(process.env.COMPOSIO_API_KEY),
+              enabled: true,
+              accountStatus: accountStatuses[toolkitId],
+            }),
+            ...fallbackToolkitMetadata(toolkitId),
+          })),
+        ],
         repos,
         modelId: config?.modelId,
         instructions: config?.instructions,
@@ -315,8 +414,11 @@ async function updateSpaceConfig(
     reasoning: current?.reasoning,
     instructions: current?.instructions ?? "You are Tags, an AI teammate for this Slack channel.",
     enabledSkills: current?.enabledSkills ?? [],
-    enabledTools: patch.enabledTools ?? current?.enabledTools ?? [],
-    enabledConnections: patch.enabledConnections ?? current?.enabledConnections ?? [],
+    enabledTools: alwaysEnabledNativeTools(),
+    enabledConnections:
+      patch.enabledConnections ??
+      (patch.enabledTools ? legacyComposioConnections(patch.enabledTools) : undefined) ??
+      mergeConnections(current?.enabledConnections, legacyComposioConnections(current?.enabledTools)),
     maxSteps: current?.maxSteps,
     runtimeMode: "opencode",
     repoUrls: patch.repoUrls ?? current?.repoUrls ?? [],
@@ -349,6 +451,13 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, url: URL) {
         const payload = await loadControlPlane(db, req);
         apiRequestsCompleted.add(1, { route: "control-plane", method, outcome: "success" });
         span.setAttributes({ outcome: "success", "spaces.count": payload.spaces.length, "runs.count": payload.runs.length });
+        return sendJson(res, 200, payload);
+      }
+
+      if (method === "GET" && segments[0] === "composio" && segments[1] === "toolkits") {
+        const payload = await loadComposioDirectory();
+        apiRequestsCompleted.add(1, { route: "composio.toolkits", method, outcome: "success" });
+        span.setAttributes({ outcome: "success", "toolkits.count": payload.items.length, "toolkits.source": payload.source });
         return sendJson(res, 200, payload);
       }
 
@@ -396,6 +505,51 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, url: URL) {
         apiRequestsCompleted.add(1, { route: "spaces.config", method, outcome: "success" });
         span.setAttributes({ outcome: "success", "space.id": spaceId });
         return sendJson(res, 200, result);
+      }
+
+      if (
+        method === "POST" &&
+        segments[0] === "spaces" &&
+        segments[2] === "tools" &&
+        segments[4] === "authorize"
+      ) {
+        const spaceId = segments[1];
+        const toolkit = segments[3];
+        if (!spaceId || !toolkit) return sendJson(res, 400, { error: "space id and toolkit are required" });
+        if (!process.env.COMPOSIO_API_KEY) {
+          apiRequestsCompleted.add(1, { route: "spaces.tools.authorize", method, outcome: "missing_config" });
+          return sendJson(res, 400, { error: "COMPOSIO_API_KEY is required to authenticate Composio tools" });
+        }
+
+        const current = await loadActiveSpaceConfig(db, spaceId);
+        const auth = await authorizeComposioToolkit({
+          apiKey: process.env.COMPOSIO_API_KEY,
+          entityId: spaceId,
+          toolkit,
+        });
+        const result = await updateSpaceConfig(db, spaceId, {
+          enabledConnections: mergeConnections(current?.enabledConnections, [toolkit]),
+        });
+        if (!result) return sendJson(res, 404, { error: "Not found" });
+
+        const space = await getSpaceById(db, spaceId);
+        if (space) {
+          await recordAuditEvent(db, {
+            organizationId: space.organizationId,
+            spaceId,
+            actorType: "human",
+            eventType: "tool.authorize.started",
+            payload: { source: "control_plane", toolkit },
+          });
+        }
+
+        apiRequestsCompleted.add(1, { route: "spaces.tools.authorize", method, outcome: "success" });
+        span.setAttributes({ outcome: "success", "space.id": spaceId, "toolkit.id": toolkit });
+        return sendJson(res, 200, {
+          connectUrl: auth.connectUrl,
+          configId: result.configId,
+          version: result.version,
+        });
       }
 
       if (method === "POST" && segments[0] === "approvals" && segments[2] === "respond") {

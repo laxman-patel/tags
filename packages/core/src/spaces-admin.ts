@@ -2,6 +2,7 @@ import { desc, eq, max } from "drizzle-orm";
 import type { Db } from "@tags/db";
 import { newId, spaceConfigs, spaces, workspaces } from "@tags/db";
 import { parseRuntimeMode, parsePassiveLearningMode, loadActiveSpaceConfig, type RuntimeMode, type PassiveLearningMode } from "./spaces";
+import { alwaysEnabledNativeTools } from "./tools";
 
 export type CreateSpaceInput = {
   organizationId: string;
@@ -54,14 +55,7 @@ export async function createSpaceWithConfig(db: Db, input: CreateSpaceInput) {
     version: 1,
     modelId: input.modelId,
     instructions: input.instructions,
-    enabledTools: input.enabledTools ?? [
-      "search_thread",
-      "search_channel",
-      "search_memory",
-      "save_memory",
-      "session_search",
-      "create_artifact",
-    ],
+    enabledTools: alwaysEnabledNativeTools(),
     runtimeMode: input.runtimeMode ?? "opencode",
     passiveLearningMode: input.passiveLearningMode ?? "off",
     isActive: true,
@@ -120,7 +114,7 @@ export async function createSpaceConfigVersion(db: Db, input: UpdateSpaceConfigI
     reasoning: input.reasoning ?? previous?.reasoning ?? "provider-default",
     instructions: input.instructions,
     enabledSkills: input.enabledSkills ?? previous?.enabledSkills ?? [],
-    enabledTools: input.enabledTools,
+    enabledTools: alwaysEnabledNativeTools(),
     enabledConnections: input.enabledConnections ?? previous?.enabledConnections ?? [],
     maxSteps: input.maxSteps ?? previous?.maxSteps ?? 12,
     runtimeMode: input.runtimeMode ?? previous?.runtimeMode ?? "opencode",

@@ -10,6 +10,20 @@ export interface Tool {
   provider: string;
   enabled: boolean;
   authState: ToolAuthState;
+  kind?: "native" | "composio";
+  logoUrl?: string;
+  categories?: string[];
+  toolsCount?: number;
+}
+
+export interface ComposioDirectoryTool {
+  id: string;
+  name: string;
+  description: string;
+  logoUrl?: string;
+  categories: string[];
+  toolsCount?: number;
+  noAuth?: boolean;
 }
 
 export interface Repo {
@@ -100,11 +114,25 @@ export function createSpace(input: { name: string; channel: string }) {
   });
 }
 
-export function updateSpaceConfig(spaceId: string, input: { enabledTools?: string[]; repoUrls?: string[] }) {
+export function updateSpaceConfig(spaceId: string, input: { enabledTools?: string[]; enabledConnections?: string[]; repoUrls?: string[] }) {
   return requestJson<{ configId: string; version: number }>(`/api/spaces/${spaceId}/config`, {
     method: "PATCH",
     body: JSON.stringify(input),
   });
+}
+
+export function loadComposioDirectory() {
+  return requestJson<{ items: ComposioDirectoryTool[]; source: "composio" | "fallback" }>("/api/composio/toolkits");
+}
+
+export function authorizeComposioTool(spaceId: string, toolkitId: string) {
+  return requestJson<{ connectUrl: string | null; configId: string; version: number }>(
+    `/api/spaces/${spaceId}/tools/${encodeURIComponent(toolkitId)}/authorize`,
+    {
+      method: "POST",
+      body: JSON.stringify({}),
+    },
+  );
 }
 
 export function respondToApproval(approvalId: string, decision: "approved" | "rejected") {

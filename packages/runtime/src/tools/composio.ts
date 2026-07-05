@@ -67,6 +67,40 @@ export type ComposioToolsHandle = {
   close: () => Promise<void>;
 };
 
+export type ComposioToolkitDirectoryItem = {
+  id: string;
+  name: string;
+  description: string;
+  logoUrl?: string;
+  categories: string[];
+  toolsCount?: number;
+  noAuth?: boolean;
+};
+
+export async function listComposioToolkits(args: {
+  apiKey: string;
+  limit?: number;
+}): Promise<ComposioToolkitDirectoryItem[]> {
+  if (!args.apiKey) return [];
+
+  const composio = new Composio({ apiKey: args.apiKey });
+  const toolkits = await composio.toolkits.get({
+    managedBy: "all",
+    sortBy: "usage",
+    limit: args.limit ?? 500,
+  });
+
+  return toolkits.map((toolkit) => ({
+    id: toolkit.slug,
+    name: toolkit.name,
+    description: toolkit.meta.description ?? `Connect ${toolkit.name} through Composio.`,
+    logoUrl: toolkit.meta.logo,
+    categories: toolkit.meta.categories?.map((category) => category.name) ?? [],
+    toolsCount: toolkit.meta.toolsCount,
+    noAuth: toolkit.noAuth,
+  }));
+}
+
 export type ComposioMcpServerConfig = {
   type: "remote";
   url: string;

@@ -10,10 +10,8 @@ import {
   Empty,
   Field,
   Input,
-  Switch,
   Tabs,
   Surface,
-  Link,
   Dialog,
   cn,
 } from "@cloudflare/kumo";
@@ -66,11 +64,14 @@ import {
 } from "recharts";
 import {
   createSpace,
+  authorizeComposioTool,
   loadControlPlane,
+  loadComposioDirectory,
   loadRunEvents,
   respondToApproval,
   updateSpaceConfig,
   type Approval,
+  type ComposioDirectoryTool,
   type Repo,
   type Run,
   type RunEvent,
@@ -176,29 +177,6 @@ const INITIAL_SPACES: Space[] = [
       { id: "github", name: "github_read", description: "Read GitHub repositories and PRs", provider: "GitHub", enabled: true, authState: "connected" },
     ],
   },
-];
-
-// ===== Composio directory (mock) =====
-
-interface ComposioTool {
-  id: string;
-  name: string;
-  description: string;
-  provider: string;
-  icon: React.ComponentType<{ size?: number; className?: string; weight?: "duotone" | "fill" | "regular" }>;
-}
-
-const COMPOSIO_DIRECTORY: ComposioTool[] = [
-  { id: "linear", name: "linear", description: "Create and query Linear issues", provider: "Linear", icon: WrenchIcon },
-  { id: "notion", name: "notion", description: "Read and write Notion pages", provider: "Notion", icon: FileTextIcon },
-  { id: "sentry", name: "sentry", description: "Query error events and issues", provider: "Sentry", icon: WarningIcon },
-  { id: "pagerduty", name: "pagerduty", description: "Trigger and ack incidents", provider: "PagerDuty", icon: LightningIcon },
-  { id: "vercel", name: "vercel", description: "Read deployments and logs", provider: "Vercel", icon: RocketIcon },
-  { id: "stripe", name: "stripe", description: "Query customers and payments", provider: "Stripe", icon: CoinsIcon },
-  { id: "zendesk", name: "zendesk", description: "Manage Zendesk tickets", provider: "Zendesk", icon: HeadsetIcon },
-  { id: "hubspot", name: "hubspot", description: "Query CRM contacts and deals", provider: "HubSpot", icon: ChartLineUpIcon },
-  { id: "datadog", name: "datadog", description: "Query metrics and monitors", provider: "Datadog", icon: ActivityIcon },
-  { id: "figma", name: "figma", description: "Read Figma files and comments", provider: "Figma", icon: CodeIcon },
 ];
 
 const RUNS: Run[] = [
@@ -428,6 +406,57 @@ function BackLink({ label, onClick }: { label: string; onClick: () => void }) {
   );
 }
 
+function isComposioTool(tool: Tool) {
+  return tool.kind === "composio" || tool.provider === "Composio";
+}
+
+function statusTone(status: SpaceStatus) {
+  return {
+    active: "bg-kumo-success",
+    paused: "bg-kumo-warning",
+    error: "bg-kumo-danger",
+  }[status];
+}
+
+function displayToolCount(value: number) {
+  return value === 1 ? "1 tool" : `${value} tools`;
+}
+
+function ToolLogo({
+  tool,
+  size = "base",
+}: {
+  tool: Pick<Tool, "id" | "name" | "logoUrl"> | ComposioDirectoryTool;
+  size?: "sm" | "base";
+}) {
+  const boxSize = size === "sm" ? "h-7 w-7" : "h-9 w-9";
+  const iconSize = size === "sm" ? 14 : 18;
+
+  return (
+    <div className={cn("flex items-center justify-center rounded-md border border-kumo-hairline bg-kumo-base text-kumo-subtle shrink-0", boxSize)}>
+      {"logoUrl" in tool && tool.logoUrl ? (
+        <img src={tool.logoUrl} alt="" className="h-4 w-4 rounded-sm object-contain" />
+      ) : (
+        <ActionIcon action={tool.id} size={iconSize} />
+      )}
+    </div>
+  );
+}
+
+function StatusLine({ space }: { space: Space }) {
+  const totalTools = space.tools.length;
+  const readyTools = space.tools.filter((tool) => tool.authState === "connected").length;
+
+  return (
+    <div className="flex min-w-0 items-center gap-2 text-kumo-subtle">
+      <span className={cn("h-1.5 w-1.5 rounded-full shrink-0", statusTone(space.status))} />
+      <Text variant="secondary" size="xs" truncate>
+        {space.status === "active" ? "production" : space.status} · {readyTools}/{totalTools} ready
+      </Text>
+    </div>
+  );
+}
+
 // ===== Metric Grid =====
 
 interface Metric {
@@ -482,88 +511,155 @@ function SpacesView({
   onNewSpace: () => void;
   onSelectRun: (id: string) => void;
 }) {
-  const totalRuns = spaces.reduce((a, s) => a + s.runCount, 0);
   const activeCount = spaces.filter((s) => s.status === "active").length;
   const errorCount = spaces.filter((s) => s.status === "error").length;
-  const totalToday = ACTIVITY_24H.reduce((a, x) => a + x.runs, 0);
-  const totalFailed = ACTIVITY_24H.reduce((a, x) => a + x.failed, 0);
-  const successRate = ((totalToday - totalFailed) / totalToday) * 100;
+  const composioCount = spaces.reduce((count, space) => count + space.tools.filter(isComposioTool).length, 0);
 
   return (
     <div>
-      <PageHeader
-        title="Spaces"
-        description="AI agents connected to Slack channels."
-        actions={
+      <div className="mb-5 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div className="min-w-0">
+          <Text variant="heading2" as="h1">
+            Spaces
+          </Text>
+          <div className="mt-3 flex flex-wrap items-center gap-2 text-kumo-subtle">
+            <span className="inline-flex items-center gap-1.5 rounded-md border border-kumo-hairline bg-kumo-base px-2 py-1">
+              <StackIcon size={14} />
+              <Text variant="secondary" size="xs">{spaces.length} spaces</Text>
+            </span>
+            <span className="inline-flex items-center gap-1.5 rounded-md border border-kumo-hairline bg-kumo-base px-2 py-1">
+              <ActivityIcon size={14} />
+              <Text variant="secondary" size="xs">{activeCount} active</Text>
+            </span>
+            <span className="inline-flex items-center gap-1.5 rounded-md border border-kumo-hairline bg-kumo-base px-2 py-1">
+              <WrenchIcon size={14} />
+              <Text variant="secondary" size="xs">{composioCount} Composio</Text>
+            </span>
+            {errorCount > 0 && (
+              <span className="inline-flex items-center gap-1.5 rounded-md border border-kumo-hairline bg-kumo-base px-2 py-1 text-kumo-danger">
+                <WarningIcon size={14} />
+                <Text variant="error" size="xs">{errorCount} needs attention</Text>
+              </span>
+            )}
+          </div>
+        </div>
+        <div className="shrink-0">
           <Button variant="primary" icon={PlusIcon} onClick={onNewSpace}>
             New Space
           </Button>
-        }
-      />
-
-      <SectionHeader title="Spaces" />
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 mb-6">
-        {spaces.map((space) => {
-          const statusRing = {
-            active: "bg-kumo-success",
-            paused: "bg-kumo-warning",
-            error: "bg-kumo-danger",
-          }[space.status];
-          const Icon = getSpaceIcon(space.id);
-
-          return (
-            <button
-              key={space.id}
-              type="button"
-              onClick={() => onSelectSpace(space.id)}
-              className="group text-left rounded-lg border border-kumo-hairline bg-kumo-base p-4 hover:border-kumo-line hover:bg-kumo-tint/40 transition-colors cursor-pointer"
-            >
-              <div className="flex items-start gap-3">
-                <div className="flex h-9 w-9 items-center justify-center rounded-md border border-kumo-hairline bg-kumo-canvas text-kumo-subtle shrink-0">
-                  <Icon size={18} weight="regular" />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
-                    <Text bold truncate as="div">{space.name}</Text>
-                    <span className={cn("h-1.5 w-1.5 rounded-full shrink-0", statusRing)} />
-                  </div>
-                  <div className="mt-1 inline-flex items-center gap-1 text-kumo-subtle">
-                    <HashIcon size={12} />
-                    <Text variant="mono-secondary" size="xs">{space.channel}</Text>
-                  </div>
-                </div>
-                <CaretRightIcon
-                  size={14}
-                  className="mt-2.5 text-kumo-inactive transition-transform group-hover:translate-x-0.5 group-hover:text-kumo-subtle"
-                />
-              </div>
-
-              <div className="mt-3 grid grid-cols-3 gap-2 border-t border-kumo-hairline pt-3 text-kumo-subtle">
-                <div className="flex min-w-0 items-center gap-1.5">
-                  <PlayIcon size={12} />
-                  <Text variant="mono-secondary" size="xs">
-                    {space.runCount.toLocaleString()}
-                  </Text>
-                </div>
-                <div className="flex min-w-0 items-center gap-1.5">
-                  <CoinsIcon size={12} />
-                  <Text variant="mono-secondary" size="xs">
-                    ${space.cost.toFixed(2)}
-                  </Text>
-                </div>
-                <div className="flex min-w-0 items-center justify-end gap-1.5">
-                  <ClockIcon size={12} />
-                  <Text variant="mono-secondary" size="xs" truncate>
-                    {space.lastRun}
-                  </Text>
-                </div>
-              </div>
-            </button>
-          );
-        })}
+        </div>
       </div>
 
+      <div className="grid min-w-0 grid-cols-1 gap-4 md:grid-cols-2">
+        {spaces.map((space) => (
+          <SpaceProjectCard
+            key={space.id}
+            space={space}
+            recentRun={runs.find((run) => run.spaceId === space.id)}
+            onClick={() => onSelectSpace(space.id)}
+          />
+        ))}
+      </div>
     </div>
+  );
+}
+
+function SpaceProjectCard({
+  space,
+  recentRun,
+  onClick,
+}: {
+  space: Space;
+  recentRun?: Run;
+  onClick: () => void;
+}) {
+  const Icon = getSpaceIcon(space.id);
+  const composioTools = space.tools.filter(isComposioTool);
+  const nativeTools = space.tools.filter((tool) => !isComposioTool(tool));
+  const centerTools = [
+    { id: "tags", name: "Tags", logoUrl: undefined },
+    ...composioTools.slice(0, 2),
+  ];
+
+  return (
+    <LayerCard
+      role="button"
+      tabIndex={0}
+      onClick={onClick}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          onClick();
+        }
+      }}
+      className="group w-[calc(100vw-2rem)] min-w-0 cursor-pointer overflow-hidden p-0 transition-colors hover:bg-kumo-base focus-visible:ring-2 focus-visible:ring-kumo-focus md:w-full"
+    >
+      <div className="flex items-center justify-between gap-3 px-4 py-3">
+        <div className="min-w-0">
+          <Text bold truncate as="div">{space.name}</Text>
+          <div className="mt-1 flex items-center gap-1.5 text-kumo-subtle">
+            <HashIcon size={12} />
+            <Text variant="secondary" size="xs" truncate>{space.channel}</Text>
+          </div>
+        </div>
+        <div className="flex h-8 w-8 items-center justify-center rounded-md border border-kumo-hairline bg-kumo-base text-kumo-subtle">
+          <Icon size={16} weight="regular" />
+        </div>
+      </div>
+
+      <div className="px-2 pb-2">
+        <div className="relative h-44 overflow-hidden rounded-md border border-kumo-hairline bg-kumo-recessed">
+          <div
+            className="absolute inset-0 opacity-60"
+            style={{
+              backgroundImage: "radial-gradient(var(--color-kumo-line) 1px, transparent 1px)",
+              backgroundSize: "10px 10px",
+            }}
+          />
+          <div className="absolute inset-0 flex items-center justify-center">
+            <div className="flex items-center gap-2">
+              {centerTools.map((tool) => (
+                <div
+                  key={tool.id}
+                  className="flex h-10 w-10 items-center justify-center rounded-md border border-kumo-line bg-kumo-base text-kumo-default shadow-sm transition-transform group-hover:-translate-y-0.5"
+                >
+                  {tool.id === "tags" ? (
+                    <RobotIcon size={20} weight="duotone" />
+                  ) : (
+                    <ToolLogo tool={tool} size="base" />
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="absolute inset-x-3 bottom-3 flex items-center justify-between gap-3">
+            <StatusLine space={space} />
+            <div className="hidden items-center gap-2 text-kumo-subtle sm:flex">
+              <span className="inline-flex items-center gap-1">
+                <WrenchIcon size={12} />
+                <Text variant="secondary" size="xs">{displayToolCount(nativeTools.length + composioTools.length)}</Text>
+              </span>
+              <span className="inline-flex items-center gap-1">
+                <ActivityIcon size={12} />
+                <Text variant="secondary" size="xs">{space.runCount.toLocaleString()}</Text>
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {recentRun && (
+        <div className="flex items-center justify-between gap-3 border-t border-kumo-hairline px-4 py-2.5">
+          <div className="min-w-0">
+            <Text variant="secondary" size="xs" truncate>{recentRun.triggeredBy}</Text>
+          </div>
+          <div className="flex items-center gap-1.5 text-kumo-subtle">
+            <ClockIcon size={12} />
+            <Text variant="secondary" size="xs" truncate>{space.lastRun}</Text>
+          </div>
+        </div>
+      )}
+    </LayerCard>
   );
 }
 
@@ -571,7 +667,6 @@ function SpaceDetailView({
   space,
   runs,
   onBack,
-  onToggleTool,
   onAuthTool,
   onAddTool,
   onRemoveTool,
@@ -583,9 +678,8 @@ function SpaceDetailView({
   space: Space;
   runs: Run[];
   onBack: () => void;
-  onToggleTool: (spaceId: string, toolId: string) => void;
   onAuthTool: (spaceId: string, toolId: string) => void;
-  onAddTool: (spaceId: string, composio: ComposioTool) => void;
+  onAddTool: (spaceId: string, composio: ComposioDirectoryTool) => void;
   onRemoveTool: (spaceId: string, toolId: string) => void;
   onAddRepo: (spaceId: string, name: string) => void;
   onSetDefaultRepo: (spaceId: string, repoId: string) => void;
@@ -597,6 +691,38 @@ function SpaceDetailView({
   const [addRepoOpen, setAddRepoOpen] = useState(false);
   const [addToolOpen, setAddToolOpen] = useState(false);
   const [newRepoName, setNewRepoName] = useState("");
+  const [toolSearch, setToolSearch] = useState("");
+  const [directorySource, setDirectorySource] = useState<"composio" | "fallback">("fallback");
+  const [directoryLoading, setDirectoryLoading] = useState(false);
+  const [composioDirectory, setComposioDirectory] = useState<ComposioDirectoryTool[]>([]);
+  const nativeTools = space.tools.filter((tool) => !isComposioTool(tool));
+  const composioTools = space.tools.filter(isComposioTool);
+  const connectedComposioTools = composioTools.filter((tool) => tool.authState === "connected");
+  const visibleDirectory = composioDirectory.filter((tool) => {
+    const query = toolSearch.trim().toLowerCase();
+    if (!query) return true;
+    return (
+      tool.name.toLowerCase().includes(query) ||
+      tool.id.toLowerCase().includes(query) ||
+      tool.description.toLowerCase().includes(query) ||
+      tool.categories.some((category) => category.toLowerCase().includes(query))
+    );
+  });
+
+  useEffect(() => {
+    if (!addToolOpen || composioDirectory.length > 0 || directoryLoading) return;
+    setDirectoryLoading(true);
+    loadComposioDirectory()
+      .then((payload) => {
+        setComposioDirectory(payload.items);
+        setDirectorySource(payload.source);
+      })
+      .catch(() => {
+        setComposioDirectory([]);
+        setDirectorySource("fallback");
+      })
+      .finally(() => setDirectoryLoading(false));
+  }, [addToolOpen, composioDirectory.length, directoryLoading]);
 
   return (
     <div>
@@ -633,7 +759,7 @@ function SpaceDetailView({
         className="mb-6"
         tabs={[
           { value: "overview", label: "Overview" },
-          { value: "tools", label: `Tools (${space.tools.filter((t) => t.enabled).length})` },
+          { value: "tools", label: `Tools (${composioTools.length})` },
           { value: "runs", label: `Runs (${spaceRuns.length})` },
         ]}
       />
@@ -711,7 +837,7 @@ function SpaceDetailView({
                   {space.repos.map((repo) => (
                     <div key={repo.id} className="flex items-center gap-3 py-2.5">
                       <GitBranchIcon size={16} className="text-kumo-subtle shrink-0" />
-                      <Text variant="mono" size="sm">{repo.name}</Text>
+                      <Text size="sm">{repo.name}</Text>
                       {repo.isDefault && <Badge variant="primary">Default</Badge>}
                       <div className="ml-auto flex items-center gap-1">
                         {!repo.isDefault && (
@@ -743,79 +869,105 @@ function SpaceDetailView({
 
       {tab === "tools" && (
         <LayerCard className="p-0">
-          <div className="flex items-center justify-between px-4 py-3 border-b border-kumo-hairline">
-            <Text variant="secondary" size="sm">
-              {space.tools.filter((t) => t.enabled).length} enabled · {space.tools.length} total
-            </Text>
+          <div className="flex flex-col gap-3 border-b border-kumo-hairline px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge variant="success" appearance="dot">{nativeTools.length} always on</Badge>
+              <Badge
+                variant={composioTools.length === 0 ? "neutral" : connectedComposioTools.length === composioTools.length ? "success" : "warning"}
+                appearance="dot"
+              >
+                {connectedComposioTools.length}/{composioTools.length} Composio connected
+              </Badge>
+            </div>
             <Button
               variant="primary"
               size="sm"
               icon={PlusIcon}
               onClick={() => setAddToolOpen(true)}
             >
-              Add tool
+              New tool
             </Button>
           </div>
-          {space.tools.length === 0 ? (
-            <Empty
-              icon={<WrenchIcon size={40} />}
-              title="No tools connected"
-              description="Browse the Composio directory to give this agent capabilities."
-            />
-          ) : (
-            space.tools.map((tool, i) => (
-              <div
-                key={tool.id}
-                className={cn(
-                  "flex items-center gap-4 px-4 py-3",
-                  i < space.tools.length - 1 && "border-b border-kumo-hairline"
-                )}
-              >
-                <div className="w-8 h-8 rounded-md bg-kumo-tint flex items-center justify-center shrink-0">
-                  <ActionIcon action={tool.id} size={16} />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <Text variant="mono" size="sm">{tool.name}</Text>
-                    <Text variant="secondary" size="xs">· {tool.provider}</Text>
-                  </div>
-                  <Text variant="secondary" size="xs" as="p">
-                    {tool.description}
-                  </Text>
-                </div>
-                {tool.authState === "connected" ? (
-                  <Badge variant="success" appearance="dot">Connected</Badge>
-                ) : tool.authState === "requires_auth" ? (
-                  <Badge variant="warning" appearance="dot">Reauth needed</Badge>
-                ) : (
-                  <Badge variant="outline" appearance="dot">Not authenticated</Badge>
-                )}
-                {tool.authState !== "connected" ? (
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={() => onAuthTool(space.id, tool.id)}
-                  >
-                    Authenticate
-                  </Button>
-                ) : (
-                  <Switch
-                    checked={tool.enabled}
-                    onCheckedChange={() => onToggleTool(space.id, tool.id)}
-                    aria-label={`Toggle ${tool.name}`}
-                  />
-                )}
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  shape="square"
-                  icon={XIcon}
-                  aria-label={`Remove ${tool.name}`}
-                  onClick={() => onRemoveTool(space.id, tool.id)}
-                />
+
+          <div className="border-b border-kumo-hairline p-4">
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <RobotIcon size={16} className="text-kumo-subtle" />
+                <Text bold>Internal tools</Text>
               </div>
-            ))
-          )}
+              <Badge variant="neutral" appearance="dot">Always enabled</Badge>
+            </div>
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-3">
+              {nativeTools.map((tool) => (
+                <div key={tool.id} className="flex min-w-0 items-center gap-3 rounded-md border border-kumo-hairline bg-kumo-base px-3 py-2">
+                  <ToolLogo tool={tool} size="sm" />
+                  <div className="min-w-0">
+                    <Text size="sm" truncate>{tool.name}</Text>
+                    <Text variant="secondary" size="xs" truncate>{tool.description}</Text>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="p-4">
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <WrenchIcon size={16} className="text-kumo-subtle" />
+                <Text bold>Composio tools</Text>
+              </div>
+              <Text variant="secondary" size="xs">{displayToolCount(composioTools.length)}</Text>
+            </div>
+
+            {composioTools.length === 0 ? (
+              <Empty
+                icon={<WrenchIcon size={40} />}
+                title="No Composio tools connected"
+                description="Open the directory to connect external tools."
+              />
+            ) : (
+              <div className="flex flex-col divide-y divide-kumo-hairline rounded-md border border-kumo-hairline">
+                {composioTools.map((tool) => (
+                  <div key={tool.id} className="flex flex-col gap-3 px-3 py-3 sm:flex-row sm:items-center">
+                    <ToolLogo tool={tool} />
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Text bold size="sm">{tool.name}</Text>
+                        {tool.toolsCount ? <Badge variant="neutral">{displayToolCount(tool.toolsCount)}</Badge> : null}
+                      </div>
+                      <Text variant="secondary" size="xs" truncate as="p">
+                        {tool.description}
+                      </Text>
+                    </div>
+                    {tool.authState === "connected" ? (
+                      <Badge variant="success" appearance="dot">Connected</Badge>
+                    ) : tool.authState === "requires_auth" ? (
+                      <Badge variant="warning" appearance="dot">Auth required</Badge>
+                    ) : (
+                      <Badge variant="neutral" appearance="dot">Not connected</Badge>
+                    )}
+                    <div className="flex items-center gap-1 sm:justify-end">
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => onAuthTool(space.id, tool.id)}
+                      >
+                        {tool.authState === "connected" ? "Reconnect" : "Connect"}
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        shape="square"
+                        icon={XIcon}
+                        aria-label={`Remove ${tool.name}`}
+                        onClick={() => onRemoveTool(space.id, tool.id)}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </LayerCard>
       )}
 
@@ -873,58 +1025,100 @@ function SpaceDetailView({
 
       {/* Add tool from Composio directory */}
       <Dialog.Root open={addToolOpen} onOpenChange={setAddToolOpen}>
-        <Dialog className="p-0 max-w-2xl">
-          <div className="flex items-start justify-between gap-4 px-6 py-4 border-b border-kumo-hairline">
-            <div>
-              <Dialog.Title>
-                <Text variant="heading3">Composio directory</Text>
-              </Dialog.Title>
-              <Dialog.Description>
-                <Text variant="secondary" size="sm">
-                  Pick a tool to add to this space. You'll be prompted to authenticate.
-                </Text>
-              </Dialog.Description>
+        <Dialog className="p-0 max-w-4xl" size="xl">
+          <div className="flex flex-col gap-4 border-b border-kumo-hairline px-6 py-4">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <Dialog.Title>
+                  <Text variant="heading3">Composio directory</Text>
+                </Dialog.Title>
+                <Dialog.Description>
+                  <Text variant="secondary" size="sm">
+                    Connect external toolkits to this Space.
+                  </Text>
+                </Dialog.Description>
+              </div>
+              <Dialog.Close
+                aria-label="Close"
+                render={(p) => (
+                  <Button {...p} variant="ghost" shape="square" size="sm" icon={XIcon} aria-label="Close" />
+                )}
+              />
             </div>
-            <Dialog.Close
-              aria-label="Close"
-              render={(p) => (
-                <Button {...p} variant="ghost" shape="square" size="sm" icon={XIcon} aria-label="Close" />
-              )}
-            />
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+              <Input
+                size="sm"
+                value={toolSearch}
+                onChange={(event) => setToolSearch(event.target.value)}
+                placeholder="Search toolkits"
+                aria-label="Search Composio toolkits"
+                className="min-w-0 flex-1"
+              />
+              <div className="flex items-center gap-2">
+                <Badge variant={directorySource === "composio" ? "success" : "neutral"} appearance="dot">
+                  {directorySource === "composio" ? "Live directory" : "Directory cache"}
+                </Badge>
+                <Text variant="secondary" size="xs">{visibleDirectory.length} shown</Text>
+              </div>
+            </div>
           </div>
-          <div className="max-h-[420px] overflow-y-auto p-3">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              {COMPOSIO_DIRECTORY.filter(
-                (c) => !space.tools.some((t) => t.id === c.id)
-              ).map((c) => {
-                const Icon = c.icon;
-                return (
-                  <button
-                    key={c.id}
-                    type="button"
-                    onClick={() => {
-                      onAddTool(space.id, c);
-                      setAddToolOpen(false);
-                    }}
-                    className="text-left flex items-center gap-3 p-3 rounded-lg border border-kumo-hairline hover:border-kumo-line hover:bg-kumo-tint transition-colors cursor-pointer"
-                  >
-                    <div className="w-9 h-9 rounded-md bg-kumo-tint flex items-center justify-center shrink-0">
-                      <Icon size={18} className="text-kumo-default" weight="duotone" />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2">
-                        <Text variant="mono" size="sm">{c.name}</Text>
-                        <Text variant="secondary" size="xs">· {c.provider}</Text>
+          <div className="max-h-[560px] overflow-y-auto p-3">
+            {directoryLoading ? (
+              <Empty
+                icon={<ArrowClockwiseIcon size={40} />}
+                title="Loading directory"
+                description="Fetching Composio toolkits."
+              />
+            ) : visibleDirectory.length === 0 ? (
+              <Empty
+                icon={<MagnifyingGlassIcon size={40} />}
+                title="No tools found"
+                description="Try another search."
+              />
+            ) : (
+              <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+                {visibleDirectory.map((toolkit) => {
+                  const connectedTool = composioTools.find((tool) => tool.id === toolkit.id);
+                  const isConnected = connectedTool?.authState === "connected";
+                  const isAdded = Boolean(connectedTool);
+
+                  return (
+                    <div
+                      key={toolkit.id}
+                      className="flex min-w-0 items-start gap-3 rounded-md border border-kumo-hairline bg-kumo-base p-3"
+                    >
+                      <ToolLogo tool={toolkit} />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Text bold size="sm" truncate>{toolkit.name}</Text>
+                          {toolkit.toolsCount ? <Badge variant="neutral">{displayToolCount(toolkit.toolsCount)}</Badge> : null}
+                        </div>
+                        <Text variant="secondary" size="xs" as="p" truncate>
+                          {toolkit.description}
+                        </Text>
+                        {toolkit.categories.length > 0 && (
+                          <div className="mt-2 flex flex-wrap gap-1">
+                            {toolkit.categories.slice(0, 2).map((category) => (
+                              <Badge key={category} variant="secondary">{category}</Badge>
+                            ))}
+                          </div>
+                        )}
                       </div>
-                      <Text variant="secondary" size="xs" truncate as="p">
-                        {c.description}
-                      </Text>
+                      <Button
+                        variant={isConnected ? "secondary" : "primary"}
+                        size="sm"
+                        onClick={() => {
+                          onAddTool(space.id, toolkit);
+                          setAddToolOpen(false);
+                        }}
+                      >
+                        {isConnected ? "Reconnect" : isAdded ? "Connect" : "Connect"}
+                      </Button>
                     </div>
-                    <PlusIcon size={14} className="text-kumo-subtle shrink-0" />
-                  </button>
-                );
-              })}
-            </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         </Dialog>
       </Dialog.Root>
@@ -958,11 +1152,11 @@ function SpaceDetailView({
                     onClick={() => onSelectRun(run.id)}
                   >
                     <Table.Cell><RunStatusBadge status={run.status} /></Table.Cell>
-                    <Table.Cell><Text variant="mono-secondary" size="xs">{run.id}</Text></Table.Cell>
-                    <Table.Cell><Text variant="mono-secondary" size="xs">{run.triggeredBy}</Text></Table.Cell>
-                    <Table.Cell><Text variant="mono-secondary" size="xs">{run.startedAt}</Text></Table.Cell>
-                    <Table.Cell><Text variant="mono-secondary" size="xs">{run.duration}</Text></Table.Cell>
-                    <Table.Cell><Text variant="mono" size="xs">{run.toolCalls}</Text></Table.Cell>
+                    <Table.Cell><Text variant="secondary" size="xs">{run.id}</Text></Table.Cell>
+                    <Table.Cell><Text variant="secondary" size="xs">{run.triggeredBy}</Text></Table.Cell>
+                    <Table.Cell><Text variant="secondary" size="xs">{run.startedAt}</Text></Table.Cell>
+                    <Table.Cell><Text variant="secondary" size="xs">{run.duration}</Text></Table.Cell>
+                    <Table.Cell><Text size="xs">{run.toolCalls}</Text></Table.Cell>
                     <Table.Cell><CaretRightIcon size={14} className="text-kumo-subtle" /></Table.Cell>
                   </Table.Row>
                 ))}
@@ -990,6 +1184,15 @@ const ACTION_META: Record<
   string,
   { icon: React.ComponentType<{ size?: number; className?: string }>; variant: "warning" | "info" | "error" | "primary" }
 > = {
+  search_thread: { icon: ChatCircleIcon, variant: "info" },
+  search_channel: { icon: HashIcon, variant: "info" },
+  search_memory: { icon: DatabaseIcon, variant: "info" },
+  save_memory: { icon: DatabaseIcon, variant: "primary" },
+  session_search: { icon: MagnifyingGlassIcon, variant: "info" },
+  create_artifact: { icon: FileTextIcon, variant: "primary" },
+  run_coding_agent: { icon: CodeIcon, variant: "primary" },
+  ask_user: { icon: ChatCircleIcon, variant: "info" },
+  create_schedule: { icon: ClockIcon, variant: "warning" },
   deploy: { icon: RocketIcon, variant: "warning" },
   send_email: { icon: EnvelopeIcon, variant: "info" },
   github_write: { icon: GitPullRequestIcon, variant: "primary" },
@@ -997,7 +1200,22 @@ const ACTION_META: Record<
   run_query: { icon: DatabaseIcon, variant: "info" },
   slack_post: { icon: ChatCircleIcon, variant: "info" },
   github_read: { icon: GitBranchIcon, variant: "info" },
+  github: { icon: GitBranchIcon, variant: "primary" },
+  linear: { icon: WrenchIcon, variant: "info" },
+  slack: { icon: ChatCircleIcon, variant: "info" },
+  notion: { icon: FileTextIcon, variant: "info" },
   jira: { icon: WrenchIcon, variant: "info" },
+  gmail: { icon: EnvelopeIcon, variant: "info" },
+  googlecalendar: { icon: ClockIcon, variant: "warning" },
+  googledrive: { icon: FileTextIcon, variant: "info" },
+  sentry: { icon: WarningIcon, variant: "warning" },
+  pagerduty: { icon: LightningIcon, variant: "warning" },
+  datadog: { icon: ActivityIcon, variant: "info" },
+  stripe: { icon: CoinsIcon, variant: "primary" },
+  hubspot: { icon: ChartLineUpIcon, variant: "info" },
+  zendesk: { icon: HeadsetIcon, variant: "info" },
+  figma: { icon: CodeIcon, variant: "info" },
+  vercel: { icon: RocketIcon, variant: "primary" },
 };
 
 function ActionIcon({ action, size = 16 }: { action: string; size?: number }) {
@@ -1074,15 +1292,15 @@ function ApprovalsView({
                   <div className="flex items-center gap-4 flex-wrap">
                     <span className="inline-flex items-center gap-1 text-kumo-subtle">
                       <RobotIcon size={12} />
-                      <Text variant="mono-secondary" size="xs">{apr.spaceName}</Text>
+                      <Text variant="secondary" size="xs">{apr.spaceName}</Text>
                     </span>
                     <span className="inline-flex items-center gap-1 text-kumo-subtle">
                       <HashIcon size={12} />
-                      <Text variant="mono-secondary" size="xs">{apr.channel}</Text>
+                      <Text variant="secondary" size="xs">{apr.channel}</Text>
                     </span>
                     <span className="inline-flex items-center gap-1 text-kumo-subtle">
                       <ClockIcon size={12} />
-                      <Text variant="mono-secondary" size="xs">{apr.requestedAt}</Text>
+                      <Text variant="secondary" size="xs">{apr.requestedAt}</Text>
                     </span>
                   </div>
                 </div>
@@ -1120,13 +1338,13 @@ function RunsView({ runs, onSelectRun }: { runs: Run[]; onSelectRun: (id: string
             <div className="flex items-center gap-4">
               <div className="flex items-center gap-1.5">
                 <span className="w-2 h-2 rounded-full bg-kumo-info" />
-                <Text variant="mono-secondary" size="xs">
+                <Text variant="secondary" size="xs">
                   {ACTIVITY_24H.reduce((a, x) => a + x.runs, 0)} runs
                 </Text>
               </div>
               <div className="flex items-center gap-1.5">
                 <span className="w-2 h-2 rounded-full bg-kumo-danger" />
-                <Text variant="mono-secondary" size="xs">
+                <Text variant="secondary" size="xs">
                   {ACTIVITY_24H.reduce((a, x) => a + x.failed, 0)} failed
                 </Text>
               </div>
@@ -1179,18 +1397,18 @@ function RunsView({ runs, onSelectRun }: { runs: Run[]; onSelectRun: (id: string
                 onClick={() => onSelectRun(run.id)}
               >
                 <Table.Cell><RunStatusBadge status={run.status} /></Table.Cell>
-                <Table.Cell><Text variant="mono-secondary" size="xs">{run.id}</Text></Table.Cell>
+                <Table.Cell><Text variant="secondary" size="xs">{run.id}</Text></Table.Cell>
                 <Table.Cell><Text>{run.spaceName}</Text></Table.Cell>
                 <Table.Cell>
                   <span className="inline-flex items-center gap-1 text-kumo-subtle">
                     <HashIcon size={12} />
-                    <Text variant="mono-secondary" size="xs">{run.channel}</Text>
+                    <Text variant="secondary" size="xs">{run.channel}</Text>
                   </span>
                 </Table.Cell>
-                <Table.Cell><Text variant="mono-secondary" size="xs">{run.triggeredBy}</Text></Table.Cell>
-                <Table.Cell><Text variant="mono-secondary" size="xs">{run.startedAt}</Text></Table.Cell>
-                <Table.Cell><Text variant="mono-secondary" size="xs">{run.duration}</Text></Table.Cell>
-                <Table.Cell><Text variant="mono" size="xs">{run.toolCalls}</Text></Table.Cell>
+                <Table.Cell><Text variant="secondary" size="xs">{run.triggeredBy}</Text></Table.Cell>
+                <Table.Cell><Text variant="secondary" size="xs">{run.startedAt}</Text></Table.Cell>
+                <Table.Cell><Text variant="secondary" size="xs">{run.duration}</Text></Table.Cell>
+                <Table.Cell><Text size="xs">{run.toolCalls}</Text></Table.Cell>
                 <Table.Cell><CaretRightIcon size={14} className="text-kumo-subtle" /></Table.Cell>
               </Table.Row>
             ))}
@@ -1260,7 +1478,7 @@ function RunDetailView({ run, events, onBack }: { run: Run; events: RunEvent[]; 
                 <div className={cn("flex-1", !isLast && "pb-4")}>
                   <LayerCard>
                     <LayerCard.Secondary className="flex items-center gap-3">
-                      <Text variant="mono-secondary" size="xs">
+                      <Text variant="secondary" size="xs">
                         {event.time}
                       </Text>
                       <Text bold>{event.label}</Text>
@@ -1282,7 +1500,7 @@ function RunDetailView({ run, events, onBack }: { run: Run; events: RunEvent[]; 
                       )}
                     </LayerCard.Secondary>
                     <LayerCard.Primary>
-                      <Text variant="mono-secondary" size="xs" as="p">
+                      <Text variant="secondary" size="xs" as="p">
                         {event.detail}
                       </Text>
                     </LayerCard.Primary>
@@ -1378,7 +1596,7 @@ function NewSpaceView({
                         )}
                       >
                         <HashIcon size={11} />
-                        <Text variant="mono-secondary" size="xs">
+                        <Text variant="secondary" size="xs">
                           {c}
                         </Text>
                       </button>
@@ -1441,8 +1659,8 @@ export default function App() {
   const updateSpace = (spaceId: string, fn: (s: Space) => Space) =>
     setSpaces((prev) => prev.map((s) => (s.id === spaceId ? fn(s) : s)));
 
-  const persistTools = async (spaceId: string, enabledTools: string[]) => {
-    await updateSpaceConfig(spaceId, { enabledTools });
+  const persistConnections = async (spaceId: string, enabledConnections: string[]) => {
+    await updateSpaceConfig(spaceId, { enabledConnections });
     await refresh();
   };
 
@@ -1451,64 +1669,56 @@ export default function App() {
     await refresh();
   };
 
-  const handleToggleTool = async (spaceId: string, toolId: string) => {
-    const space = spaces.find((s) => s.id === spaceId);
-    if (!space) return;
-    const enabled = new Set(space.tools.filter((tool) => tool.enabled).map((tool) => tool.id));
-    if (enabled.has(toolId)) enabled.delete(toolId);
-    else enabled.add(toolId);
-    updateSpace(spaceId, (s) => ({
-      ...s,
-      tools: s.tools.map((t) => (t.id === toolId ? { ...t, enabled: !t.enabled } : t)),
-    }));
-    try {
-      await persistTools(spaceId, [...enabled]);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to update tools");
-      await refresh().catch(() => undefined);
-    }
+  const openConnectUrl = (url: string | null) => {
+    if (url) window.open(url, "_blank", "noopener,noreferrer");
   };
 
   const handleAuthTool = async (spaceId: string, toolId: string) => {
-    const space = spaces.find((s) => s.id === spaceId);
-    if (!space) return;
-    const enabled = Array.from(new Set([...space.tools.filter((tool) => tool.enabled).map((tool) => tool.id), toolId]));
     updateSpace(spaceId, (s) => ({
       ...s,
       tools: s.tools.map((t) =>
-        t.id === toolId ? { ...t, authState: "connected", enabled: true } : t
+        t.id === toolId ? { ...t, authState: "requires_auth", enabled: true } : t
       ),
     }));
     try {
-      await persistTools(spaceId, enabled);
+      const auth = await authorizeComposioTool(spaceId, toolId);
+      openConnectUrl(auth.connectUrl);
+      await refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to authenticate tool");
       await refresh().catch(() => undefined);
     }
   };
 
-  const handleAddTool = async (spaceId: string, composio: ComposioTool) => {
+  const handleAddTool = async (spaceId: string, composio: ComposioDirectoryTool) => {
     const space = spaces.find((s) => s.id === spaceId);
     if (!space) return;
-    const enabled = Array.from(new Set([...space.tools.filter((tool) => tool.enabled).map((tool) => tool.id), composio.id]));
     updateSpace(spaceId, (s) => ({
       ...s,
       tools: s.tools.some((tool) => tool.id === composio.id)
-        ? s.tools
+        ? s.tools.map((tool) =>
+            tool.id === composio.id ? { ...tool, authState: "requires_auth", enabled: true } : tool
+          )
         : [
             ...s.tools,
             {
-          id: composio.id,
-          name: composio.name,
-          description: composio.description,
-          provider: composio.provider,
+              id: composio.id,
+              name: composio.name,
+              description: composio.description,
+              provider: "Composio",
+              kind: "composio",
+              logoUrl: composio.logoUrl,
+              categories: composio.categories,
+              toolsCount: composio.toolsCount,
               enabled: true,
-              authState: "connected",
+              authState: composio.noAuth ? "connected" : "requires_auth",
             },
           ],
     }));
     try {
-      await persistTools(spaceId, enabled);
+      const auth = await authorizeComposioTool(spaceId, composio.id);
+      openConnectUrl(auth.connectUrl);
+      await refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to add tool");
       await refresh().catch(() => undefined);
@@ -1518,13 +1728,15 @@ export default function App() {
   const handleRemoveTool = async (spaceId: string, toolId: string) => {
     const space = spaces.find((s) => s.id === spaceId);
     if (!space) return;
-    const enabled = space.tools.filter((tool) => tool.id !== toolId && tool.enabled).map((tool) => tool.id);
+    const enabledConnections = space.tools
+      .filter((tool) => isComposioTool(tool) && tool.id !== toolId)
+      .map((tool) => tool.id);
     updateSpace(spaceId, (s) => ({
       ...s,
-      tools: s.tools.filter((t) => t.id !== toolId),
+      tools: s.tools.filter((t) => !isComposioTool(t) || t.id !== toolId),
     }));
     try {
-      await persistTools(spaceId, enabled);
+      await persistConnections(spaceId, enabledConnections);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to remove tool");
       await refresh().catch(() => undefined);
@@ -1623,7 +1835,7 @@ export default function App() {
   })();
 
   return (
-    <div data-mode="light" className="h-screen w-screen bg-kumo-canvas">
+    <div data-mode="dark" className="min-h-screen w-full bg-kumo-canvas">
       <Sidebar.Provider
         defaultOpen={false}
         collapsible="icon"
@@ -1681,11 +1893,11 @@ export default function App() {
           <Sidebar.Footer>
             <div className="flex items-center gap-2 px-2 py-2">
               <div className="w-7 h-7 rounded-full bg-kumo-tint flex items-center justify-center shrink-0">
-                <Text variant="mono" size="xs">A</Text>
+                <Text size="xs">A</Text>
               </div>
               <div className="min-w-0">
                 <Text size="sm" truncate>Admin</Text>
-                <Text variant="mono-secondary" size="xs" truncate>
+                <Text variant="secondary" size="xs" truncate>
                   acme.workspace
                 </Text>
               </div>
@@ -1693,8 +1905,8 @@ export default function App() {
           </Sidebar.Footer>
         </Sidebar>
 
-        <main className="flex-1 overflow-y-auto bg-kumo-canvas">
-          <div className="p-6 max-w-6xl mx-auto">
+        <main className="min-w-0 flex-1 overflow-y-auto bg-kumo-canvas">
+          <div className="mx-auto max-w-6xl p-4 sm:p-6">
             {error && (
               <LayerCard className="mb-4 border-kumo-danger/40">
                 <LayerCard.Primary>
@@ -1729,7 +1941,6 @@ export default function App() {
                 space={currentSpace}
                 runs={runs}
                 onBack={() => setView({ page: "spaces" })}
-                onToggleTool={handleToggleTool}
                 onAuthTool={handleAuthTool}
                 onAddTool={handleAddTool}
                 onRemoveTool={handleRemoveTool}
