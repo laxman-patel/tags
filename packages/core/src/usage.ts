@@ -1,6 +1,6 @@
 import { and, count, desc, eq, gte, sum } from "drizzle-orm";
 import type { Db } from "@tags/db";
-import { newId, usageRecords } from "@tags/db";
+import { newId, runs, usageRecords } from "@tags/db";
 
 /**
  * Micro-USD per 1M tokens. Keys must match Fireworks model ids used by spaces.
@@ -117,4 +117,75 @@ export async function getUsageBySpace(db: Db, spaceId: string) {
     .limit(50);
 
   return { summary: agg[0], recent };
+}
+
+function startOfUtcDay(date: Date): Date {
+  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+}
+
+function dayKey(date: Date): string {
+  return startOfUtcDay(date).toISOString().slice(0, 10);
+}
+
+export async function getSpaceDailyUsage(
+  db: Db,
+  args: {
+    organizationId: string;
+    spaceId: string;
+    days?: number;
+  },
+) {
+  const days = Math.max(1, args.days ?? 7);
+  const today = startOfUtcDay(new Date());
+  const start = new Date(today);
+  start.setUTCDate(today.getUTCDate() - (days - 1));
+
+  const buckets = Array.from({ length: days }, (_, index) => {
+    const date = new Date(start);
+    date.setUTCDate(start.getUTCDate() + index);
+    return {
+      date: date.toISOString().slice(0, 10),
+      runs: 0,
+      tokens: 0,
+    };
+  });
+  const bucketByDate = new Map(buckets.map((bucket) => [bucket.date, bucket]));
+
+  const [runRows, usageRows] = await Promise.all([
+    db
+      .select({ startedAt: runs.startedAt })
+      .from(runs)
+      .where(
+        and(
+          eq(runs.organizationId, args.organizationId),
+          eq(runs.spaceId, args.spaceId),
+          gte(runs.startedAt, start),
+        ),
+      ),
+    db
+      .select({
+        createdAt: usageRecords.createdAt,
+        totalTokens: usageRecords.totalTokens,
+      })
+      .from(usageRecords)
+      .where(
+        and(
+          eq(usageRecords.organizationId, args.organizationId),
+          eq(usageRecords.spaceId, args.spaceId),
+          gte(usageRecords.createdAt, start),
+        ),
+      ),
+  ]);
+
+  for (const row of runRows) {
+    const bucket = bucketByDate.get(dayKey(row.startedAt));
+    if (bucket) bucket.runs += 1;
+  }
+
+  for (const row of usageRows) {
+    const bucket = bucketByDate.get(dayKey(row.createdAt));
+    if (bucket) bucket.tokens += Number(row.totalTokens ?? 0);
+  }
+
+  return buckets;
 }

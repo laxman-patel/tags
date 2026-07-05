@@ -39,7 +39,7 @@ import {
   NATIVE_TOOL_METADATA,
 } from "@tags/core/tools";
 import { resolveOrCreateUser } from "@tags/core/users";
-import { getUsageBySpace } from "@tags/core/usage";
+import { getSpaceDailyUsage, getUsageBySpace } from "@tags/core/usage";
 import {
   expireApprovalByRequestId,
   listPendingApprovals,
@@ -529,6 +529,11 @@ async function buildSpacesPayload(db: Db, organizationId: string) {
     rows.map(async (row) => {
       const config = await loadActiveSpaceConfig(db, row.space.id);
       const usage = await getUsageBySpace(db, row.space.id);
+      const dailyUsage = await getSpaceDailyUsage(db, {
+        organizationId,
+        spaceId: row.space.id,
+        days: 7,
+      });
       const runCount = Number(usage.summary?.runCount ?? 0);
       const totalTokens = Number(usage.summary?.totalTokens ?? 0);
       const costMicroUsd = Number(usage.summary?.costMicroUsd ?? 0);
@@ -557,6 +562,7 @@ async function buildSpacesPayload(db: Db, organizationId: string) {
         runCount,
         tokenUsage: totalTokens,
         cost: costMicroUsd / 1_000_000,
+        dailyUsage,
         recentActivity: runCount > 0 ? `${runCount} recorded runs` : "No runs yet",
         tools: [
           ...alwaysEnabledNativeTools().map((toolId) => ({

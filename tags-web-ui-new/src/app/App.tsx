@@ -257,6 +257,16 @@ function SlackConnectEmpty() {
 
 // ===== Mock Data =====
 
+const INITIAL_DAILY_USAGE = [
+  { date: "2026-06-30", runs: 0, tokens: 0 },
+  { date: "2026-07-01", runs: 0, tokens: 0 },
+  { date: "2026-07-02", runs: 0, tokens: 0 },
+  { date: "2026-07-03", runs: 0, tokens: 0 },
+  { date: "2026-07-04", runs: 0, tokens: 0 },
+  { date: "2026-07-05", runs: 0, tokens: 0 },
+  { date: "2026-07-06", runs: 0, tokens: 0 },
+];
+
 const INITIAL_SPACES: Space[] = [
   {
     id: "sp_01",
@@ -267,6 +277,7 @@ const INITIAL_SPACES: Space[] = [
     runCount: 1847,
     tokenUsage: 4820000,
     cost: 96.4,
+    dailyUsage: INITIAL_DAILY_USAGE,
     repos: [
       { id: "r1", name: "acme/support-kb", isDefault: true },
       { id: "r2", name: "acme/help-articles", isDefault: false },
@@ -288,6 +299,7 @@ const INITIAL_SPACES: Space[] = [
     runCount: 612,
     tokenUsage: 2110000,
     cost: 42.2,
+    dailyUsage: INITIAL_DAILY_USAGE,
     repos: [
       { id: "r1", name: "acme/monorepo", isDefault: true },
       { id: "r2", name: "acme/design-system", isDefault: false },
@@ -310,6 +322,7 @@ const INITIAL_SPACES: Space[] = [
     runCount: 289,
     tokenUsage: 890000,
     cost: 17.8,
+    dailyUsage: INITIAL_DAILY_USAGE,
     repos: [],
     recentActivity: "Paused by admin — rate limit exceeded",
     tools: [
@@ -327,6 +340,7 @@ const INITIAL_SPACES: Space[] = [
     runCount: 3401,
     tokenUsage: 9200000,
     cost: 184.0,
+    dailyUsage: INITIAL_DAILY_USAGE,
     repos: [
       { id: "r1", name: "acme/infra", isDefault: true },
       { id: "r2", name: "acme/terraform-modules", isDefault: false },
@@ -417,26 +431,6 @@ const RUN_STATUS_DISTRIBUTION = [
   { name: "Failed", value: 24, color: "var(--color-kumo-danger, #dc2626)" },
   { name: "Running", value: 6, color: "var(--color-kumo-info, #2563eb)" },
   { name: "Pending", value: 3, color: "var(--color-kumo-warning, #d97706)" },
-];
-
-const SPACE_TOKEN_TREND = [
-  { d: "Jun 27", tokens: 140 },
-  { d: "Jun 28", tokens: 165 },
-  { d: "Jun 29", tokens: 130 },
-  { d: "Jun 30", tokens: 210 },
-  { d: "Jul 01", tokens: 245 },
-  { d: "Jul 02", tokens: 190 },
-  { d: "Jul 03", tokens: 275 },
-];
-
-const SPACE_RUNS_PER_DAY = [
-  { d: "Jun 27", runs: 42 },
-  { d: "Jun 28", runs: 51 },
-  { d: "Jun 29", runs: 38 },
-  { d: "Jun 30", runs: 67 },
-  { d: "Jul 01", runs: 74 },
-  { d: "Jul 02", runs: 58 },
-  { d: "Jul 03", runs: 81 },
 ];
 
 // ===== Chart primitives =====
@@ -567,6 +561,16 @@ function statusTone(status: SpaceStatus) {
 
 function displayToolCount(value: number) {
   return value === 1 ? "1 tool" : `${value} tools`;
+}
+
+function formatChartDay(value: string) {
+  const date = new Date(`${value}T00:00:00Z`);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleDateString("en-US", {
+    month: "short",
+    day: "2-digit",
+    timeZone: "UTC",
+  });
 }
 
 function formatShortDate(value: string | null) {
@@ -969,6 +973,11 @@ function SpaceDetailView({
   const nativeTools = space.tools.filter((tool) => !isComposioTool(tool));
   const composioTools = space.tools.filter(isComposioTool);
   const connectedComposioTools = composioTools.filter((tool) => tool.authState === "connected");
+  const dailyUsage = space.dailyUsage.map((point) => ({
+    d: formatChartDay(point.date),
+    runs: point.runs,
+    tokens: Math.round(point.tokens / 1000),
+  }));
   const visibleDirectory = composioDirectory.filter((tool) => {
     const query = toolSearch.trim().toLowerCase();
     if (!query) return true;
@@ -1103,7 +1112,7 @@ function SpaceDetailView({
               <LayerCard.Primary>
                 <div className="h-36 -mx-2">
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={SPACE_RUNS_PER_DAY} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
+                    <BarChart data={dailyUsage} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
                       <CartesianGrid strokeDasharray="2 4" stroke="var(--color-kumo-hairline)" vertical={false} />
                       <XAxis dataKey="d" tick={{ fontSize: 10, fill: CHART_MUTED }} axisLine={false} tickLine={false} />
                       <YAxis tick={{ fontSize: 10, fill: CHART_MUTED }} axisLine={false} tickLine={false} width={28} />
@@ -1123,7 +1132,7 @@ function SpaceDetailView({
               <LayerCard.Primary>
                 <div className="h-36 -mx-2">
                   <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={SPACE_TOKEN_TREND} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
+                    <AreaChart data={dailyUsage} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
                       <defs>
                         <linearGradient id="tokGrad" x1="0" y1="0" x2="0" y2="1">
                           <stop offset="0%" stopColor={CHART_BRAND} stopOpacity={0.35} />

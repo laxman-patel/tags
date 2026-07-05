@@ -39,6 +39,12 @@ export interface Repo {
   isDefault: boolean;
 }
 
+export interface SpaceDailyUsage {
+  date: string;
+  runs: number;
+  tokens: number;
+}
+
 export interface Space {
   id: string;
   name: string;
@@ -50,6 +56,7 @@ export interface Space {
   cost: number;
   tools: Tool[];
   repos: Repo[];
+  dailyUsage: SpaceDailyUsage[];
   recentActivity: string;
   modelId?: string;
   instructions?: string;
