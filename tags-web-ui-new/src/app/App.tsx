@@ -1017,6 +1017,7 @@ function SpaceDetailView({
   onBack,
   onAuthTool,
   onAddTool,
+  authLoadingToolId,
   onToggleTool,
   onRemoveTool,
   onAddRepo,
@@ -1027,8 +1028,9 @@ function SpaceDetailView({
   space: Space;
   runs: Run[];
   onBack: () => void;
-  onAuthTool: (spaceId: string, toolId: string) => void;
-  onAddTool: (spaceId: string, composio: ComposioDirectoryTool) => void;
+  onAuthTool: (spaceId: string, toolId: string) => Promise<void>;
+  onAddTool: (spaceId: string, composio: ComposioDirectoryTool) => Promise<void>;
+  authLoadingToolId: string | null;
   onToggleTool: (spaceId: string, toolId: string, enabled: boolean) => void;
   onRemoveTool: (spaceId: string, toolId: string) => void;
   onAddRepo: (spaceId: string, name: string) => void;
@@ -1327,6 +1329,7 @@ function SpaceDetailView({
               <div className="divide-y divide-kumo-hairline">
                 {composioTools.map((tool) => {
                   const connected = tool.authState === "connected";
+                  const authLoading = authLoadingToolId === `${space.id}:${tool.id}`;
                   return (
                     <div key={tool.id} className="group grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 px-4 py-3">
                       <ToolLogo tool={tool} size="sm" />
@@ -1352,6 +1355,8 @@ function SpaceDetailView({
                           <Button
                             variant="secondary"
                             size="sm"
+                            loading={authLoading}
+                            disabled={authLoading}
                             onClick={() => onAuthTool(space.id, tool.id)}
                           >
                             Reconnect
@@ -1647,6 +1652,7 @@ function SpaceDetailView({
                   const connectedTool = composioTools.find((tool) => tool.id === toolkit.id);
                   const isConnected = connectedTool?.authState === "connected";
                   const isAdded = Boolean(connectedTool);
+                  const authLoading = authLoadingToolId === `${space.id}:${toolkit.id}`;
 
                   return (
                     <div
@@ -1676,8 +1682,10 @@ function SpaceDetailView({
                         variant={isConnected ? "secondary" : "primary"}
                         size="sm"
                         className="sm:ml-auto"
-                        onClick={() => {
-                          onAddTool(space.id, toolkit);
+                        loading={authLoading}
+                        disabled={authLoading}
+                        onClick={async () => {
+                          await onAddTool(space.id, toolkit);
                           setAddToolOpen(false);
                         }}
                       >
@@ -2306,6 +2314,7 @@ function DashboardApp({ clerkEnabled = false }: { clerkEnabled?: boolean }) {
   const [eventsByRun, setEventsByRun] = useState<Record<string, RunEvent[]>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [authLoadingToolId, setAuthLoadingToolId] = useState<string | null>(null);
   const authRefreshTimerRef = useRef<number | null>(null);
   const authRefreshTimeoutsRef = useRef<number[]>([]);
   const authRefreshCleanupRef = useRef<(() => void) | null>(null);
@@ -2414,6 +2423,8 @@ function DashboardApp({ clerkEnabled = false }: { clerkEnabled?: boolean }) {
   };
 
   const handleAuthTool = async (spaceId: string, toolId: string) => {
+    const authKey = `${spaceId}:${toolId}`;
+    setAuthLoadingToolId(authKey);
     updateSpace(spaceId, (s) => ({
       ...s,
       tools: s.tools.map((t) =>
@@ -2427,12 +2438,16 @@ function DashboardApp({ clerkEnabled = false }: { clerkEnabled?: boolean }) {
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to authenticate tool");
       await refresh().catch(() => undefined);
+    } finally {
+      setAuthLoadingToolId((current) => (current === authKey ? null : current));
     }
   };
 
   const handleAddTool = async (spaceId: string, composio: ComposioDirectoryTool) => {
     const space = spaces.find((s) => s.id === spaceId);
     if (!space) return;
+    const authKey = `${spaceId}:${composio.id}`;
+    setAuthLoadingToolId(authKey);
     updateSpace(spaceId, (s) => ({
       ...s,
       tools: s.tools.some((tool) => tool.id === composio.id)
@@ -2462,6 +2477,8 @@ function DashboardApp({ clerkEnabled = false }: { clerkEnabled?: boolean }) {
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to add tool");
       await refresh().catch(() => undefined);
+    } finally {
+      setAuthLoadingToolId((current) => (current === authKey ? null : current));
     }
   };
 
@@ -2732,6 +2749,7 @@ function DashboardApp({ clerkEnabled = false }: { clerkEnabled?: boolean }) {
                         onBack={() => setView({ page: "spaces" })}
                         onAuthTool={handleAuthTool}
                         onAddTool={handleAddTool}
+                        authLoadingToolId={authLoadingToolId}
                         onToggleTool={handleToggleTool}
                         onRemoveTool={handleRemoveTool}
                         onAddRepo={handleAddRepo}
