@@ -107,6 +107,7 @@ import {
   type ToolAuthState,
 } from "./api";
 import { clerkAppearance } from "./clerkAppearance";
+import { Switch } from "./components/ui/switch";
 
 // ===== Types =====
 
@@ -1003,6 +1004,7 @@ function SpaceDetailView({
   onBack,
   onAuthTool,
   onAddTool,
+  onToggleTool,
   onRemoveTool,
   onAddRepo,
   onSetDefaultRepo,
@@ -1014,6 +1016,7 @@ function SpaceDetailView({
   onBack: () => void;
   onAuthTool: (spaceId: string, toolId: string) => void;
   onAddTool: (spaceId: string, composio: ComposioDirectoryTool) => void;
+  onToggleTool: (spaceId: string, toolId: string, enabled: boolean) => void;
   onRemoveTool: (spaceId: string, toolId: string) => void;
   onAddRepo: (spaceId: string, name: string) => void;
   onSetDefaultRepo: (spaceId: string, repoId: string) => void;
@@ -1040,7 +1043,7 @@ function SpaceDetailView({
   const [directoryLoading, setDirectoryLoading] = useState(false);
   const [composioDirectory, setComposioDirectory] = useState<ComposioDirectoryTool[]>([]);
   const composioTools = space.tools.filter(isComposioTool);
-  const connectedComposioTools = composioTools.filter((tool) => tool.authState === "connected");
+  const readyComposioTools = composioTools.filter((tool) => tool.authState === "connected" && tool.enabled);
   const dailyUsage = space.dailyUsage.map((point) => ({
     d: formatChartDay(point.date),
     runs: point.runs,
@@ -1279,7 +1282,7 @@ function SpaceDetailView({
               <Text bold>Tools</Text>
               {composioTools.length > 0 && (
                 <Text variant="secondary" size="xs">
-                  {connectedComposioTools.length}/{composioTools.length} ready
+                  {readyComposioTools.length}/{composioTools.length} ready
                 </Text>
               )}
             </div>
@@ -1320,7 +1323,11 @@ function SpaceDetailView({
                     </div>
                     <div className="flex items-center justify-end gap-1">
                       {tool.authState === "connected" ? (
-                        <Text variant="secondary" size="xs">Connected</Text>
+                        <Switch
+                          checked={tool.enabled}
+                          aria-label={`${tool.enabled ? "Disable" : "Enable"} ${tool.name}`}
+                          onCheckedChange={(checked) => onToggleTool(space.id, tool.id, checked)}
+                        />
                       ) : (
                         <Button
                           variant="secondary"
@@ -1330,16 +1337,14 @@ function SpaceDetailView({
                           Connect
                         </Button>
                       )}
-                      <span className="opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          shape="square"
-                          icon={XIcon}
-                          aria-label={`Remove ${tool.name}`}
-                          onClick={() => onRemoveTool(space.id, tool.id)}
-                        />
-                      </span>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        shape="square"
+                        icon={XIcon}
+                        aria-label={`Remove ${tool.name}`}
+                        onClick={() => onRemoveTool(space.id, tool.id)}
+                      />
                     </div>
                   </div>
                 ))}
@@ -2376,17 +2381,43 @@ function DashboardApp({ clerkEnabled = false }: { clerkEnabled?: boolean }) {
   const handleRemoveTool = async (spaceId: string, toolId: string) => {
     const space = spaces.find((s) => s.id === spaceId);
     if (!space) return;
-    const enabledConnections = space.tools
+    const availableConnections = space.tools
       .filter((tool) => isComposioTool(tool) && tool.id !== toolId)
+      .map((tool) => tool.id);
+    const enabledConnections = space.tools
+      .filter((tool) => isComposioTool(tool) && tool.id !== toolId && tool.enabled)
       .map((tool) => tool.id);
     updateSpace(spaceId, (s) => ({
       ...s,
       tools: s.tools.filter((t) => !isComposioTool(t) || t.id !== toolId),
     }));
     try {
-      await persistConnections(spaceId, enabledConnections);
+      await updateSpaceConfig(spaceId, { availableConnections, enabledConnections });
+      await refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to remove tool");
+      await refresh().catch(() => undefined);
+    }
+  };
+
+  const handleToggleTool = async (spaceId: string, toolId: string, enabled: boolean) => {
+    const space = spaces.find((s) => s.id === spaceId);
+    if (!space) return;
+    const enabledConnections = space.tools
+      .filter((tool) => isComposioTool(tool) && tool.authState === "connected")
+      .filter((tool) => (tool.id === toolId ? enabled : tool.enabled))
+      .map((tool) => tool.id);
+
+    updateSpace(spaceId, (s) => ({
+      ...s,
+      tools: s.tools.map((tool) =>
+        isComposioTool(tool) && tool.id === toolId ? { ...tool, enabled } : tool,
+      ),
+    }));
+    try {
+      await persistConnections(spaceId, enabledConnections);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to update tool");
       await refresh().catch(() => undefined);
     }
   };
@@ -2614,6 +2645,7 @@ function DashboardApp({ clerkEnabled = false }: { clerkEnabled?: boolean }) {
                         onBack={() => setView({ page: "spaces" })}
                         onAuthTool={handleAuthTool}
                         onAddTool={handleAddTool}
+                        onToggleTool={handleToggleTool}
                         onRemoveTool={handleRemoveTool}
                         onAddRepo={handleAddRepo}
                         onSetDefaultRepo={handleSetDefaultRepo}

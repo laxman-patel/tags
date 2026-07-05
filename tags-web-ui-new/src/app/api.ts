@@ -166,7 +166,15 @@ export function deleteSpace(spaceId: string) {
   });
 }
 
-export function updateSpaceConfig(spaceId: string, input: { enabledTools?: string[]; enabledConnections?: string[]; repoUrls?: string[] }) {
+export function updateSpaceConfig(
+  spaceId: string,
+  input: {
+    enabledTools?: string[];
+    availableConnections?: string[];
+    enabledConnections?: string[];
+    repoUrls?: string[];
+  },
+) {
   return requestJson<{ configId: string; version: number }>(`/api/spaces/${spaceId}/config`, {
     method: "PATCH",
     body: JSON.stringify(input),

@@ -143,6 +143,7 @@ export async function createSpaceWithConfig(db: Db, input: CreateSpaceInput) {
     modelId: input.modelId,
     instructions: input.instructions,
     enabledTools: alwaysEnabledNativeTools(),
+    availableConnections: [],
     runtimeMode: input.runtimeMode ?? "opencode",
     passiveLearningMode: input.passiveLearningMode ?? "off",
     isActive: true,
@@ -159,6 +160,7 @@ export type UpdateSpaceConfigInput = {
   instructions: string;
   enabledSkills?: string[];
   enabledTools: string[];
+  availableConnections?: string[];
   enabledConnections?: string[];
   maxSteps?: number;
   runtimeMode?: RuntimeMode;
@@ -202,6 +204,12 @@ export async function createSpaceConfigVersion(db: Db, input: UpdateSpaceConfigI
     instructions: input.instructions,
     enabledSkills: input.enabledSkills ?? previous?.enabledSkills ?? [],
     enabledTools: alwaysEnabledNativeTools(),
+    availableConnections:
+      input.availableConnections ??
+      previous?.availableConnections ??
+      input.enabledConnections ??
+      previous?.enabledConnections ??
+      [],
     enabledConnections: input.enabledConnections ?? previous?.enabledConnections ?? [],
     maxSteps: input.maxSteps ?? previous?.maxSteps ?? 12,
     runtimeMode: input.runtimeMode ?? previous?.runtimeMode ?? "opencode",

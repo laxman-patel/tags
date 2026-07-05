@@ -135,6 +135,7 @@ export const spaceConfigs = pgTable(
     instructions: text("instructions").notNull(),
     enabledSkills: jsonb("enabled_skills").$type<string[]>().notNull().default([]),
     enabledTools: jsonb("enabled_tools").$type<string[]>().notNull().default([]),
+    availableConnections: jsonb("available_connections").$type<string[]>().notNull().default([]),
     enabledConnections: jsonb("enabled_connections").$type<string[]>().notNull().default([]),
     maxSteps: integer("max_steps").notNull().default(12),
     runtimeMode: text("runtime_mode").notNull().default("opencode"),

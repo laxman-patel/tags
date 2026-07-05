@@ -547,8 +547,10 @@ async function buildSpacesPayload(db: Db, organizationId: string) {
         config?.enabledConnections,
         legacyComposioConnections(config?.enabledTools),
       );
+      const availableConnections = mergeConnections(config?.availableConnections, enabledConnections);
+      const enabledConnectionSet = new Set(enabledConnections);
       const accountStatuses =
-        enabledConnections.length > 0
+        availableConnections.length > 0
           ? await listComposioConnectedAccountStatuses({
               apiKey: process.env.COMPOSIO_API_KEY ?? "",
               entityId: row.space.id,
@@ -572,17 +574,20 @@ async function buildSpacesPayload(db: Db, organizationId: string) {
             enabled: true,
             authState: "connected",
           })),
-          ...enabledConnections.map((toolkitId) => ({
-            id: toolkitId,
-            kind: "composio",
-            enabled: true,
-            authState: composioAuthState({
-              hasApiKey: Boolean(process.env.COMPOSIO_API_KEY),
-              enabled: true,
-              accountStatus: accountStatuses[toolkitId],
-            }),
-            ...fallbackToolkitMetadata(toolkitId),
-          })),
+          ...availableConnections.map((toolkitId) => {
+            const enabled = enabledConnectionSet.has(toolkitId);
+            return {
+              id: toolkitId,
+              kind: "composio",
+              enabled,
+              authState: composioAuthState({
+                hasApiKey: Boolean(process.env.COMPOSIO_API_KEY),
+                enabled: true,
+                accountStatus: accountStatuses[toolkitId],
+              }),
+              ...fallbackToolkitMetadata(toolkitId),
+            };
+          }),
         ],
         repos,
         modelId: config?.modelId,
@@ -726,6 +731,7 @@ async function updateSpaceConfig(
   spaceId: string,
   patch: {
     enabledTools?: string[];
+    availableConnections?: string[];
     enabledConnections?: string[];
     repoUrls?: string[];
   },
@@ -741,6 +747,9 @@ async function updateSpaceConfig(
     instructions: current?.instructions ?? "You are Tags, an AI teammate for this Slack channel.",
     enabledSkills: current?.enabledSkills ?? [],
     enabledTools: alwaysEnabledNativeTools(),
+    availableConnections:
+      patch.availableConnections ??
+      mergeConnections(current?.availableConnections, patch.enabledConnections, legacyComposioConnections(current?.enabledTools)),
     enabledConnections:
       patch.enabledConnections ??
       (patch.enabledTools ? legacyComposioConnections(patch.enabledTools) : undefined) ??
@@ -1088,9 +1097,16 @@ async function handleProtectedApi(
         if (!spaceId) return sendJson(res, 400, { error: "space id is required" });
         const space = await requireSpaceInOrg(db, spaceId, organizationId);
         if (!space) return sendJson(res, 404, { error: "Not found" });
-        const body = (await readJson(req)) as { enabledTools?: unknown; enabledConnections?: unknown; repoUrls?: unknown };
+        const body = (await readJson(req)) as {
+          enabledTools?: unknown;
+          availableConnections?: unknown;
+          enabledConnections?: unknown;
+          repoUrls?: unknown;
+        };
         const result = await updateSpaceConfig(db, spaceId, {
           enabledTools: body.enabledTools !== undefined ? asStringArray(body.enabledTools) : undefined,
+          availableConnections:
+            body.availableConnections !== undefined ? asStringArray(body.availableConnections) : undefined,
           enabledConnections: body.enabledConnections !== undefined ? asStringArray(body.enabledConnections) : undefined,
           repoUrls: body.repoUrls !== undefined ? asStringArray(body.repoUrls) : undefined,
         });
@@ -1123,6 +1139,7 @@ async function handleProtectedApi(
           toolkit,
         });
         const result = await updateSpaceConfig(db, spaceId, {
+          availableConnections: mergeConnections(current?.availableConnections, current?.enabledConnections, [toolkit]),
           enabledConnections: mergeConnections(current?.enabledConnections, [toolkit]),
         });
         if (!result) return sendJson(res, 404, { error: "Not found" });

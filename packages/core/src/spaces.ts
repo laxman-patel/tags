@@ -24,6 +24,7 @@ export type ActiveSpaceConfig = {
   instructions: string;
   enabledSkills: string[];
   enabledTools: string[];
+  availableConnections: string[];
   enabledConnections: string[];
   maxSteps: number;
   /**
@@ -84,6 +85,7 @@ export async function loadActiveSpaceConfig(
   if (!row) return null;
 
   const legacyConnections = row.enabledTools.filter((toolId) => !isNativeToolId(toolId));
+  const enabledConnections = Array.from(new Set([...(row.enabledConnections ?? []), ...legacyConnections]));
 
   return {
     id: row.id,
@@ -95,7 +97,8 @@ export async function loadActiveSpaceConfig(
     instructions: row.instructions,
     enabledSkills: row.enabledSkills,
     enabledTools: alwaysEnabledNativeTools(),
-    enabledConnections: Array.from(new Set([...(row.enabledConnections ?? []), ...legacyConnections])),
+    availableConnections: Array.from(new Set([...(row.availableConnections ?? []), ...enabledConnections])),
+    enabledConnections,
     maxSteps: row.maxSteps,
     runtimeMode: parseRuntimeMode(row.runtimeMode),
     repoUrl: row.repoUrl,
