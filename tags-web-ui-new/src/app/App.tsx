@@ -826,7 +826,7 @@ function SpacesView({
         </div>
       </div>
 
-      <div className="grid min-w-0 grid-cols-1 gap-4 min-[520px]:[grid-template-columns:repeat(auto-fill,minmax(16rem,16rem))]">
+      <div className="grid min-w-0 grid-cols-1 gap-4 min-[520px]:[grid-template-columns:repeat(auto-fill,minmax(20rem,20rem))]">
         {spaces.map((space) => (
           <SpaceProjectCard
             key={space.id}
@@ -926,7 +926,7 @@ function SpaceProjectCard({
         </div>
 
         <div className="px-2 pb-2">
-          <div className="relative aspect-square overflow-hidden rounded-md border border-kumo-hairline bg-kumo-recessed">
+          <div className="relative aspect-[5/4] overflow-hidden rounded-md border border-kumo-hairline bg-kumo-recessed">
             <div
               className="absolute inset-0 opacity-60"
               style={{
