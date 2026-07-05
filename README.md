@@ -58,6 +58,12 @@ Required at boot: `DATABASE_URL`, `FIREWORKS_API_KEY`, `SLACK_SIGNING_SECRET`, `
 
 Migrations run automatically via `preDeployCommand` when `DATABASE_MIGRATE_URL` (owner role) is set.
 
+### CI/CD
+
+Railway is connected to the GitHub repo `laxman-patel/tags` and auto-deploys the `tags-web` service from the `main` branch. Pushes to `main` trigger Railway builds directly; GitHub Actions only runs verification.
+
+Keep app secrets in Railway variables: Neon (`DATABASE_URL`, `DATABASE_MIGRATE_URL`), Inngest (`INNGEST_EVENT_KEY`, `INNGEST_SIGNING_KEY`), Cloudflare R2 (`R2_*`), Slack, Clerk, Fireworks, and other runtime keys. Railway builds with `railway.json`, runs `pnpm db:migrate` before release, and starts `@tags/control-plane`.
+
 ### Slack app configuration
 
 In your Slack app settings (production domain `https://<your-domain>`):
