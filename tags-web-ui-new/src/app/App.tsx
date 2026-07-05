@@ -814,7 +814,7 @@ function SpacesView({
         </div>
       </div>
 
-      <div className="grid min-w-0 grid-cols-1 gap-4 min-[520px]:[grid-template-columns:repeat(auto-fill,minmax(20rem,20rem))]">
+      <div className="grid min-w-0 grid-cols-1 gap-3 min-[520px]:[grid-template-columns:repeat(auto-fill,minmax(13rem,13rem))]">
         {spaces.map((space) => (
           <SpaceProjectCard
             key={space.id}
@@ -873,9 +873,9 @@ function SpaceProjectCard({
             onClick();
           }
         }}
-        className="group w-full min-w-0 cursor-pointer overflow-hidden p-0 transition-colors hover:bg-kumo-base focus-visible:ring-2 focus-visible:ring-kumo-focus"
+        className="group w-full max-w-[13rem] min-w-0 cursor-pointer overflow-hidden p-0 transition-colors hover:bg-kumo-base focus-visible:ring-2 focus-visible:ring-kumo-focus min-[520px]:max-w-none"
       >
-        <div className="flex items-center justify-between gap-3 px-4 py-3">
+        <div className="flex items-center justify-between gap-2 px-3 py-2">
           <div className="min-w-0">
             <Text bold truncate as="div">{space.name}</Text>
             <div className="mt-1 flex items-center gap-1.5 text-kumo-subtle">
@@ -913,32 +913,32 @@ function SpaceProjectCard({
           </DropdownMenu>
         </div>
 
-        <div className="px-2 pb-2">
+        <div className="px-1.5 pb-1.5">
           <div className="relative aspect-[5/4] overflow-hidden rounded-md border border-kumo-hairline bg-kumo-recessed">
             <div
               className="absolute inset-0 opacity-60"
               style={{
                 backgroundImage: "radial-gradient(var(--color-kumo-line) 1px, transparent 1px)",
-                backgroundSize: "10px 10px",
+                backgroundSize: "7px 7px",
               }}
             />
             <div className="absolute inset-0 flex items-center justify-center">
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5">
                 {centerTools.map((tool) => (
                   <div
                     key={tool.id}
-                    className="flex h-10 w-10 items-center justify-center rounded-md border border-kumo-line bg-kumo-base text-kumo-default shadow-sm transition-transform group-hover:-translate-y-0.5"
+                    className="flex h-7 w-7 items-center justify-center rounded-md border border-kumo-line bg-kumo-base text-kumo-default shadow-sm transition-transform group-hover:-translate-y-0.5"
                   >
                     {tool.id === "tags" ? (
-                      <BrainIcon size={20} weight="duotone" />
+                      <BrainIcon size={14} weight="duotone" />
                     ) : (
-                      <ToolLogo tool={tool} size="base" />
+                      <ToolLogo tool={tool} size="sm" />
                     )}
                   </div>
                 ))}
               </div>
             </div>
-            <div className="absolute inset-x-3 bottom-3 flex items-center justify-between gap-3">
+            <div className="absolute inset-x-2 bottom-2 flex items-center justify-between gap-2">
               <StatusLine space={space} />
               <div className="hidden items-center gap-2 text-kumo-subtle sm:flex">
                 <span className="inline-flex items-center gap-1">
@@ -955,7 +955,7 @@ function SpaceProjectCard({
         </div>
 
         {recentRun && (
-          <div className="flex items-center justify-between gap-3 border-t border-kumo-hairline px-4 py-2.5">
+          <div className="flex items-center justify-between gap-2 border-t border-kumo-hairline px-3 py-2">
             <div className="min-w-0">
               <Text variant="secondary" size="xs" truncate>{recentRun.triggeredBy}</Text>
             </div>
