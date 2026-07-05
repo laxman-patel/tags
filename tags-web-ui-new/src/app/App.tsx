@@ -14,6 +14,7 @@ import {
   Badge,
   Text,
   Empty,
+  Loader,
   Field,
   Input,
   Tabs,
@@ -2085,15 +2086,9 @@ export default function App({ clerkEnabled = false }: { clerkEnabled?: boolean }
               </LayerCard>
             )}
             {loading && (
-              <LayerCard>
-                <LayerCard.Primary>
-                  <Empty
-                    icon={<ArrowClockwiseIcon size={40} />}
-                    title="Loading control plane"
-                    description="Fetching spaces, runs, and approvals."
-                  />
-                </LayerCard.Primary>
-              </LayerCard>
+              <div className="flex min-h-[240px] items-center justify-center">
+                <Loader size="lg" />
+              </div>
             )}
             {!loading && (
               <>
