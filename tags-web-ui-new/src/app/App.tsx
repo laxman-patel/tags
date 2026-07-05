@@ -83,6 +83,7 @@ import {
   loadRunEvents,
   respondToApproval,
   updateSpaceConfig,
+  type ActivityPoint,
   type Approval,
   type ComposioDirectoryTool,
   type Repo,
@@ -405,21 +406,6 @@ const RUN_EVENTS: Record<string, RunEvent[]> = {
 };
 
 // ===== Chart data =====
-
-const ACTIVITY_24H = [
-  { h: "00", runs: 8, failed: 0 },
-  { h: "02", runs: 3, failed: 0 },
-  { h: "04", runs: 2, failed: 0 },
-  { h: "06", runs: 12, failed: 1 },
-  { h: "08", runs: 34, failed: 2 },
-  { h: "10", runs: 58, failed: 3 },
-  { h: "12", runs: 71, failed: 1 },
-  { h: "14", runs: 82, failed: 4 },
-  { h: "16", runs: 66, failed: 2 },
-  { h: "18", runs: 41, failed: 0 },
-  { h: "20", runs: 22, failed: 1 },
-  { h: "22", runs: 14, failed: 0 },
-];
 
 const RUN_STATUS_DISTRIBUTION = [
   { name: "Success", value: 812, color: "var(--color-kumo-success, #16a34a)" },
@@ -1571,7 +1557,23 @@ function ApprovalsView({
   );
 }
 
-function RunsView({ runs, onSelectRun }: { runs: Run[]; onSelectRun: (id: string) => void }) {
+function RunsView({
+  runs,
+  activity24h,
+  onSelectRun,
+}: {
+  runs: Run[];
+  activity24h: ActivityPoint[];
+  onSelectRun: (id: string) => void;
+}) {
+  const activityTotals = activity24h.reduce(
+    (acc, point) => {
+      acc.runs += point.runs;
+      acc.failed += point.failed;
+      return acc;
+    },
+    { runs: 0, failed: 0 },
+  );
   const totals = runs.reduce(
     (acc, r) => {
       acc[r.status] = (acc[r.status] ?? 0) + 1;
@@ -1597,13 +1599,13 @@ function RunsView({ runs, onSelectRun }: { runs: Run[]; onSelectRun: (id: string
               <div className="flex items-center gap-1.5">
                 <span className="w-2 h-2 rounded-full bg-kumo-info" />
                 <Text variant="secondary" size="xs">
-                  {ACTIVITY_24H.reduce((a, x) => a + x.runs, 0)} runs
+                  {activityTotals.runs} runs
                 </Text>
               </div>
               <div className="flex items-center gap-1.5">
                 <span className="w-2 h-2 rounded-full bg-kumo-danger" />
                 <Text variant="secondary" size="xs">
-                  {ACTIVITY_24H.reduce((a, x) => a + x.failed, 0)} failed
+                  {activityTotals.failed} failed
                 </Text>
               </div>
             </div>
@@ -1611,7 +1613,7 @@ function RunsView({ runs, onSelectRun }: { runs: Run[]; onSelectRun: (id: string
           <LayerCard.Primary>
             <div className="h-44 -mx-2">
               <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={ACTIVITY_24H} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
+                <AreaChart data={activity24h} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
                   <defs>
                     <linearGradient id="runsGrad" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="0%" stopColor={CHART_BRAND} stopOpacity={0.3} />
@@ -1619,7 +1621,7 @@ function RunsView({ runs, onSelectRun }: { runs: Run[]; onSelectRun: (id: string
                     </linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="2 4" stroke="var(--color-kumo-hairline)" vertical={false} />
-                  <XAxis dataKey="h" tick={{ fontSize: 10, fill: CHART_MUTED }} axisLine={false} tickLine={false} />
+                  <XAxis dataKey="h" interval={1} tick={{ fontSize: 10, fill: CHART_MUTED }} axisLine={false} tickLine={false} />
                   <YAxis tick={{ fontSize: 10, fill: CHART_MUTED }} axisLine={false} tickLine={false} width={28} />
                   <Tooltip {...ChartTooltipStyle()} />
                   <Area type="monotone" dataKey="runs" stroke={CHART_BRAND} strokeWidth={2} fill="url(#runsGrad)" />
@@ -1985,6 +1987,7 @@ function DashboardApp({ clerkEnabled = false }: { clerkEnabled?: boolean }) {
   const [slackWorkspace, setSlackWorkspace] = useState<SlackWorkspace | null>(null);
   const [spaces, setSpaces] = useState<Space[]>([]);
   const [runs, setRuns] = useState<Run[]>([]);
+  const [activity24h, setActivity24h] = useState<ActivityPoint[]>([]);
   const [approvals, setApprovals] = useState<Approval[]>([]);
   const [eventsByRun, setEventsByRun] = useState<Record<string, RunEvent[]>>({});
   const [loading, setLoading] = useState(true);
@@ -1996,6 +1999,7 @@ function DashboardApp({ clerkEnabled = false }: { clerkEnabled?: boolean }) {
     setSlackWorkspace(payload.slackWorkspace);
     setSpaces(payload.spaces);
     setRuns(payload.runs);
+    setActivity24h(payload.activity24h);
     setApprovals(payload.approvals);
   };
 
@@ -2318,7 +2322,11 @@ function DashboardApp({ clerkEnabled = false }: { clerkEnabled?: boolean }) {
                       />
                     )}
                     {view.page === "runs" && (
-                      <RunsView runs={runs} onSelectRun={(id) => setView({ page: "run-detail", id })} />
+                      <RunsView
+                        runs={runs}
+                        activity24h={activity24h}
+                        onSelectRun={(id) => setView({ page: "run-detail", id })}
+                      />
                     )}
                     {view.page === "run-detail" && currentRun && (
                       <RunDetailView

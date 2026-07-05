@@ -67,6 +67,12 @@ export interface Run {
   triggeredBy: string;
 }
 
+export interface ActivityPoint {
+  h: string;
+  runs: number;
+  failed: number;
+}
+
 export interface Approval {
   id: string;
   spaceId: string;
@@ -99,6 +105,7 @@ export interface ControlPlanePayload {
   } | null;
   spaces: Space[];
   runs: Run[];
+  activity24h: ActivityPoint[];
   approvals: Approval[];
 }
 

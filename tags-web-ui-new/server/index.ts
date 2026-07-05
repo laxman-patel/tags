@@ -400,6 +400,10 @@ function runStatus(status: string) {
   return "pending";
 }
 
+function hourLabel(date: Date) {
+  return String(date.getHours()).padStart(2, "0");
+}
+
 function repoName(repoUrl: string) {
   return repoUrl
     .replace(/^git@github.com:/, "")
@@ -618,6 +622,45 @@ async function buildRunsPayload(db: Db, organizationId: string) {
   }));
 }
 
+async function buildActivityPayload(db: Db, organizationId: string) {
+  const currentHour = new Date();
+  currentHour.setMinutes(0, 0, 0);
+
+  const startHour = new Date(currentHour);
+  startHour.setHours(currentHour.getHours() - 23);
+
+  const buckets = Array.from({ length: 24 }, (_, index) => {
+    const date = new Date(startHour);
+    date.setHours(startHour.getHours() + index);
+    const key = date.toISOString();
+    return { key, h: hourLabel(date), runs: 0, failed: 0 };
+  });
+  const bucketByKey = new Map(buckets.map((bucket) => [bucket.key, bucket]));
+
+  const rows = await db
+    .select({
+      startedAt: runs.startedAt,
+      status: runs.status,
+    })
+    .from(runs)
+    .where(and(eq(runs.organizationId, organizationId), sql`${runs.startedAt} >= ${startHour}`));
+
+  for (const row of rows) {
+    const bucketDate = new Date(row.startedAt);
+    bucketDate.setMinutes(0, 0, 0);
+    const bucket = bucketByKey.get(bucketDate.toISOString());
+    if (!bucket) continue;
+    bucket.runs += 1;
+    if (row.status === "failed") bucket.failed += 1;
+  }
+
+  return buckets.map(({ h, runs: runCount, failed }) => ({
+    h,
+    runs: runCount,
+    failed,
+  }));
+}
+
 async function buildApprovalsPayload(db: Db, organizationId: string) {
   const rows = await listPendingApprovals(db, organizationId);
   if (rows.length === 0) return [];
@@ -641,11 +684,12 @@ async function buildApprovalsPayload(db: Db, organizationId: string) {
 
 async function loadControlPlane(db: Db, organizationId: string) {
   if (!organizationId) {
-    return { organizationId: "", spaces: [], runs: [], approvals: [], slackWorkspace: null };
+    return { organizationId: "", spaces: [], runs: [], activity24h: [], approvals: [], slackWorkspace: null };
   }
-  const [spaceItems, runItems, approvalItems, slackInstallation] = await Promise.all([
+  const [spaceItems, runItems, activity24h, approvalItems, slackInstallation] = await Promise.all([
     buildSpacesPayload(db, organizationId),
     buildRunsPayload(db, organizationId),
+    buildActivityPayload(db, organizationId),
     buildApprovalsPayload(db, organizationId),
     getSlackInstallationForOrg(db, organizationId),
   ]);
@@ -653,6 +697,7 @@ async function loadControlPlane(db: Db, organizationId: string) {
     organizationId,
     spaces: spaceItems,
     runs: runItems,
+    activity24h,
     approvals: approvalItems,
     slackWorkspace: slackInstallation
       ? {
