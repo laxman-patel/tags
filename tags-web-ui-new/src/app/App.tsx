@@ -19,6 +19,7 @@ import {
   Loader,
   Field,
   Input,
+  Switch,
   Tabs,
   Surface,
   Dialog,
@@ -107,7 +108,6 @@ import {
   type ToolAuthState,
 } from "./api";
 import { clerkAppearance } from "./clerkAppearance";
-import { Switch } from "./components/ui/switch";
 
 // ===== Types =====
 
@@ -566,6 +566,19 @@ function statusTone(status: SpaceStatus) {
 
 function displayToolCount(value: number) {
   return value === 1 ? "1 tool" : `${value} tools`;
+}
+
+function toolAuthLabel(tool: Tool) {
+  if (tool.authState === "connected") return "Connected";
+  if (tool.authStatus) return `Composio: ${tool.authStatus}`;
+  if (tool.authState === "requires_auth") return "Authorization pending";
+  return "Not connected";
+}
+
+function toolAuthBadgeVariant(tool: Tool): "success" | "warning" | "neutral" {
+  if (tool.authState === "connected") return "success";
+  if (tool.authState === "requires_auth") return "warning";
+  return "neutral";
 }
 
 function formatChartDay(value: string) {
@@ -1312,42 +1325,50 @@ function SpaceDetailView({
               </div>
             ) : (
               <div className="divide-y divide-kumo-hairline">
-                {composioTools.map((tool) => (
-                  <div key={tool.id} className="group grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 px-4 py-3">
-                    <ToolLogo tool={tool} size="sm" />
-                    <div className="min-w-0">
-                      <Text bold size="sm" truncate>{tool.name}</Text>
-                      <Text variant="secondary" size="xs" truncate as="p">
-                        {tool.toolsCount ? displayToolCount(tool.toolsCount) : tool.description}
-                      </Text>
-                    </div>
-                    <div className="flex items-center justify-end gap-1">
-                      {tool.authState === "connected" ? (
-                        <Switch
-                          checked={tool.enabled}
-                          aria-label={`${tool.enabled ? "Disable" : "Enable"} ${tool.name}`}
-                          onCheckedChange={(checked) => onToggleTool(space.id, tool.id, checked)}
-                        />
-                      ) : (
+                {composioTools.map((tool) => {
+                  const connected = tool.authState === "connected";
+                  return (
+                    <div key={tool.id} className="group grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 px-4 py-3">
+                      <ToolLogo tool={tool} size="sm" />
+                      <div className="min-w-0">
+                        <div className="flex min-w-0 flex-wrap items-center gap-2">
+                          <Text bold size="sm" truncate>{tool.name}</Text>
+                          <Badge variant={toolAuthBadgeVariant(tool)} appearance="dot">
+                            {toolAuthLabel(tool)}
+                          </Badge>
+                        </div>
+                        <Text variant="secondary" size="xs" truncate as="p">
+                          {tool.toolsCount ? displayToolCount(tool.toolsCount) : tool.description}
+                        </Text>
+                      </div>
+                      <div className="flex items-center justify-end gap-2">
+                        {connected ? (
+                          <Switch
+                            label={tool.enabled ? "Enabled" : "Disabled"}
+                            checked={tool.enabled}
+                            onCheckedChange={(checked) => onToggleTool(space.id, tool.id, checked)}
+                          />
+                        ) : (
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            onClick={() => onAuthTool(space.id, tool.id)}
+                          >
+                            Reconnect
+                          </Button>
+                        )}
                         <Button
-                          variant="secondary"
+                          variant="ghost"
                           size="sm"
-                          onClick={() => onAuthTool(space.id, tool.id)}
-                        >
-                          Connect
-                        </Button>
-                      )}
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        shape="square"
-                        icon={XIcon}
-                        aria-label={`Remove ${tool.name}`}
-                        onClick={() => onRemoveTool(space.id, tool.id)}
-                      />
+                          shape="square"
+                          icon={XIcon}
+                          aria-label={`Remove ${tool.name}`}
+                          onClick={() => onRemoveTool(space.id, tool.id)}
+                        />
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>

@@ -10,6 +10,7 @@ export interface Tool {
   provider: string;
   enabled: boolean;
   authState: ToolAuthState;
+  authStatus?: string | null;
   kind?: "native" | "composio";
   logoUrl?: string;
   categories?: string[];

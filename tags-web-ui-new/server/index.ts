@@ -576,6 +576,7 @@ async function buildSpacesPayload(db: Db, organizationId: string) {
           })),
           ...availableConnections.map((toolkitId) => {
             const enabled = enabledConnectionSet.has(toolkitId);
+            const accountStatus = accountStatuses[toolkitId];
             return {
               id: toolkitId,
               kind: "composio",
@@ -583,8 +584,9 @@ async function buildSpacesPayload(db: Db, organizationId: string) {
               authState: composioAuthState({
                 hasApiKey: Boolean(process.env.COMPOSIO_API_KEY),
                 enabled: true,
-                accountStatus: accountStatuses[toolkitId],
+                accountStatus,
               }),
+              authStatus: accountStatus ?? null,
               ...fallbackToolkitMetadata(toolkitId),
             };
           }),
