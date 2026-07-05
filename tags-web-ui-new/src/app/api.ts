@@ -94,6 +94,24 @@ export interface RunEvent {
   status?: "success" | "failed" | "pending";
 }
 
+export interface Schedule {
+  id: string;
+  cron: string;
+  timezone: string;
+  prompt: string;
+  enabled: boolean;
+  lastRunAt: string | null;
+  createdAt: string;
+}
+
+export interface Artifact {
+  id: string;
+  kind: string;
+  title: string;
+  url: string;
+  createdAt: string;
+}
+
 export interface ControlPlanePayload {
   organizationId: string;
   slackWorkspace: {
@@ -140,6 +158,21 @@ export function updateSpaceConfig(spaceId: string, input: { enabledTools?: strin
     method: "PATCH",
     body: JSON.stringify(input),
   });
+}
+
+export function loadSpaceSchedules(spaceId: string) {
+  return requestJson<{ schedules: Schedule[] }>(`/api/spaces/${spaceId}/schedules`);
+}
+
+export function createSpaceSchedule(spaceId: string, input: { prompt: string; cron: string; timezone: string }) {
+  return requestJson<{ schedule: Schedule }>(`/api/spaces/${spaceId}/schedules`, {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export function loadSpaceArtifacts(spaceId: string) {
+  return requestJson<{ artifacts: Artifact[] }>(`/api/spaces/${spaceId}/artifacts`);
 }
 
 export function loadComposioDirectory() {

@@ -1,5 +1,5 @@
 import { CronExpressionParser } from "cron-parser";
-import { eq } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
 import type { Db } from "@tags/db";
 import { newId, schedules } from "@tags/db";
 
@@ -34,8 +34,24 @@ export function shouldFireSchedule(
   }
 }
 
+export function isValidScheduleCron(cron: string, timezone: string): boolean {
+  try {
+    CronExpressionParser.parse(cron, {
+      currentDate: new Date(),
+      tz: timezone,
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export async function listSchedules(db: Db, spaceId: string) {
-  return db.select().from(schedules).where(eq(schedules.spaceId, spaceId));
+  return db
+    .select()
+    .from(schedules)
+    .where(eq(schedules.spaceId, spaceId))
+    .orderBy(desc(schedules.createdAt));
 }
 
 export async function createSchedule(
@@ -46,6 +62,7 @@ export async function createSchedule(
     cron: string;
     timezone: string;
     prompt: string;
+    createdByUserId?: string;
   },
 ) {
   const id = newId();
@@ -59,6 +76,7 @@ export async function createSchedule(
       timezone: args.timezone,
       prompt: args.prompt,
       enabled: true,
+      createdByUserId: args.createdByUserId,
     })
     .returning();
   return row;

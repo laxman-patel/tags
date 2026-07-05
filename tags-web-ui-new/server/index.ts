@@ -22,6 +22,8 @@ import {
 } from "@tags/core/accounts";
 import { canApprove } from "@tags/core/policies";
 import { answerQuestionByRequestId, getQuestionByRequestId } from "@tags/core/questions";
+import { createSchedule, isValidScheduleCron, listSchedules } from "@tags/core/schedules";
+import { listArtifactsForSpace } from "@tags/core/artifacts";
 import {
   OrganizationSlackWorkspaceConflictError,
   SlackWorkspaceAlreadyConnectedError,
@@ -970,6 +972,90 @@ async function handleProtectedApi(
 
       if (method === "POST" && segments[0] === "spaces" && segments.length === 1) {
         return createSpaceForAccount(req, res, db, account, span);
+      }
+
+      if (method === "GET" && segments[0] === "spaces" && segments[2] === "schedules") {
+        const spaceId = segments[1];
+        if (!spaceId) return sendJson(res, 400, { error: "space id is required" });
+        const space = await requireSpaceInOrg(db, spaceId, organizationId);
+        if (!space) return sendJson(res, 404, { error: "Not found" });
+        const schedules = await listSchedules(db, spaceId);
+        apiRequestsCompleted.add(1, { route: "spaces.schedules", method, outcome: "success" });
+        span.setAttributes({ outcome: "success", "space.id": spaceId, "schedules.count": schedules.length });
+        return sendJson(res, 200, {
+          schedules: schedules.map((schedule) => ({
+            id: schedule.id,
+            cron: schedule.cron,
+            timezone: schedule.timezone,
+            prompt: schedule.prompt,
+            enabled: schedule.enabled,
+            lastRunAt: schedule.lastRunAt?.toISOString() ?? null,
+            createdAt: schedule.createdAt.toISOString(),
+          })),
+        });
+      }
+
+      if (method === "POST" && segments[0] === "spaces" && segments[2] === "schedules") {
+        const spaceId = segments[1];
+        if (!spaceId) return sendJson(res, 400, { error: "space id is required" });
+        const space = await requireSpaceInOrg(db, spaceId, organizationId);
+        if (!space) return sendJson(res, 404, { error: "Not found" });
+        const body = (await readJson(req)) as { prompt?: string; cron?: string; timezone?: string };
+        const prompt = body.prompt?.trim();
+        const cron = body.cron?.trim();
+        const timezone = body.timezone?.trim() || "UTC";
+        if (!prompt || !cron) return sendJson(res, 400, { error: "prompt and cron are required" });
+        if (!isValidScheduleCron(cron, timezone)) return sendJson(res, 400, { error: "cron or timezone is invalid" });
+        const schedule = await createSchedule(db, {
+          organizationId,
+          spaceId,
+          prompt,
+          cron,
+          timezone,
+          createdByUserId: account.user.id,
+        });
+        await recordAuditEvent(db, {
+          organizationId,
+          spaceId,
+          actorUserId: account.user.id,
+          actorType: "human",
+          eventType: "schedule.created",
+          payload: { scheduleId: schedule?.id, source: "control_plane" },
+        });
+        apiRequestsCompleted.add(1, { route: "spaces.schedules", method, outcome: "success" });
+        span.setAttributes({ outcome: "success", "space.id": spaceId, "schedule.id": schedule?.id });
+        return sendJson(res, 201, {
+          schedule: schedule
+            ? {
+                id: schedule.id,
+                cron: schedule.cron,
+                timezone: schedule.timezone,
+                prompt: schedule.prompt,
+                enabled: schedule.enabled,
+                lastRunAt: schedule.lastRunAt?.toISOString() ?? null,
+                createdAt: schedule.createdAt.toISOString(),
+              }
+            : null,
+        });
+      }
+
+      if (method === "GET" && segments[0] === "spaces" && segments[2] === "artifacts") {
+        const spaceId = segments[1];
+        if (!spaceId) return sendJson(res, 400, { error: "space id is required" });
+        const space = await requireSpaceInOrg(db, spaceId, organizationId);
+        if (!space) return sendJson(res, 404, { error: "Not found" });
+        const artifacts = await listArtifactsForSpace(db, spaceId, { organizationId });
+        apiRequestsCompleted.add(1, { route: "spaces.artifacts", method, outcome: "success" });
+        span.setAttributes({ outcome: "success", "space.id": spaceId, "artifacts.count": artifacts.length });
+        return sendJson(res, 200, {
+          artifacts: artifacts.map((artifact) => ({
+            id: artifact.id,
+            kind: artifact.kind,
+            title: artifact.title,
+            url: artifact.url,
+            createdAt: artifact.createdAt.toISOString(),
+          })),
+        });
       }
 
       if (method === "PATCH" && segments[0] === "spaces" && segments[2] === "config") {

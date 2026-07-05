@@ -77,20 +77,25 @@ import {
 import {
   createSpace,
   authorizeComposioTool,
+  createSpaceSchedule,
   loadControlPlane,
   loadComposioDirectory,
+  loadSpaceArtifacts,
+  loadSpaceSchedules,
   loadSlackChannels,
   loadRunEvents,
   respondToApproval,
   updateSpaceConfig,
   type ActivityPoint,
   type Approval,
+  type Artifact,
   type ComposioDirectoryTool,
   type Repo,
   type Run,
   type RunEvent,
   type RunEventType,
   type RunStatus,
+  type Schedule,
   type Space,
   type SpaceStatus,
   type SlackChannel,
@@ -564,6 +569,18 @@ function displayToolCount(value: number) {
   return value === 1 ? "1 tool" : `${value} tools`;
 }
 
+function formatShortDate(value: string | null) {
+  if (!value) return "Never";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Never";
+  return date.toLocaleString("en-US", {
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
 function ToolLogo({
   tool,
   size = "base",
@@ -934,8 +951,18 @@ function SpaceDetailView({
   const [tab, setTab] = useState("overview");
   const [addRepoOpen, setAddRepoOpen] = useState(false);
   const [addToolOpen, setAddToolOpen] = useState(false);
+  const [addScheduleOpen, setAddScheduleOpen] = useState(false);
   const [newRepoName, setNewRepoName] = useState("");
+  const [schedulePrompt, setSchedulePrompt] = useState("");
+  const [scheduleCron, setScheduleCron] = useState("");
+  const [scheduleTimezone, setScheduleTimezone] = useState("UTC");
   const [toolSearch, setToolSearch] = useState("");
+  const [schedules, setSchedules] = useState<Schedule[] | null>(null);
+  const [artifacts, setArtifacts] = useState<Artifact[] | null>(null);
+  const [schedulesLoading, setSchedulesLoading] = useState(false);
+  const [artifactsLoading, setArtifactsLoading] = useState(false);
+  const [creatingSchedule, setCreatingSchedule] = useState(false);
+  const [detailError, setDetailError] = useState<string | null>(null);
   const [directorySource, setDirectorySource] = useState<"composio" | "fallback">("fallback");
   const [directoryLoading, setDirectoryLoading] = useState(false);
   const [composioDirectory, setComposioDirectory] = useState<ComposioDirectoryTool[]>([]);
@@ -967,6 +994,53 @@ function SpaceDetailView({
       })
       .finally(() => setDirectoryLoading(false));
   }, [addToolOpen, composioDirectory.length, directoryLoading]);
+
+  useEffect(() => {
+    if (tab !== "schedules" || schedules || schedulesLoading) return;
+    setSchedulesLoading(true);
+    setDetailError(null);
+    loadSpaceSchedules(space.id)
+      .then((payload) => setSchedules(payload.schedules))
+      .catch((error) => setDetailError(error instanceof Error ? error.message : "Failed to load schedules"))
+      .finally(() => setSchedulesLoading(false));
+  }, [schedules, schedulesLoading, space.id, tab]);
+
+  useEffect(() => {
+    if (tab !== "artifacts" || artifacts || artifactsLoading) return;
+    setArtifactsLoading(true);
+    setDetailError(null);
+    loadSpaceArtifacts(space.id)
+      .then((payload) => setArtifacts(payload.artifacts))
+      .catch((error) => setDetailError(error instanceof Error ? error.message : "Failed to load artifacts"))
+      .finally(() => setArtifactsLoading(false));
+  }, [artifacts, artifactsLoading, space.id, tab]);
+
+  const resetScheduleForm = () => {
+    setSchedulePrompt("");
+    setScheduleCron("");
+    setScheduleTimezone("UTC");
+    setCreatingSchedule(false);
+  };
+
+  const submitSchedule = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!schedulePrompt.trim() || !scheduleCron.trim()) return;
+    setCreatingSchedule(true);
+    setDetailError(null);
+    try {
+      const payload = await createSpaceSchedule(space.id, {
+        prompt: schedulePrompt.trim(),
+        cron: scheduleCron.trim(),
+        timezone: scheduleTimezone.trim() || "UTC",
+      });
+      setSchedules((prev) => [payload.schedule, ...(prev ?? [])]);
+      resetScheduleForm();
+      setAddScheduleOpen(false);
+    } catch (error) {
+      setDetailError(error instanceof Error ? error.message : "Failed to create schedule");
+      setCreatingSchedule(false);
+    }
+  };
 
   return (
     <div>
@@ -1004,9 +1078,19 @@ function SpaceDetailView({
         tabs={[
           { value: "overview", label: "Overview" },
           { value: "tools", label: `Tools (${composioTools.length})` },
+          { value: "schedules", label: "Schedules" },
+          { value: "artifacts", label: "Artifacts" },
           { value: "runs", label: `Runs (${spaceRuns.length})` },
         ]}
       />
+
+      {detailError && (
+        <LayerCard className="mb-4 border-kumo-danger/40">
+          <LayerCard.Primary>
+            <Text variant="error" size="sm">{detailError}</Text>
+          </LayerCard.Primary>
+        </LayerCard>
+      )}
 
       {tab === "overview" && (
         <div className="flex flex-col gap-4">
@@ -1214,6 +1298,167 @@ function SpaceDetailView({
           </div>
         </LayerCard>
       )}
+
+      {tab === "schedules" && (
+        <LayerCard className="p-0">
+          <div className="flex items-center justify-between gap-3 border-b border-kumo-hairline px-4 py-3">
+            <Text bold>Schedules</Text>
+            <Button
+              variant="primary"
+              size="sm"
+              icon={PlusIcon}
+              onClick={() => setAddScheduleOpen(true)}
+            >
+              New
+            </Button>
+          </div>
+          {schedulesLoading ? (
+            <div className="flex min-h-40 items-center justify-center">
+              <Loader />
+            </div>
+          ) : !schedules || schedules.length === 0 ? (
+            <Empty
+              icon={<ClockIcon size={40} />}
+              title="No schedules"
+              description="Create a recurring task for this Space."
+            />
+          ) : (
+            <Table>
+              <Table.Header>
+                <Table.Row>
+                  <Table.Head>Task</Table.Head>
+                  <Table.Head>Cron</Table.Head>
+                  <Table.Head>Timezone</Table.Head>
+                  <Table.Head>Last run</Table.Head>
+                  <Table.Head>Status</Table.Head>
+                </Table.Row>
+              </Table.Header>
+              <Table.Body>
+                {schedules.map((schedule) => (
+                  <Table.Row key={schedule.id}>
+                    <Table.Cell><Text size="sm" truncate>{schedule.prompt}</Text></Table.Cell>
+                    <Table.Cell><Text variant="secondary" size="xs">{schedule.cron}</Text></Table.Cell>
+                    <Table.Cell><Text variant="secondary" size="xs">{schedule.timezone}</Text></Table.Cell>
+                    <Table.Cell><Text variant="secondary" size="xs">{formatShortDate(schedule.lastRunAt)}</Text></Table.Cell>
+                    <Table.Cell>
+                      <Badge variant={schedule.enabled ? "success" : "neutral"} appearance="dot">
+                        {schedule.enabled ? "On" : "Off"}
+                      </Badge>
+                    </Table.Cell>
+                  </Table.Row>
+                ))}
+              </Table.Body>
+            </Table>
+          )}
+        </LayerCard>
+      )}
+
+      {tab === "artifacts" && (
+        <LayerCard className="p-0">
+          <div className="flex items-center justify-between gap-3 border-b border-kumo-hairline px-4 py-3">
+            <Text bold>Artifacts</Text>
+            <Text variant="secondary" size="xs">{artifacts?.length ?? 0} shown</Text>
+          </div>
+          {artifactsLoading ? (
+            <div className="flex min-h-40 items-center justify-center">
+              <Loader />
+            </div>
+          ) : !artifacts || artifacts.length === 0 ? (
+            <Empty
+              icon={<FileTextIcon size={40} />}
+              title="No artifacts"
+              description="Generated artifacts will appear here."
+            />
+          ) : (
+            <Table>
+              <Table.Header>
+                <Table.Row>
+                  <Table.Head>Artifact</Table.Head>
+                  <Table.Head>Type</Table.Head>
+                  <Table.Head>Created</Table.Head>
+                  <Table.Head />
+                </Table.Row>
+              </Table.Header>
+              <Table.Body>
+                {artifacts.map((artifact) => (
+                  <Table.Row
+                    key={artifact.id}
+                    className="cursor-pointer"
+                    onClick={() => window.open(artifact.url, "_blank", "noopener,noreferrer")}
+                  >
+                    <Table.Cell><Text size="sm" truncate>{artifact.title}</Text></Table.Cell>
+                    <Table.Cell><Badge variant="neutral">{artifact.kind}</Badge></Table.Cell>
+                    <Table.Cell><Text variant="secondary" size="xs">{formatShortDate(artifact.createdAt)}</Text></Table.Cell>
+                    <Table.Cell><ArrowSquareOutIcon size={14} className="text-kumo-subtle" /></Table.Cell>
+                  </Table.Row>
+                ))}
+              </Table.Body>
+            </Table>
+          )}
+        </LayerCard>
+      )}
+
+      <Dialog.Root
+        open={addScheduleOpen}
+        onOpenChange={(nextOpen) => {
+          setAddScheduleOpen(nextOpen);
+          if (!nextOpen) resetScheduleForm();
+        }}
+      >
+        <Dialog className="p-0 max-w-md">
+          <form onSubmit={submitSchedule}>
+            <div className="flex items-center justify-between gap-4 border-b border-kumo-hairline px-5 py-4">
+              <Dialog.Title>New schedule</Dialog.Title>
+              <Dialog.Close
+                aria-label="Close"
+                render={(p) => (
+                  <Button {...p} variant="ghost" shape="square" size="sm" icon={XIcon} aria-label="Close" type="button" />
+                )}
+              />
+            </div>
+            <div className="flex flex-col gap-4 px-5 py-5">
+              <Field label="Task">
+                <Input
+                  value={schedulePrompt}
+                  onChange={(event) => setSchedulePrompt(event.target.value)}
+                  placeholder="Summarize yesterday's incidents"
+                  autoFocus
+                />
+              </Field>
+              <Field label="Cron">
+                <Input
+                  value={scheduleCron}
+                  onChange={(event) => setScheduleCron(event.target.value)}
+                  placeholder="0 9 * * 1-5"
+                />
+              </Field>
+              <Field label="Timezone">
+                <Input
+                  value={scheduleTimezone}
+                  onChange={(event) => setScheduleTimezone(event.target.value)}
+                  placeholder="UTC"
+                />
+              </Field>
+            </div>
+            <div className="flex items-center justify-end gap-2 border-t border-kumo-hairline px-5 py-4">
+              <Dialog.Close
+                render={(p) => (
+                  <Button {...p} variant="ghost" type="button">
+                    Cancel
+                  </Button>
+                )}
+              />
+              <Button
+                variant="primary"
+                type="submit"
+                disabled={creatingSchedule || !schedulePrompt.trim() || !scheduleCron.trim()}
+              >
+                {creatingSchedule ? "Creating" : "Create"}
+              </Button>
+            </div>
+          </form>
+        </Dialog>
+      </Dialog.Root>
 
       {/* Add repository dialog */}
       <Dialog.Root open={addRepoOpen} onOpenChange={setAddRepoOpen}>

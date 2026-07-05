@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import type { Db } from "@tags/db";
 import { artifacts, type RlsScope } from "@tags/db";
 import type { ArtifactBodyReadResult } from "@tags/storage";
@@ -81,6 +81,24 @@ export async function listArtifactsForRun(
   }
 
   return db.select().from(artifacts).where(and(...conditions));
+}
+
+export async function listArtifactsForSpace(
+  db: Db,
+  spaceId: string,
+  scope?: Pick<RlsScope, "organizationId">,
+) {
+  const conditions = [eq(artifacts.spaceId, spaceId)];
+  if (scope) {
+    conditions.push(eq(artifacts.organizationId, scope.organizationId));
+  }
+
+  return db
+    .select()
+    .from(artifacts)
+    .where(and(...conditions))
+    .orderBy(desc(artifacts.createdAt))
+    .limit(100);
 }
 
 export type ResolvedArtifactBody = {
