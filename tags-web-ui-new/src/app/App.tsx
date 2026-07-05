@@ -51,6 +51,8 @@ import {
   MagnifyingGlassIcon,
   DatabaseIcon,
   ChatCircleIcon,
+  GearSixIcon,
+  SlackLogoIcon,
   WrenchIcon,
   HeadsetIcon,
   CodeIcon,
@@ -101,7 +103,8 @@ type View =
   | { page: "space-detail"; id: string }
   | { page: "approvals" }
   | { page: "runs" }
-  | { page: "run-detail"; id: string };
+  | { page: "run-detail"; id: string }
+  | { page: "workspace" };
 
 type SlackWorkspace = {
   id: string;
@@ -219,7 +222,7 @@ function SignInScreen() {
 
 function SlackConnectEmpty() {
   return (
-    <div className="flex min-h-[calc(100vh-3rem)] items-center justify-center p-4">
+    <div className="flex min-h-[320px] items-center justify-center p-4">
       <LayerCard className="w-full max-w-lg">
         <LayerCard.Primary>
           <Empty
@@ -649,20 +652,141 @@ function MetricGrid({ metrics }: { metrics: Metric[] }) {
 
 // ===== Views =====
 
+function WorkspaceView({
+  organizationId,
+  slackWorkspace,
+  spaces,
+  runs,
+  approvals,
+}: {
+  organizationId: string;
+  slackWorkspace: SlackWorkspace | null;
+  spaces: Space[];
+  runs: Run[];
+  approvals: Approval[];
+}) {
+  const activeSpaces = spaces.filter((space) => space.status === "active").length;
+  const connectedTools = spaces.reduce(
+    (count, space) => count + space.tools.filter((tool) => tool.authState === "connected").length,
+    0,
+  );
+  const scopes = slackWorkspace?.scopes ?? [];
+
+  return (
+    <div>
+      <PageHeader
+        title="Workspace"
+        description="Slack connection, workspace identity, and account-level settings for Tags."
+        actions={
+          slackWorkspace ? (
+            <Button
+              variant="secondary"
+              icon={ArrowClockwiseIcon}
+              onClick={() => {
+                window.location.href = "/api/slack/oauth/start";
+              }}
+            >
+              Reconnect Slack
+            </Button>
+          ) : undefined
+        }
+      />
+
+      {!slackWorkspace ? (
+        <SlackConnectEmpty />
+      ) : (
+        <div className="flex flex-col gap-4">
+          <MetricGrid
+            metrics={[
+              { label: "Spaces", value: spaces.length.toLocaleString(), icon: <StackIcon size={14} /> },
+              { label: "Active", value: activeSpaces.toLocaleString(), icon: <ActivityIcon size={14} /> },
+              { label: "Runs", value: runs.length.toLocaleString(), icon: <PlayIcon size={14} /> },
+              { label: "Pending approvals", value: approvals.length.toLocaleString(), icon: <ShieldCheckIcon size={14} /> },
+            ]}
+          />
+
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1.1fr)_minmax(280px,0.9fr)]">
+            <LayerCard>
+              <LayerCard.Secondary className="flex items-center justify-between gap-3">
+                <div className="flex min-w-0 items-center gap-2">
+                  <SlackLogoIcon size={16} className="text-kumo-subtle shrink-0" />
+                  <Text bold truncate>Slack workspace</Text>
+                </div>
+                <Badge variant="success" appearance="dot">Connected</Badge>
+              </LayerCard.Secondary>
+              <LayerCard.Primary>
+                <div className="flex flex-col divide-y divide-kumo-hairline">
+                  <WorkspaceInfoRow label="Workspace name" value={slackWorkspace.name || "Unnamed workspace"} />
+                  <WorkspaceInfoRow label="Slack team ID" value={slackWorkspace.teamId} />
+                  <WorkspaceInfoRow label="Tags workspace ID" value={slackWorkspace.id} />
+                  <WorkspaceInfoRow label="Bot user ID" value={slackWorkspace.botUserId || "Not available"} />
+                  <WorkspaceInfoRow label="Organization ID" value={organizationId || "Not available"} />
+                </div>
+              </LayerCard.Primary>
+            </LayerCard>
+
+            <LayerCard>
+              <LayerCard.Secondary className="flex items-center gap-2">
+                <WrenchIcon size={14} className="text-kumo-subtle" />
+                <Text bold>Workspace summary</Text>
+              </LayerCard.Secondary>
+              <LayerCard.Primary>
+                <div className="flex flex-col gap-3">
+                  <div className="rounded-md border border-kumo-hairline bg-kumo-recessed p-3">
+                    <Text variant="secondary" size="xs">Connected tools across Spaces</Text>
+                    <Text variant="heading3" as="div">{connectedTools.toLocaleString()}</Text>
+                  </div>
+                  <div className="rounded-md border border-kumo-hairline bg-kumo-recessed p-3">
+                    <Text variant="secondary" size="xs">OAuth scopes</Text>
+                    <Text variant="heading3" as="div">{scopes.length.toLocaleString()}</Text>
+                  </div>
+                </div>
+              </LayerCard.Primary>
+            </LayerCard>
+          </div>
+
+          <LayerCard>
+            <LayerCard.Secondary className="flex items-center gap-2">
+              <ShieldCheckIcon size={14} className="text-kumo-subtle" />
+              <Text bold>Slack OAuth scopes</Text>
+            </LayerCard.Secondary>
+            <LayerCard.Primary>
+              {scopes.length === 0 ? (
+                <Text variant="secondary" size="sm">No scopes were returned for this installation.</Text>
+              ) : (
+                <div className="flex flex-wrap gap-2">
+                  {scopes.map((scope) => (
+                    <Badge key={scope} variant="default">{scope}</Badge>
+                  ))}
+                </div>
+              )}
+            </LayerCard.Primary>
+          </LayerCard>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function WorkspaceInfoRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="grid gap-1 py-3 sm:grid-cols-[160px_minmax(0,1fr)] sm:gap-4">
+      <Text variant="secondary" size="sm">{label}</Text>
+      <Text size="sm" DANGEROUS_className="min-w-0 break-all">{value}</Text>
+    </div>
+  );
+}
+
 function SpacesView({
   spaces,
   runs,
-  slackWorkspace,
   onSelectSpace,
   onNewSpace,
-  onSelectRun,
 }: {
   spaces: Space[];
   runs: Run[];
-  slackWorkspace: SlackWorkspace;
   onSelectSpace: (id: string) => void;
   onNewSpace: () => void;
-  onSelectRun: (id: string) => void;
 }) {
   const activeCount = spaces.filter((s) => s.status === "active").length;
   const errorCount = spaces.filter((s) => s.status === "error").length;
@@ -697,18 +821,6 @@ function SpacesView({
           </div>
         </div>
         <div className="flex shrink-0 flex-col items-stretch gap-2 sm:items-end">
-          <Badge variant="success" appearance="dot">
-            {slackWorkspace.name || slackWorkspace.teamId}
-          </Badge>
-          <Button
-            variant="secondary"
-            icon={ArrowClockwiseIcon}
-            onClick={() => {
-              window.location.href = "/api/slack/oauth/start";
-            }}
-          >
-            Reconnect Slack
-          </Button>
           <Button variant="primary" icon={PlusIcon} onClick={onNewSpace}>
             New Space
           </Button>
@@ -1887,6 +1999,7 @@ function NewSpaceDialog({
 function DashboardApp({ clerkEnabled = false }: { clerkEnabled?: boolean }) {
   const [view, setView] = useState<View>({ page: "spaces" });
   const [newSpaceOpen, setNewSpaceOpen] = useState(false);
+  const [organizationId, setOrganizationId] = useState("");
   const [slackWorkspace, setSlackWorkspace] = useState<SlackWorkspace | null>(null);
   const [spaces, setSpaces] = useState<Space[]>([]);
   const [runs, setRuns] = useState<Run[]>([]);
@@ -1898,6 +2011,7 @@ function DashboardApp({ clerkEnabled = false }: { clerkEnabled?: boolean }) {
   const refresh = async () => {
     setError(null);
     const payload = await loadControlPlane();
+    setOrganizationId(payload.organizationId);
     setSlackWorkspace(payload.slackWorkspace);
     setSpaces(payload.spaces);
     setRuns(payload.runs);
@@ -2089,7 +2203,9 @@ function DashboardApp({ clerkEnabled = false }: { clerkEnabled?: boolean }) {
   const currentRun =
     view.page === "run-detail" ? runs.find((r) => r.id === view.id) : undefined;
 
-  const activeNav = ((): "spaces" | "approvals" | "runs" => {
+  const activeNav = ((): "spaces" | "approvals" | "runs" | "workspace" => {
+    if (!slackWorkspace) return "workspace";
+    if (view.page === "workspace") return "workspace";
     if (view.page === "approvals") return "approvals";
     if (view.page === "runs" || view.page === "run-detail") return "runs";
     return "spaces";
@@ -2148,6 +2264,18 @@ function DashboardApp({ clerkEnabled = false }: { clerkEnabled?: boolean }) {
               </Sidebar.Menu>
             </Sidebar.Group>
 
+            <Sidebar.Group className="mt-6 pt-4 border-t border-kumo-hairline">
+              <Sidebar.GroupLabel>Settings</Sidebar.GroupLabel>
+              <Sidebar.Menu>
+                <Sidebar.MenuButton
+                  icon={GearSixIcon}
+                  active={activeNav === "workspace"}
+                  onClick={() => setView({ page: "workspace" })}
+                >
+                  Workspace
+                </Sidebar.MenuButton>
+              </Sidebar.Menu>
+            </Sidebar.Group>
           </Sidebar.Content>
 
           <Sidebar.Footer>
@@ -2171,18 +2299,22 @@ function DashboardApp({ clerkEnabled = false }: { clerkEnabled?: boolean }) {
             )}
             {!loading && (
               <>
-                {!slackWorkspace ? (
-                  <SlackConnectEmpty />
+                {!slackWorkspace || view.page === "workspace" ? (
+                  <WorkspaceView
+                    organizationId={organizationId}
+                    slackWorkspace={slackWorkspace}
+                    spaces={spaces}
+                    runs={runs}
+                    approvals={approvals}
+                  />
                 ) : (
                   <>
                     {view.page === "spaces" && (
                       <SpacesView
                         spaces={spaces}
                         runs={runs}
-                        slackWorkspace={slackWorkspace}
                         onSelectSpace={(id) => setView({ page: "space-detail", id })}
                         onNewSpace={() => setNewSpaceOpen(true)}
-                        onSelectRun={(id) => setView({ page: "run-detail", id })}
                       />
                     )}
                     {view.page === "space-detail" && currentSpace && (
