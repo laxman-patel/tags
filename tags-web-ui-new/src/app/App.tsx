@@ -1847,14 +1847,11 @@ function NewSpaceDialog({
         if (!nextOpen) reset();
       }}
     >
-      <Dialog className="flex max-h-[calc(100vh-2rem)] max-w-2xl flex-col overflow-hidden p-0">
+      <Dialog className="flex max-h-[calc(100vh-2rem)] !w-[calc(100vw-2rem)] max-w-[440px] flex-col overflow-hidden p-0 sm:!w-[440px]">
         <form onSubmit={handleSubmit} className="flex min-h-0 flex-col">
-          <div className="flex items-start justify-between gap-4 border-b border-kumo-hairline p-4">
-            <div>
-              <Dialog.Title>New Space</Dialog.Title>
-              <Dialog.Description>
-                Connect an agent to a Slack channel.
-              </Dialog.Description>
+          <div className="flex items-center justify-between gap-4 border-b border-kumo-hairline px-5 py-4">
+            <div className="min-w-0">
+              <Dialog.Title>Create Space</Dialog.Title>
             </div>
             <Dialog.Close
               aria-label="Close"
@@ -1864,8 +1861,8 @@ function NewSpaceDialog({
             />
           </div>
 
-          <div className="flex min-h-0 flex-col gap-5 overflow-y-auto p-4">
-            <Field label="Space name" description="Shown in the dashboard and Slack.">
+          <div className="flex min-h-0 flex-col gap-5 overflow-y-auto px-5 py-5">
+            <Field label="Space name">
               <Input
                 value={name}
                 onChange={(e) => setName(e.target.value)}
@@ -1875,12 +1872,9 @@ function NewSpaceDialog({
               />
             </Field>
 
-            <Field
-              label="Slack channel"
-              description="Select a channel from your connected Slack workspace."
-            >
+            <Field label="Slack channel">
               <div className="flex flex-col gap-3">
-                <div className="relative">
+                <div className="relative w-full">
                   <MagnifyingGlassIcon size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-kumo-subtle" />
                   <Input
                     value={selectedChannel ? selectedChannel.name : channelQuery}
@@ -1890,11 +1884,11 @@ function NewSpaceDialog({
                     }}
                     placeholder="Search channels"
                     aria-label="Slack channel"
-                    className="pl-9"
+                    className="w-full pl-9"
                   />
                 </div>
 
-                <div className="max-h-56 overflow-y-auto rounded-md border border-kumo-hairline bg-kumo-base p-1">
+                <div className="max-h-56 overflow-y-auto rounded-lg border border-kumo-hairline bg-kumo-base p-1">
                   {channelsLoading ? (
                     <div className="flex items-center gap-2 px-3 py-3 text-kumo-subtle">
                       <ArrowClockwiseIcon size={14} className="animate-spin" />
@@ -1915,24 +1909,29 @@ function NewSpaceDialog({
                         <button
                           key={channel.id}
                           type="button"
+                          aria-pressed={selected}
                           onClick={() => {
                             setSelectedChannel(channel);
                             setChannelQuery(channel.name);
                           }}
                           className={cn(
-                            "flex w-full items-center justify-between gap-3 rounded-md px-3 py-2 text-left transition-colors",
-                            selected ? "bg-kumo-tint text-kumo-default" : "text-kumo-subtle hover:bg-kumo-tint hover:text-kumo-default"
+                            "flex w-full items-center justify-between gap-3 rounded-md border border-transparent px-3 py-2.5 text-left transition-[background-color,border-color,color,transform] duration-150 ease-out active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kumo-focus",
+                            selected
+                              ? "border-kumo-hairline bg-kumo-tint text-kumo-default"
+                              : "text-kumo-subtle hover:bg-kumo-tint hover:text-kumo-default"
                           )}
                         >
                           <span className="inline-flex min-w-0 items-center gap-2">
                             <HashIcon size={14} className="shrink-0" />
                             <Text size="sm" truncate>{channel.name}</Text>
                           </span>
-                          <span className="flex shrink-0 items-center gap-1">
-                            <Badge variant={channel.isPrivate ? "warning" : "neutral"} appearance="dot">
-                              {channel.isPrivate ? "Private" : "Public"}
-                            </Badge>
-                            {channel.isMember && <Badge variant="success" appearance="dot">Member</Badge>}
+                          <span className="flex shrink-0 items-center gap-2">
+                            {channel.isPrivate && (
+                              <Badge variant={channel.isMember ? "neutral" : "warning"} appearance="dot">
+                                {channel.isMember ? "Private" : "Invite app"}
+                              </Badge>
+                            )}
+                            {selected && <CheckIcon size={15} className="text-kumo-default" />}
                           </span>
                         </button>
                       );
@@ -1940,15 +1939,18 @@ function NewSpaceDialog({
                   )}
                 </div>
                 {selectedChannel?.isPrivate && !selectedChannel.isMember && (
-                  <Text variant="secondary" size="xs" as="p">
-                    Invite the Tags app to this private channel in Slack, then refresh channels.
-                  </Text>
+                  <div className="flex items-start gap-2 rounded-md border border-kumo-hairline bg-kumo-recessed px-3 py-2 text-kumo-subtle">
+                    <WarningIcon size={14} className="mt-0.5 shrink-0 text-kumo-warning" />
+                    <Text variant="secondary" size="xs" as="p">
+                      Invite the Tags app to this private channel in Slack, then refresh channels.
+                    </Text>
+                  </div>
                 )}
               </div>
             </Field>
           </div>
 
-          <div className="flex items-center justify-end gap-2 border-t border-kumo-hairline p-4">
+          <div className="flex items-center justify-end gap-2 border-t border-kumo-hairline px-5 py-4">
             <Dialog.Close
               render={(p) => (
                 <Button {...p} variant="ghost" type="button">
@@ -1966,7 +1968,7 @@ function NewSpaceDialog({
                 (selectedChannel.isPrivate && !selectedChannel.isMember)
               }
             >
-              {submitting ? "Creating" : "Create Space"}
+              {submitting ? "Creating" : "Create"}
             </Button>
           </div>
         </form>
