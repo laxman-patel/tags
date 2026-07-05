@@ -563,6 +563,18 @@ function displayToolCount(value: number) {
   return value === 1 ? "1 tool" : `${value} tools`;
 }
 
+function authStateLabel(authState: ToolAuthState) {
+  if (authState === "connected") return "Connected";
+  if (authState === "requires_auth") return "Needs connection";
+  return "Not connected";
+}
+
+function authStateTone(authState: ToolAuthState) {
+  if (authState === "connected") return "bg-kumo-success";
+  if (authState === "requires_auth") return "bg-kumo-warning";
+  return "bg-kumo-subtle";
+}
+
 function formatChartDay(value: string) {
   const date = new Date(`${value}T00:00:00Z`);
   if (Number.isNaN(date.getTime())) return value;
@@ -1206,105 +1218,114 @@ function SpaceDetailView({
       )}
 
       {tab === "tools" && (
-        <LayerCard className="p-0">
-          <div className="flex flex-col gap-3 border-b border-kumo-hairline px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex flex-wrap items-center gap-2">
-              <Badge variant="success" appearance="dot">{nativeTools.length} always on</Badge>
-              <Badge
-                variant={composioTools.length === 0 ? "neutral" : connectedComposioTools.length === composioTools.length ? "success" : "warning"}
-                appearance="dot"
-              >
-                {connectedComposioTools.length}/{composioTools.length} Composio connected
-              </Badge>
+        <LayerCard className="p-0 overflow-hidden">
+          <div className="flex flex-col gap-4 border-b border-kumo-hairline px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <Text bold>Tools</Text>
+              <Text variant="secondary" size="sm" as="p">
+                Connect external services. Built-in Tags tools are always available.
+              </Text>
             </div>
             <Button
               variant="primary"
-              size="sm"
               icon={PlusIcon}
               onClick={() => setAddToolOpen(true)}
             >
-              New tool
+              Add tool
             </Button>
           </div>
 
-          <div className="border-b border-kumo-hairline p-4">
-            <div className="mb-3 flex items-center justify-between gap-3">
-              <div className="flex items-center gap-2">
-                <RobotIcon size={16} className="text-kumo-subtle" />
-                <Text bold>Internal tools</Text>
+          <div className="grid grid-cols-1 gap-0 lg:grid-cols-[minmax(0,1fr)_360px]">
+            <div className="border-b border-kumo-hairline lg:border-b-0 lg:border-r">
+              <div className="flex items-center justify-between gap-3 border-b border-kumo-hairline px-5 py-3">
+                <div>
+                  <Text bold>Connected tools</Text>
+                  <Text variant="secondary" size="xs" as="p">
+                    {connectedComposioTools.length} of {composioTools.length} ready
+                  </Text>
+                </div>
+                {composioTools.length > 0 && connectedComposioTools.length !== composioTools.length && (
+                  <div className="flex items-center gap-2 text-kumo-warning">
+                    <WarningIcon size={14} />
+                    <Text size="xs">Action needed</Text>
+                  </div>
+                )}
               </div>
-              <Badge variant="neutral" appearance="dot">Always enabled</Badge>
-            </div>
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-3">
-              {nativeTools.map((tool) => (
-                <div key={tool.id} className="flex min-w-0 items-center gap-3 rounded-md border border-kumo-hairline bg-kumo-base px-3 py-2">
-                  <ToolLogo tool={tool} size="sm" />
-                  <div className="min-w-0">
-                    <Text size="sm" truncate>{tool.name}</Text>
-                    <Text variant="secondary" size="xs" truncate>{tool.description}</Text>
+
+              {composioTools.length === 0 ? (
+                <div className="px-5 py-12">
+                  <Empty
+                    icon={<WrenchIcon size={40} />}
+                    title="No external tools"
+                    description="Add GitHub or another service when this Space needs access outside Slack."
+                  />
+                  <div className="mt-5 flex justify-center">
+                    <Button variant="primary" icon={PlusIcon} onClick={() => setAddToolOpen(true)}>
+                      Add tool
+                    </Button>
                   </div>
                 </div>
-              ))}
-            </div>
-          </div>
-
-          <div className="p-4">
-            <div className="mb-3 flex items-center justify-between gap-3">
-              <div className="flex items-center gap-2">
-                <WrenchIcon size={16} className="text-kumo-subtle" />
-                <Text bold>Composio tools</Text>
-              </div>
-              <Text variant="secondary" size="xs">{displayToolCount(composioTools.length)}</Text>
-            </div>
-
-            {composioTools.length === 0 ? (
-              <Empty
-                icon={<WrenchIcon size={40} />}
-                title="No Composio tools connected"
-                description="Open the directory to connect external tools."
-              />
-            ) : (
-              <div className="flex flex-col divide-y divide-kumo-hairline rounded-md border border-kumo-hairline">
-                {composioTools.map((tool) => (
-                  <div key={tool.id} className="flex flex-col gap-3 px-3 py-3 sm:flex-row sm:items-center">
-                    <ToolLogo tool={tool} />
-                    <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <Text bold size="sm">{tool.name}</Text>
-                        {tool.toolsCount ? <Badge variant="neutral">{displayToolCount(tool.toolsCount)}</Badge> : null}
+              ) : (
+                <div className="divide-y divide-kumo-hairline">
+                  {composioTools.map((tool) => (
+                    <div key={tool.id} className="grid grid-cols-[auto_minmax(0,1fr)] gap-3 px-5 py-4 sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:items-center">
+                      <ToolLogo tool={tool} />
+                      <div className="min-w-0">
+                        <div className="flex min-w-0 items-center gap-2">
+                          <Text bold size="sm" truncate>{tool.name}</Text>
+                          <span className={cn("h-1.5 w-1.5 shrink-0 rounded-full", authStateTone(tool.authState))} />
+                          <Text variant="secondary" size="xs" truncate>
+                            {authStateLabel(tool.authState)}
+                            {tool.toolsCount ? ` · ${displayToolCount(tool.toolsCount)}` : ""}
+                          </Text>
+                        </div>
+                        <Text variant="secondary" size="xs" truncate as="p">
+                          {tool.description}
+                        </Text>
                       </div>
-                      <Text variant="secondary" size="xs" truncate as="p">
-                        {tool.description}
-                      </Text>
+                      <div className="col-span-2 flex items-center gap-1 sm:col-span-1 sm:justify-end">
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => onAuthTool(space.id, tool.id)}
+                        >
+                          {tool.authState === "connected" ? "Reconnect" : "Connect"}
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          shape="square"
+                          icon={XIcon}
+                          aria-label={`Remove ${tool.name}`}
+                          onClick={() => onRemoveTool(space.id, tool.id)}
+                        />
+                      </div>
                     </div>
-                    {tool.authState === "connected" ? (
-                      <Badge variant="success" appearance="dot">Connected</Badge>
-                    ) : tool.authState === "requires_auth" ? (
-                      <Badge variant="warning" appearance="dot">Auth required</Badge>
-                    ) : (
-                      <Badge variant="neutral" appearance="dot">Not connected</Badge>
-                    )}
-                    <div className="flex items-center gap-1 sm:justify-end">
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        onClick={() => onAuthTool(space.id, tool.id)}
-                      >
-                        {tool.authState === "connected" ? "Reconnect" : "Connect"}
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        shape="square"
-                        icon={XIcon}
-                        aria-label={`Remove ${tool.name}`}
-                        onClick={() => onRemoveTool(space.id, tool.id)}
-                      />
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="px-5 py-4">
+              <div className="mb-3 flex items-center gap-2">
+                <RobotIcon size={16} className="text-kumo-subtle" />
+                <div>
+                  <Text bold>Built in</Text>
+                  <Text variant="secondary" size="xs" as="p">Always on</Text>
+                </div>
+              </div>
+              <div className="flex flex-col gap-3">
+                {nativeTools.map((tool) => (
+                  <div key={tool.id} className="flex min-w-0 items-start gap-3">
+                    <ToolLogo tool={tool} size="sm" />
+                    <div className="min-w-0">
+                      <Text size="sm" truncate>{tool.name}</Text>
+                      <Text variant="secondary" size="xs" truncate as="p">{tool.description}</Text>
                     </div>
                   </div>
                 ))}
               </div>
-            )}
+            </div>
           </div>
         </LayerCard>
       )}
@@ -1529,11 +1550,11 @@ function SpaceDetailView({
             <div className="flex items-start justify-between gap-4">
               <div>
                 <Dialog.Title>
-                  <Text variant="heading3">Composio directory</Text>
+                  <Text variant="heading3">Add tool</Text>
                 </Dialog.Title>
                 <Dialog.Description>
                   <Text variant="secondary" size="sm">
-                    Connect external toolkits to this Space.
+                    Choose a service to connect to this Space.
                   </Text>
                 </Dialog.Description>
               </div>
@@ -1553,10 +1574,11 @@ function SpaceDetailView({
                 aria-label="Search Composio toolkits"
                 className="min-w-0 flex-1"
               />
-              <div className="flex items-center gap-2">
-                <Badge variant={directorySource === "composio" ? "success" : "neutral"} appearance="dot">
+              <div className="flex items-center gap-2 text-kumo-subtle">
+                <span className={cn("h-1.5 w-1.5 rounded-full", directorySource === "composio" ? "bg-kumo-success" : "bg-kumo-subtle")} />
+                <Text variant="secondary" size="xs">
                   {directorySource === "composio" ? "Live directory" : "Directory cache"}
-                </Badge>
+                </Text>
                 <Text variant="secondary" size="xs">{visibleDirectory.length} shown</Text>
               </div>
             </div>
@@ -1575,7 +1597,7 @@ function SpaceDetailView({
                 description="Try another search."
               />
             ) : (
-              <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+              <div className="divide-y divide-kumo-hairline">
                 {visibleDirectory.map((toolkit) => {
                   const connectedTool = composioTools.find((tool) => tool.id === toolkit.id);
                   const isConnected = connectedTool?.authState === "connected";
@@ -1584,28 +1606,31 @@ function SpaceDetailView({
                   return (
                     <div
                       key={toolkit.id}
-                      className="flex min-w-0 items-start gap-3 rounded-md border border-kumo-hairline bg-kumo-base p-3"
+                      className="flex min-w-0 flex-col gap-3 px-2 py-3 sm:flex-row sm:items-start"
                     >
                       <ToolLogo tool={toolkit} />
                       <div className="min-w-0 flex-1">
-                        <div className="flex flex-wrap items-center gap-2">
+                        <div className="flex min-w-0 items-center gap-2">
                           <Text bold size="sm" truncate>{toolkit.name}</Text>
-                          {toolkit.toolsCount ? <Badge variant="neutral">{displayToolCount(toolkit.toolsCount)}</Badge> : null}
+                          {toolkit.toolsCount ? (
+                            <Text variant="secondary" size="xs" truncate>
+                              {displayToolCount(toolkit.toolsCount)}
+                            </Text>
+                          ) : null}
                         </div>
                         <Text variant="secondary" size="xs" as="p" truncate>
                           {toolkit.description}
                         </Text>
                         {toolkit.categories.length > 0 && (
-                          <div className="mt-2 flex flex-wrap gap-1">
-                            {toolkit.categories.slice(0, 2).map((category) => (
-                              <Badge key={category} variant="secondary">{category}</Badge>
-                            ))}
-                          </div>
+                          <Text variant="secondary" size="xs" as="p" truncate>
+                            {toolkit.categories.slice(0, 2).join(" · ")}
+                          </Text>
                         )}
                       </div>
                       <Button
                         variant={isConnected ? "secondary" : "primary"}
                         size="sm"
+                        className="sm:ml-auto"
                         onClick={() => {
                           onAddTool(space.id, toolkit);
                           setAddToolOpen(false);
