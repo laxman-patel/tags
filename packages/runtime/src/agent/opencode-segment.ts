@@ -210,7 +210,6 @@ export async function runOpencodeSegment(
     enabledTools: config.enabledTools,
     connectedToolkits: config.enabledConnections,
     hasComposioApiKey: Boolean(args.providerConfig.composioApiKey),
-    autoApproveReadOnlyComposio: config.autoApproveReadOnlyComposio,
     spaceMemorySnapshot,
   });
   let prompt = buildOpencodeUserPrompt(messages);
@@ -267,7 +266,6 @@ export async function runOpencodeSegment(
         actorSlackUserId: args.actorSlackUserId,
         enabledTools: config.enabledTools,
         enabledConnections: config.enabledConnections,
-        autoApproveReadOnlyComposio: config.autoApproveReadOnlyComposio,
       },
       args.providerConfig.mcpSigningKey ?? "",
     );
@@ -357,7 +355,7 @@ export async function runOpencodeSegment(
     // surface them to Slack + return the pause result to the Inngest workflow.
     const pendingApproval = await getPendingApprovalByRunId(args.db, args.runId);
     if (pendingApproval) {
-      await emit({
+      const approvalEvent: TagsEvent = {
         type: "approval.requested",
         approvalId: pendingApproval.id,
         requestId: pendingApproval.requestId,
@@ -367,7 +365,8 @@ export async function runOpencodeSegment(
         inputPreview: pendingApproval.toolInput,
         requestedBySlackUserId: pendingApproval.requestedBySlackUserId ?? undefined,
         expiresAt: pendingApproval.expiresAt.toISOString(),
-      });
+      };
+      await stream.pushEvent(approvalEvent);
       await updateRunStatus(args.db, args.runId, "waiting");
       return {
         kind: "approval_required",

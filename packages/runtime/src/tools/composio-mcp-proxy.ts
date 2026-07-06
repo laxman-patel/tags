@@ -74,7 +74,7 @@ function jsonSchemaToZodRawShape(
   return shape;
 }
 
-function isReadOnlyTool(tool: ComposioToolDef): boolean {
+export function isReadOnlyTool(tool: Pick<ComposioToolDef, "annotations">): boolean {
   return tool.annotations?.readOnlyHint === true;
 }
 
@@ -131,7 +131,7 @@ export async function handleComposioMcpRequest(
     { name: "composio", version: "1.0.0" },
     {
       instructions:
-        "Composio-connected tools for this Space. Read-only tools execute automatically when auto-approve is enabled; write/delete/edit tools require human approval.",
+        "Composio-connected tools for this Space. Read-only tools execute automatically; write/delete/edit tools require human approval.",
     },
   );
 
@@ -153,7 +153,7 @@ export async function handleComposioMcpRequest(
           inputPreview: input,
         });
 
-        if (readOnly && claims.autoApproveReadOnlyComposio) {
+        if (readOnly) {
           try {
             const result = await mcpClient.callTool({
               name: tool.name,

@@ -45,6 +45,7 @@ import { TAGS_MODEL_ID } from "@tags/core/model-labels";
 import { resolveOrCreateUser } from "@tags/core/users";
 import { getSpaceDailyUsage, getUsageBySpace } from "@tags/core/usage";
 import {
+  appendRunEvent,
   expireApprovalByRequestId,
   listPendingApprovals,
   listRunEventsAfter,
@@ -907,6 +908,9 @@ async function buildApprovalsPayload(db: Db, organizationId: string) {
       spaceId: approval.spaceId,
       spaceName: space?.name ?? "Unknown space",
       summary: formatApprovalSummary(approval.toolName, approval.toolInput),
+      toolName: approval.toolName,
+      riskLevel: approval.riskLevel,
+      expiresAt: approval.expiresAt.toISOString(),
       requestedAt: formatDate(approval.createdAt),
     };
   });
@@ -1189,24 +1193,25 @@ async function notifyApprovalResolvedOnSlack(args: {
   if (args.source === "control_plane") {
     const slackBundle = await getAccountSlackClient(args.db, args.organizationId).catch(() => null);
     if (!slackBundle || !args.resolved.slackChannelId || !args.resolved.slackMessageTs) return;
-    void updateMessage(
+    await updateMessage(
       slackBundle.client,
       args.resolved.slackChannelId,
       args.resolved.slackMessageTs,
       text,
       blocks,
-    ).catch(() => {});
+    );
   }
 
   return { text, blocks };
 }
 
-function emitApprovalResolved(args: {
+async function emitApprovalResolved(args: {
   db: Db;
   organizationId: string;
   spaceId: string;
   actorUserId: string;
   approvalId: string;
+  runId: string;
   requestId: string;
   decision: "approved" | "rejected";
   source: "slack_interaction" | "control_plane";
@@ -1219,9 +1224,17 @@ function emitApprovalResolved(args: {
     eventType: "approval.resolved",
     payload: { approvalId: args.approvalId, decision: args.decision, source: args.source },
   }).catch(() => {});
-  void inngest
-    .send({ name: APPROVAL_RESOLVED_EVENT, data: { requestId: args.requestId, decision: args.decision } })
-    .catch(() => {});
+  await appendRunEvent(args.db, args.runId, {
+    type: "approval.resolved",
+    approvalId: args.approvalId,
+    requestId: args.requestId,
+    decision: args.decision,
+    source: args.source,
+  });
+  await inngest.send({
+    name: APPROVAL_RESOLVED_EVENT,
+    data: { requestId: args.requestId, decision: args.decision },
+  });
 }
 
 function questionAnsweredBlocks(args: { actorSlackUserId: string }) {
@@ -1631,19 +1644,35 @@ async function handleProtectedApi(
           await expireApprovalByRequestId(db, approval.requestId);
           return sendJson(res, 410, { error: "Approval expired" });
         }
+        const slackInstallation = await getSlackInstallationForOrg(db, organizationId).catch(() => null);
+        const actorSlackUserId =
+          slackInstallation?.installedByUserId === account.user.id
+            ? slackInstallation.installedBySlackUserId ?? undefined
+            : undefined;
+        const allowed = await canApprove(db, {
+          organizationId,
+          spaceId: approval.spaceId,
+          userId: account.user.id,
+          slackUserId: actorSlackUserId,
+          requesterSlackUserId: approval.requestedBySlackUserId ?? undefined,
+        });
+        if (!allowed) {
+          return sendJson(res, 403, { error: "Tags approval policy does not allow you to resolve this request." });
+        }
         const resolved = await resolveApprovalRequest(db, approvalId, body.decision, account.user.id);
         if (!resolved) return sendJson(res, 404, { error: "Not found or already resolved" });
-        emitApprovalResolved({
+        await emitApprovalResolved({
           db,
           organizationId,
           spaceId: resolved.spaceId,
           actorUserId: account.user.id,
           approvalId,
+          runId: resolved.runId,
           requestId: resolved.requestId,
           decision: body.decision,
           source: "control_plane",
         });
-        void notifyApprovalResolvedOnSlack({
+        await notifyApprovalResolvedOnSlack({
           db,
           organizationId,
           resolved,
@@ -2019,12 +2048,9 @@ async function handleSlackInteractions(req: IncomingMessage, res: ServerResponse
         const action = payload.actions?.[0];
         if (!action?.action_id) return sendJson(res, 200, { ok: true });
         if (action.action_id.startsWith("approval:")) {
-          const slackResponse = await handleApprovalInteraction(db, slack, payload, action);
+          await handleApprovalInteraction(db, slack, payload, action);
           businessOperationsCompleted.add(1, { operation: "slack.interaction.resolve", outcome: "success" });
           span.setAttribute("outcome", "success");
-          if (slackResponse) {
-            return sendJson(res, 200, slackResponse);
-          }
           return sendJson(res, 200, { ok: true });
         } else if (action.action_id.startsWith("question:answer:")) {
           await handleQuestionAction(slack, payload, action);
@@ -2058,7 +2084,7 @@ async function handleApprovalInteraction(
   slack: ReturnType<typeof createSlackClient>,
   payload: SlackBlockActionPayload,
   action: { action_id?: string; value?: string },
-): Promise<{ replace_original: boolean; blocks: unknown[]; text: string } | null> {
+): Promise<null> {
   const [, verb, approvalIdFromAction] = action.action_id?.split(":") ?? [];
   const decision = verb === "approve" ? "approved" : verb === "reject" ? "rejected" : null;
   const actorSlackUserId = payload.user?.id;
@@ -2123,18 +2149,23 @@ async function handleApprovalInteraction(
   });
   const text = `${decision === "approved" ? "Approved" : "Declined"} — ${summary}`;
 
-  emitApprovalResolved({
+  await emitApprovalResolved({
     db,
     organizationId: resolved.organizationId,
     spaceId: resolved.spaceId,
     actorUserId: actor.id,
     approvalId: resolved.id,
+    runId: resolved.runId,
     requestId: resolved.requestId,
     decision,
     source: "slack_interaction",
   });
 
-  return { replace_original: true, blocks, text };
+  if (payload.channel?.id && payload.message?.ts) {
+    await updateMessage(slack, payload.channel.id, payload.message.ts, text, blocks).catch(() => {});
+  }
+
+  return null;
 }
 
 async function handleQuestionAction(

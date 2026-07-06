@@ -571,6 +571,15 @@ function formatRunStartedAt(value: string) {
   });
 }
 
+function formatApprovalExpiry(value: string) {
+  const expiresAt = new Date(value);
+  if (Number.isNaN(expiresAt.getTime())) return "unknown expiry";
+  const diffMs = expiresAt.getTime() - Date.now();
+  if (diffMs <= 0) return "expired";
+  const minutes = Math.max(1, Math.ceil(diffMs / 60_000));
+  return minutes === 1 ? "expires in 1 min" : `expires in ${minutes} min`;
+}
+
 function ToolLogo({
   tool,
   size = "base",
@@ -982,7 +991,6 @@ function SpaceDetailView({
   onSetDefaultRepo,
   onRemoveRepo,
   onSelectRun,
-  onToggleAutoApproveReadOnly,
 }: {
   space: Space;
   runs: Run[];
@@ -996,7 +1004,6 @@ function SpaceDetailView({
   onSetDefaultRepo: (spaceId: string, repoId: string) => void;
   onRemoveRepo: (spaceId: string, repoId: string) => void;
   onSelectRun: (id: string) => void;
-  onToggleAutoApproveReadOnly: (spaceId: string, enabled: boolean) => void;
 }) {
   const spaceRuns = runs.filter((r) => r.spaceId === space.id);
   const [tab, setTab] = useState("overview");
@@ -1337,18 +1344,11 @@ function SpaceDetailView({
             )}
           </div>
           {composioTools.length > 0 && (
-            <div className="flex items-center justify-between gap-3 border-t border-kumo-hairline px-4 py-3">
-              <div className="min-w-0">
-                <Text bold size="sm">Auto-approve read-only tools</Text>
-                <Text variant="secondary" size="xs" as="p">
-                  Read-only calls (e.g. searching emails, listing repos) run without approval. Write/delete/edit calls always require approval.
-                </Text>
-              </div>
-              <Switch
-                aria-label="Auto-approve read-only connected tools"
-                checked={space.autoApproveReadOnlyComposio ?? false}
-                onCheckedChange={(checked) => onToggleAutoApproveReadOnly(space.id, checked)}
-              />
+            <div className="border-t border-kumo-hairline px-4 py-3">
+              <Text bold size="sm">Approval policy</Text>
+              <Text variant="secondary" size="xs" as="p">
+                Composio read-only calls run immediately. Write, edit, and delete calls pause for approval in Slack and the dashboard.
+              </Text>
             </div>
           )}
         </LayerCard>
@@ -1763,10 +1763,14 @@ function ApprovalsView({
             <LayerCard key={apr.id}>
               <LayerCard.Secondary className="flex items-center justify-between gap-4 py-4">
                 <div className="min-w-0 flex-1">
-                  <Text bold>{apr.summary}</Text>
-                  <Text variant="secondary" size="xs" className="mt-1 block">
-                    {apr.spaceName} · {apr.requestedAt}
-                  </Text>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <ActionIcon action={apr.toolName.replace(/^composio\./, "")} />
+                      <Text bold>{apr.summary}</Text>
+                      <Badge variant="warning">{apr.riskLevel}</Badge>
+                    </div>
+                    <Text variant="secondary" size="xs" className="mt-1 block">
+                      {apr.spaceName} · {apr.requestedAt} · {formatApprovalExpiry(apr.expiresAt)}
+                    </Text>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
                   <Button
@@ -2462,7 +2466,7 @@ function DashboardApp({ clerkEnabled = false }: { clerkEnabled?: boolean }) {
       loadApprovals()
         .then(setApprovals)
         .catch(() => undefined);
-    }, 4000);
+    }, 1500);
     return () => clearInterval(timer);
   }, [approvals.length, view.page]);
 
@@ -2673,16 +2677,6 @@ function DashboardApp({ clerkEnabled = false }: { clerkEnabled?: boolean }) {
       await persistConnections(spaceId, enabledConnections);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to update tool");
-      await refresh().catch(() => undefined);
-    }
-  };
-
-  const handleToggleAutoApproveReadOnly = async (spaceId: string, enabled: boolean) => {
-    updateSpace(spaceId, (s) => ({ ...s, autoApproveReadOnlyComposio: enabled }));
-    try {
-      await updateSpaceConfig(spaceId, { autoApproveReadOnlyComposio: enabled });
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to update auto-approve setting");
       await refresh().catch(() => undefined);
     }
   };
@@ -2914,7 +2908,6 @@ function DashboardApp({ clerkEnabled = false }: { clerkEnabled?: boolean }) {
                         onSetDefaultRepo={handleSetDefaultRepo}
                         onRemoveRepo={handleRemoveRepo}
                         onSelectRun={(id) => setView({ page: "run-detail", id })}
-                        onToggleAutoApproveReadOnly={handleToggleAutoApproveReadOnly}
                       />
                     )}
                     {view.page === "approvals" && (

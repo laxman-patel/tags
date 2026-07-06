@@ -1,10 +1,5 @@
 import { describe, expect, it } from "vitest";
-
-function isReadOnlyTool(tool: {
-  annotations?: { readOnlyHint?: boolean };
-}): boolean {
-  return tool.annotations?.readOnlyHint === true;
-}
+import { isReadOnlyTool } from "./composio-mcp-proxy";
 
 describe("composio-mcp-proxy classification", () => {
   it("treats readOnlyHint:true as read-only", () => {

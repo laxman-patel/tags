@@ -97,6 +97,9 @@ export interface Approval {
   spaceId: string;
   spaceName: string;
   summary: string;
+  toolName: string;
+  riskLevel: "none" | "low" | "medium" | "high";
+  expiresAt: string;
   requestedAt: string;
 }
 
@@ -305,6 +308,11 @@ export async function loadRunEvents(runId: string): Promise<RunEvent[]> {
         detail = String(p.requestText ?? p.toolName ?? "");
         json = prettyJson(p.inputPreview);
         status = "pending";
+      } else if (event.eventType === "approval.resolved") {
+        const decision = p.decision === "approved" ? "approved" : "rejected";
+        label = decision === "approved" ? "Approval approved" : "Approval declined";
+        detail = `Resolved from ${String(p.source ?? "approval flow")}`;
+        status = decision === "approved" ? "success" : "failed";
       } else if (event.eventType === "question.requested") {
         label = "Question asked";
         detail = String(p.questionText ?? "");

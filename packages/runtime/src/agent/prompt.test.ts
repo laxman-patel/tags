@@ -16,8 +16,12 @@ describe("opencode prompts", () => {
     expect(prompt).toContain("You are Tags, running inside a shared Slack channel (#dev Space).");
     expect(prompt).toContain("opencode is only the sandbox coding harness");
     expect(prompt).toContain("Do not answer\n  as the opencode CLI");
+    expect(prompt).toContain("internal Tags tools");
+    expect(prompt).toContain("do not require approval");
     expect(prompt).toContain("search_channel");
     expect(prompt).toContain("github");
+    expect(prompt).toContain("Read-only tools (e.g. searching emails, listing repos) execute automatically without approval");
+    expect(prompt).toContain("Slack and the Tags dashboard with Approve/Decline buttons");
   });
 
   it("injects frozen Space memory into the system prompt", () => {

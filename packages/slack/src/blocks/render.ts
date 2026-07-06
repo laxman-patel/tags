@@ -185,7 +185,7 @@ export function renderSlackBlocks(event: TagsEvent): SlackBlock[] {
           type: "section",
           text: {
             type: "mrkdwn",
-            text: `🔐 *${summary}*\n_Allow this? Reply here or in the Tags dashboard._`,
+            text: `🔐 *${summary}*\n_Approve or Decline here, or resolve it from the Tags dashboard._`,
           },
         },
         {

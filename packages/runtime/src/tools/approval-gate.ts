@@ -4,6 +4,7 @@ import { getApprovalPolicyForSpace } from "@tags/core/policies";
 import {
   createApprovalRequest,
   createToolInvocation,
+  getPendingApprovalByInvocationId,
 } from "@tags/core/runs";
 import type { Db } from "@tags/db";
 import { newId } from "@tags/db";
@@ -63,8 +64,19 @@ export async function gateSideEffectingTool(
     idempotencyKey,
   });
 
-  if (invocation.status === "succeeded" && invocation.result) {
+  if (invocation.status === "succeeded") {
     return { cachedResult: invocation.result };
+  }
+
+  const existingApproval = await getPendingApprovalByInvocationId(args.db, invocation.id);
+  if (existingApproval) {
+    throw new ApprovalPauseError({
+      requestId: existingApproval.requestId,
+      approvalId: existingApproval.id,
+      toolName: existingApproval.toolName,
+      toolInput: existingApproval.toolInput,
+      invocationId: existingApproval.toolInvocationId,
+    });
   }
 
   const policy = await getApprovalPolicyForSpace(args.db, args.spaceId);

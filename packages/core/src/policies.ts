@@ -1,10 +1,17 @@
 import { and, eq } from "drizzle-orm";
 import type { Db } from "@tags/db";
-import { approvalPolicies, budgetPolicies, memoryPolicies, newId, organizations, spaces } from "@tags/db";
+import {
+  approvalPolicies,
+  budgetPolicies,
+  memoryPolicies,
+  newId,
+  organizations,
+  spaces,
+  users,
+} from "@tags/db";
 import { getMonthlySpendMicroUsd, getOrgMonthlySpendMicroUsd } from "./usage";
 
 export async function getApprovalPolicyForSpace(db: Db, spaceId: string) {
-  const { spaces } = await import("@tags/db");
   const space = await db.select().from(spaces).where(eq(spaces.id, spaceId)).limit(1);
   const policyId = space[0]?.approvalPolicyId;
   if (!policyId) return null;
@@ -21,7 +28,8 @@ export async function canApprove(
   args: {
     spaceId: string;
     organizationId: string;
-    slackUserId: string;
+    slackUserId?: string;
+    userId?: string;
     requesterSlackUserId?: string;
   },
 ): Promise<boolean> {
@@ -30,6 +38,7 @@ export async function canApprove(
 
   if (
     args.requesterSlackUserId &&
+    args.slackUserId &&
     args.requesterSlackUserId === args.slackUserId &&
     !policy.allowSelfApprove
   ) {
@@ -37,22 +46,29 @@ export async function canApprove(
   }
 
   if (policy.approverAllowlist.length > 0) {
-    return policy.approverAllowlist.includes(args.slackUserId);
+    return Boolean(args.slackUserId && policy.approverAllowlist.includes(args.slackUserId));
   }
 
   if (policy.requireAdminRole) {
-    const { users } = await import("@tags/db");
-    const userRows = await db
-      .select()
-      .from(users)
-      .where(
-        and(
-          eq(users.organizationId, args.organizationId),
-          eq(users.externalProvider, "slack"),
-          eq(users.externalUserId, args.slackUserId),
-        ),
-      )
-      .limit(1);
+    const userRows = args.userId
+      ? await db
+          .select()
+          .from(users)
+          .where(and(eq(users.organizationId, args.organizationId), eq(users.id, args.userId)))
+          .limit(1)
+      : args.slackUserId
+        ? await db
+            .select()
+            .from(users)
+            .where(
+              and(
+                eq(users.organizationId, args.organizationId),
+                eq(users.externalProvider, "slack"),
+                eq(users.externalUserId, args.slackUserId),
+              ),
+            )
+            .limit(1)
+        : [];
     const user = userRows[0];
     return user?.role === "admin" || user?.role === "owner";
   }

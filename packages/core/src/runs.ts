@@ -273,6 +273,21 @@ export async function createApprovalRequest(
   return row;
 }
 
+export async function getPendingApprovalByInvocationId(db: Db, toolInvocationId: string) {
+  const rows = await db
+    .select()
+    .from(approvalRequests)
+    .where(
+      and(
+        eq(approvalRequests.toolInvocationId, toolInvocationId),
+        eq(approvalRequests.status, "pending"),
+      ),
+    )
+    .orderBy(desc(approvalRequests.createdAt))
+    .limit(1);
+  return rows[0] ?? null;
+}
+
 export async function resolveApprovalRequest(
   db: Db,
   approvalId: string,
