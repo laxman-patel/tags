@@ -1224,17 +1224,17 @@ async function emitApprovalResolved(args: {
     eventType: "approval.resolved",
     payload: { approvalId: args.approvalId, decision: args.decision, source: args.source },
   }).catch(() => {});
-  await appendRunEvent(args.db, args.runId, {
+  await inngest.send({
+    name: APPROVAL_RESOLVED_EVENT,
+    data: { requestId: args.requestId, decision: args.decision },
+  });
+  void appendRunEvent(args.db, args.runId, {
     type: "approval.resolved",
     approvalId: args.approvalId,
     requestId: args.requestId,
     decision: args.decision,
     source: args.source,
-  });
-  await inngest.send({
-    name: APPROVAL_RESOLVED_EVENT,
-    data: { requestId: args.requestId, decision: args.decision },
-  });
+  }).catch(() => {});
 }
 
 function questionAnsweredBlocks(args: { actorSlackUserId: string }) {
@@ -1672,7 +1672,7 @@ async function handleProtectedApi(
           decision: body.decision,
           source: "control_plane",
         });
-        await notifyApprovalResolvedOnSlack({
+        void notifyApprovalResolvedOnSlack({
           db,
           organizationId,
           resolved,
@@ -2162,7 +2162,7 @@ async function handleApprovalInteraction(
   });
 
   if (payload.channel?.id && payload.message?.ts) {
-    await updateMessage(slack, payload.channel.id, payload.message.ts, text, blocks).catch(() => {});
+    void updateMessage(slack, payload.channel.id, payload.message.ts, text, blocks).catch(() => {});
   }
 
   return null;
