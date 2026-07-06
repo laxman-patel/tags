@@ -1,5 +1,6 @@
 import { WebClient } from "@slack/web-api";
 import { globalSlackRateLimiter } from "./rate-limit";
+import { formatMarkdownForSlack } from "./markdown";
 
 export function createSlackClient(token: string): WebClient {
   return new WebClient(token);
@@ -70,12 +71,13 @@ export async function appendStream(
   chunks: SlackStreamChunk[],
 ): Promise<void> {
   await globalSlackRateLimiter.acquire(channelId);
+  const slackChunks = formatStreamChunksForSlack(chunks);
 
   try {
     const result = await client.chat.appendStream({
       channel: channelId,
       ts: messageTs,
-      chunks: chunks as never,
+      chunks: slackChunks as never,
     });
 
     if (!result.ok) {
@@ -103,12 +105,13 @@ export async function stopStream(
   },
 ): Promise<void> {
   await globalSlackRateLimiter.acquire(channelId);
+  const chunks = args?.chunks ? formatStreamChunksForSlack(args.chunks) : undefined;
 
   try {
     const result = await client.chat.stopStream({
       channel: channelId,
       ts: messageTs,
-      ...(args?.chunks ? { chunks: args.chunks as never } : {}),
+      ...(chunks ? { chunks: chunks as never } : {}),
       ...(args?.blocks ? { blocks: args.blocks as never } : {}),
     });
 
@@ -134,12 +137,13 @@ export async function postThreadMessage(
   blocks?: unknown[],
 ): Promise<SlackMessageRef> {
   await globalSlackRateLimiter.acquire(channelId);
+  const slackText = formatMarkdownForSlack(text);
 
   try {
     const result = await client.chat.postMessage({
       channel: channelId,
       ...(threadTs ? { thread_ts: threadTs } : {}),
-      text,
+      text: slackText,
       blocks: blocks as never,
     });
 
@@ -220,12 +224,13 @@ export async function updateMessage(
   blocks?: unknown[],
 ): Promise<void> {
   await globalSlackRateLimiter.acquire(channelId);
+  const slackText = formatMarkdownForSlack(text);
 
   try {
     const result = await client.chat.update({
       channel: channelId,
       ts: messageTs,
-      text,
+      text: slackText,
       blocks: blocks as never,
     });
 
@@ -241,6 +246,22 @@ export async function updateMessage(
     }
     throw error;
   }
+}
+
+function formatStreamChunksForSlack(chunks: SlackStreamChunk[]): SlackStreamChunk[] {
+  return chunks.map((chunk) => {
+    if (chunk.type === "markdown_text") {
+      return { ...chunk, text: formatMarkdownForSlack(chunk.text) };
+    }
+    if (chunk.type === "task_update") {
+      return {
+        ...chunk,
+        ...(chunk.details ? { details: formatMarkdownForSlack(chunk.details) } : {}),
+        ...(chunk.output ? { output: formatMarkdownForSlack(chunk.output) } : {}),
+      };
+    }
+    return chunk;
+  });
 }
 
 export type SlackFileRef = {

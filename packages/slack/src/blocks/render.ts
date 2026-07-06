@@ -2,6 +2,7 @@ import type { TagsEvent } from "@tags/core/events";
 import { formatApprovalSummary } from "@tags/core/approval-display";
 import type { UICard } from "@tags/core/ui-cards";
 import { formatUiCardPreview } from "@tags/core/ui-cards";
+import { formatMarkdownForSlack } from "../markdown";
 
 export type SlackBlock = Record<string, unknown>;
 
@@ -320,7 +321,7 @@ export function buildWorkingMessage(text: string): SlackBlock[] {
   return [
     {
       type: "section",
-      text: { type: "mrkdwn", text: text },
+      text: { type: "mrkdwn", text: formatMarkdownForSlack(text) },
     },
   ];
 }
