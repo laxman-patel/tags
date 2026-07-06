@@ -79,6 +79,24 @@ describe("fireworks model helpers", () => {
     });
   });
 
+  it("embeds Fireworks credentials in the provider block when a key is supplied", () => {
+    expect(
+      buildFireworksProviderConfig("accounts/fireworks/routers/glm-5p2-fast", "fw_test_key"),
+    ).toEqual({
+      "fireworks-ai": {
+        options: {
+          baseURL: "https://api.fireworks.ai/inference/v1",
+          apiKey: "fw_test_key",
+        },
+        models: {
+          "accounts/fireworks/routers/glm-5p2-fast": {
+            name: "GLM 5.2 Fast",
+          },
+        },
+      },
+    });
+  });
+
   it("builds opencode auth credentials for Fireworks", () => {
     expect(buildOpencodeFireworksAuthJson("fw_test_key")).toEqual({
       [OPENCODE_FIREWORKS_PROVIDER_ID]: {
@@ -99,7 +117,7 @@ describe("createSandboxProvider", () => {
     const sandbox = createMockSandbox("existing-sandbox");
     mocks.connect.mockResolvedValue(sandbox);
 
-    const provider = createSandboxProvider();
+    const provider = createSandboxProvider({ modelApiKey: "fw_test_key" });
     const result = await provider.runCodingAgent({
       prompt: "update the docs",
       repoUrl: "https://github.com/acme/repo",
@@ -125,7 +143,7 @@ describe("createSandboxProvider", () => {
     const sandbox = createMockSandbox("new-sandbox");
     mocks.create.mockResolvedValue(sandbox);
 
-    const provider = createSandboxProvider();
+    const provider = createSandboxProvider({ modelApiKey: "fw_test_key" });
     const result = await provider.runCodingAgent({
       prompt: "summarize the workspace",
     });
@@ -144,7 +162,7 @@ describe("createSandboxProvider", () => {
     const sandbox = createMockSandbox("new-sandbox");
     mocks.create.mockResolvedValue(sandbox);
 
-    const provider = createSandboxProvider();
+    const provider = createSandboxProvider({ modelApiKey: "fw_test_key" });
     await provider.runCodingAgent({
       prompt: "list issues",
       mcpServers: {
@@ -167,7 +185,7 @@ describe("createSandboxProvider", () => {
     const sandbox = createMockSandbox("new-sandbox");
     mocks.create.mockResolvedValue(sandbox);
 
-    const provider = createSandboxProvider();
+    const provider = createSandboxProvider({ modelApiKey: "fw_test_key" });
     await provider.runCodingAgent({
       prompt: "# Task thread\n[user]\n@tags what changed?",
       systemPrompt: "You are Tags for the #dev Space.",
@@ -188,7 +206,7 @@ describe("createSandboxProvider", () => {
     const sandbox = createMockSandbox("new-sandbox");
     mocks.create.mockResolvedValue(sandbox);
 
-    const provider = createSandboxProvider();
+    const provider = createSandboxProvider({ modelApiKey: "fw_test_key" });
     await provider.runCodingAgent({
       prompt: "hello",
       model: "accounts/fireworks/routers/glm-5p2-fast",
@@ -199,7 +217,8 @@ describe("createSandboxProvider", () => {
       commands.some(
         (command) =>
           command.includes('"fireworks-ai"') &&
-          command.includes('"accounts/fireworks/routers/glm-5p2-fast"'),
+          command.includes('"accounts/fireworks/routers/glm-5p2-fast"') &&
+          command.includes('"apiKey": "fw_test_key"'),
       ),
     ).toBe(true);
   });
@@ -220,6 +239,16 @@ describe("createSandboxProvider", () => {
           command.includes("fw_test_key"),
       ),
     ).toBe(true);
+    expect(commands.some((command) => command.includes("FIREWORKS_API_KEY='fw_test_key'"))).toBe(
+      true,
+    );
+  });
+
+  it("requires a Fireworks API key before starting opencode", async () => {
+    const provider = createSandboxProvider();
+    await expect(provider.runCodingAgent({ prompt: "hello" })).rejects.toThrow(
+      "FIREWORKS_API_KEY is required",
+    );
   });
 
   it("reads structured run output from the repo", async () => {
@@ -252,7 +281,7 @@ describe("createSandboxProvider", () => {
     });
     mocks.create.mockResolvedValue(sandbox);
 
-    const provider = createSandboxProvider();
+    const provider = createSandboxProvider({ modelApiKey: "fw_test_key" });
     const result = await provider.runCodingAgent({
       prompt: "fix the button",
       repoUrl: "https://github.com/acme/repo",
@@ -282,7 +311,7 @@ describe("createSandboxProvider", () => {
     });
     mocks.create.mockResolvedValue(sandbox);
 
-    const provider = createSandboxProvider();
+    const provider = createSandboxProvider({ modelApiKey: "fw_test_key" });
     const result = await provider.runCodingAgent({
       prompt: "fix the button",
       repoUrl: "https://github.com/acme/repo",
