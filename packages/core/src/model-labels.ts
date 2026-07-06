@@ -1,6 +1,21 @@
 /** Tags uses GLM 5.2 Fast (Fireworks router) for all inference paths. */
 export const TAGS_DEFAULT_MODEL_ID = "accounts/fireworks/routers/glm-5p2-fast";
 
+/** Fireworks models that no longer resolve at inference time. */
+const DEPRECATED_RUNTIME_MODEL_IDS = new Set([
+  "accounts/fireworks/models/kimi-k2-instruct",
+  "openai/gpt-4o-mini",
+  "openai/gpt-4o",
+]);
+
+/** Map Space config model ids to a Fireworks model that is currently served. */
+export function resolveRuntimeModelId(modelId: string): string {
+  if (DEPRECATED_RUNTIME_MODEL_IDS.has(modelId)) {
+    return TAGS_DEFAULT_MODEL_ID;
+  }
+  return modelId;
+}
+
 const KNOWN_MODEL_LABELS: Record<string, string> = {
   [TAGS_DEFAULT_MODEL_ID]: "GLM 5.2 Fast",
   "accounts/fireworks/models/kimi-k2-instruct": "Kimi K2 Instruct",

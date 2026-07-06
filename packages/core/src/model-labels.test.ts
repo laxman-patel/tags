@@ -1,5 +1,21 @@
 import { describe, expect, it } from "vitest";
-import { formatModelLabel } from "./model-labels";
+import {
+  formatModelLabel,
+  resolveRuntimeModelId,
+  TAGS_DEFAULT_MODEL_ID,
+} from "./model-labels";
+
+describe("resolveRuntimeModelId", () => {
+  it("maps deprecated Fireworks models to the default router", () => {
+    expect(resolveRuntimeModelId("accounts/fireworks/models/kimi-k2-instruct")).toBe(
+      TAGS_DEFAULT_MODEL_ID,
+    );
+  });
+
+  it("passes through current model ids unchanged", () => {
+    expect(resolveRuntimeModelId(TAGS_DEFAULT_MODEL_ID)).toBe(TAGS_DEFAULT_MODEL_ID);
+  });
+});
 
 describe("formatModelLabel", () => {
   it("maps Fireworks router ids to friendly names", () => {
