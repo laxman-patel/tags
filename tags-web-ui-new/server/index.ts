@@ -831,6 +831,7 @@ async function buildRunsPayload(db: Db, organizationId: string, slackClient?: Sl
       startedAt: row.run.startedAt.toISOString(),
       duration: duration(row.run.startedAt, row.run.finishedAt),
       toolCalls: countByRun.get(row.run.id) ?? 0,
+      trigger: row.run.trigger,
       triggeredBy,
     };
   });

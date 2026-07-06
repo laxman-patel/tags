@@ -1,6 +1,7 @@
 export type ToolAuthState = "connected" | "requires_auth" | "not_authenticated";
 export type SpaceStatus = "active" | "paused" | "error";
 export type RunStatus = "success" | "running" | "failed" | "pending";
+export type RunTrigger = "mention" | "reply" | "schedule" | "approval_response";
 export type RunEventType = "start" | "tool_call" | "approval" | "error" | "artifact" | "end";
 
 export interface Tool {
@@ -80,6 +81,7 @@ export interface Run {
   startedAt: string;
   duration: string;
   toolCalls: number;
+  trigger: RunTrigger;
   triggeredBy: string;
 }
 

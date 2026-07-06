@@ -105,6 +105,7 @@ import {
   type RunEvent,
   type RunEventType,
   type RunStatus,
+  type RunTrigger,
   type Schedule,
   type Space,
   type SpaceStatus,
@@ -366,14 +367,14 @@ const INITIAL_SPACES: Space[] = [
 ];
 
 const RUNS: Run[] = [
-  { id: "run_001", spaceId: "sp_01", spaceName: "Customer Support", channel: "support-bot", status: "success", startedAt: "Today, 14:32", duration: "18s", toolCalls: 3, triggeredBy: "@dana" },
-  { id: "run_002", spaceId: "sp_02", spaceName: "Engineering Assistant", channel: "eng-help", status: "running", startedAt: "Today, 14:28", duration: "4m 12s", toolCalls: 7, triggeredBy: "@marcus" },
-  { id: "run_003", spaceId: "sp_04", spaceName: "DevOps Monitor", channel: "devops-alerts", status: "failed", startedAt: "Today, 13:51", duration: "2s", toolCalls: 1, triggeredBy: "scheduled" },
-  { id: "run_004", spaceId: "sp_01", spaceName: "Customer Support", channel: "support-bot", status: "success", startedAt: "Today, 13:44", duration: "31s", toolCalls: 5, triggeredBy: "@priya" },
-  { id: "run_005", spaceId: "sp_02", spaceName: "Engineering Assistant", channel: "eng-help", status: "success", startedAt: "Today, 13:20", duration: "1m 02s", toolCalls: 4, triggeredBy: "@tom" },
-  { id: "run_006", spaceId: "sp_04", spaceName: "DevOps Monitor", channel: "devops-alerts", status: "pending", startedAt: "Today, 12:58", duration: "—", toolCalls: 2, triggeredBy: "scheduled" },
-  { id: "run_007", spaceId: "sp_01", spaceName: "Customer Support", channel: "support-bot", status: "success", startedAt: "Today, 12:33", duration: "22s", toolCalls: 4, triggeredBy: "@lee" },
-  { id: "run_008", spaceId: "sp_03", spaceName: "Sales Intelligence", channel: "sales-team", status: "success", startedAt: "Jul 1, 09:17", duration: "44s", toolCalls: 6, triggeredBy: "@alex" },
+  { id: "run_001", spaceId: "sp_01", spaceName: "Customer Support", channel: "support-bot", status: "success", startedAt: "Today, 14:32", duration: "18s", toolCalls: 3, trigger: "mention", triggeredBy: "@dana" },
+  { id: "run_002", spaceId: "sp_02", spaceName: "Engineering Assistant", channel: "eng-help", status: "running", startedAt: "Today, 14:28", duration: "4m 12s", toolCalls: 7, trigger: "mention", triggeredBy: "@marcus" },
+  { id: "run_003", spaceId: "sp_04", spaceName: "DevOps Monitor", channel: "devops-alerts", status: "failed", startedAt: "Today, 13:51", duration: "2s", toolCalls: 1, trigger: "schedule", triggeredBy: "scheduled" },
+  { id: "run_004", spaceId: "sp_01", spaceName: "Customer Support", channel: "support-bot", status: "success", startedAt: "Today, 13:44", duration: "31s", toolCalls: 5, trigger: "mention", triggeredBy: "@priya" },
+  { id: "run_005", spaceId: "sp_02", spaceName: "Engineering Assistant", channel: "eng-help", status: "success", startedAt: "Today, 13:20", duration: "1m 02s", toolCalls: 4, trigger: "mention", triggeredBy: "@tom" },
+  { id: "run_006", spaceId: "sp_04", spaceName: "DevOps Monitor", channel: "devops-alerts", status: "pending", startedAt: "Today, 12:58", duration: "—", toolCalls: 2, trigger: "schedule", triggeredBy: "scheduled" },
+  { id: "run_007", spaceId: "sp_01", spaceName: "Customer Support", channel: "support-bot", status: "success", startedAt: "Today, 12:33", duration: "22s", toolCalls: 4, trigger: "mention", triggeredBy: "@lee" },
+  { id: "run_008", spaceId: "sp_03", spaceName: "Sales Intelligence", channel: "sales-team", status: "success", startedAt: "Jul 1, 09:17", duration: "44s", toolCalls: 6, trigger: "mention", triggeredBy: "@alex" },
 ];
 
 const INITIAL_APPROVALS: Approval[] = [
@@ -587,6 +588,22 @@ function formatRunStartedAt(value: string) {
     hour: "2-digit",
     minute: "2-digit",
   });
+}
+
+function formatRunTriggerLabel(trigger: RunTrigger): string {
+  switch (trigger) {
+    case "schedule":
+      return "scheduled";
+    case "approval_response":
+      return "approval response";
+    case "mention":
+    case "reply":
+      return trigger;
+    default: {
+      const unreachable: never = trigger;
+      return unreachable;
+    }
+  }
 }
 
 function ToolLogo({
@@ -950,7 +967,7 @@ function SpaceProjectCard({
         {recentRun && (
           <div className="flex items-center justify-between gap-2 border-t border-kumo-hairline px-3 py-2">
             <div className="min-w-0">
-              <Text variant="secondary" size="xs" truncate>{recentRun.triggeredBy}</Text>
+              <Text variant="secondary" size="xs" truncate>{formatRunTriggerLabel(recentRun.trigger)}</Text>
             </div>
             <div className="flex items-center gap-1.5 text-kumo-subtle">
               <ClockIcon size={12} />
