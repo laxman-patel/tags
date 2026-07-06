@@ -1,4 +1,5 @@
 import type { TagsEvent } from "@tags/core/events";
+import { formatApprovalSummary } from "@tags/core/approval-display";
 import type { UICard } from "@tags/core/ui-cards";
 import { ArtifactCard } from "./artifact-card";
 import { ApprovalCard } from "./approval-card";
@@ -135,9 +136,10 @@ export function EventRenderer(props: { event: TagsEvent }) {
     case "approval.requested":
       return (
         <ApprovalCard
-          toolName="Pending approval"
-          requestText={`Approval ${event.approvalId}`}
-          riskLevel="unknown"
+          summary={formatApprovalSummary(
+            event.toolName ?? "",
+            event.inputPreview ?? event.requestText,
+          )}
           status="pending"
         />
       );

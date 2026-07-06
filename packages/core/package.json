@@ -10,6 +10,7 @@
     "./threads": "./src/threads.ts",
     "./runs": "./src/runs.ts",
     "./events": "./src/events.ts",
+    "./approval-display": "./src/approval-display.ts",
     "./ui-cards": "./src/ui-cards.ts",
     "./memory": "./src/memory.ts",
     "./file-memory": "./src/file-memory.ts",

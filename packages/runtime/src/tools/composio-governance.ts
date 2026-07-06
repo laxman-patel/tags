@@ -49,6 +49,8 @@ export function wrapComposioToolsWithApproval(
           toolName: gatedName,
           toolInput: input,
           actorUserId: ctx.args.actorUserId,
+          slackChannelId: ctx.args.channelId,
+          slackMessageTs: ctx.args.slackMessageTs,
           approvedTool: ctx.args.approvedTool,
           emit: ctx.emit,
         });

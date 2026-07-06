@@ -508,6 +508,8 @@ function buildAiTools(
             toolName: tagsTool.name,
             toolInput: input,
             actorUserId: args.actorUserId,
+            slackChannelId: args.channelId,
+            slackMessageTs: args.slackMessageTs,
             approvedTool: args.approvedTool,
             emit,
           });

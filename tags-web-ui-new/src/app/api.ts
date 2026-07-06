@@ -96,12 +96,8 @@ export interface Approval {
   id: string;
   spaceId: string;
   spaceName: string;
-  channel: string;
-  action: string;
-  description: string;
+  summary: string;
   requestedAt: string;
-  requestedBy: string;
-  context: string;
 }
 
 export interface RunEvent {
@@ -249,6 +245,11 @@ export function respondToApproval(approvalId: string, decision: "approved" | "re
     method: "POST",
     body: JSON.stringify({ decision }),
   });
+}
+
+export async function loadApprovals(): Promise<Approval[]> {
+  const payload = await requestJson<{ approvals: Approval[] }>("/api/approvals");
+  return payload.approvals;
 }
 
 function eventType(value: string): RunEventType {

@@ -1,4 +1,5 @@
 import type { TagsEvent } from "@tags/core/events";
+import { formatApprovalSummary } from "@tags/core/approval-display";
 import type { UICard } from "@tags/core/ui-cards";
 import { formatUiCardPreview } from "@tags/core/ui-cards";
 
@@ -175,40 +176,18 @@ export function renderSlackBlocks(event: TagsEvent): SlackBlock[] {
       return blocks;
     }
     case "approval.requested": {
-      const fields: SlackBlock[] = [];
-      if (event.toolName) {
-        fields.push({
-          type: "section",
-          text: { type: "mrkdwn", text: `🔐 *Approval needed*\n*Tool:* \`${event.toolName}\`` },
-        });
-      } else {
-        fields.push({
-          type: "section",
-          text: { type: "mrkdwn", text: "🔐 *Approval needed before executing this action.*" },
-        });
-      }
-      const detailLines: string[] = [];
-      if (event.riskLevel) detailLines.push(`*Risk:* ${event.riskLevel}`);
-      if (event.requestText) detailLines.push(`*Request:* ${event.requestText}`);
-      if (event.requestedBySlackUserId) detailLines.push(`*Requested by:* <@${event.requestedBySlackUserId}>`);
-      if (event.expiresAt) {
-        const expiry = new Date(event.expiresAt);
-        detailLines.push(`*Expires:* <t:${Math.floor(expiry.getTime() / 1000)}:R>`);
-      }
-      if (event.inputPreview) {
-        const preview = typeof event.inputPreview === "string"
-          ? event.inputPreview
-          : JSON.stringify(event.inputPreview);
-        detailLines.push(`*Input:*\n\`\`\`${preview.slice(0, 400)}\`\`\``);
-      }
-      if (detailLines.length > 0) {
-        fields.push({
-          type: "section",
-          text: { type: "mrkdwn", text: detailLines.join("\n") },
-        });
-      }
+      const summary = formatApprovalSummary(
+        event.toolName ?? "",
+        event.inputPreview ?? event.requestText,
+      );
       return [
-        ...fields,
+        {
+          type: "section",
+          text: {
+            type: "mrkdwn",
+            text: `🔐 *${summary}*\n_Allow this? Reply here or in the Tags dashboard._`,
+          },
+        },
         {
           type: "actions",
           block_id: `approval_${event.approvalId}`,
@@ -223,7 +202,7 @@ export function renderSlackBlocks(event: TagsEvent): SlackBlock[] {
             {
               type: "button",
               action_id: `approval:reject:${event.approvalId}`,
-              text: { type: "plain_text", text: "Reject" },
+              text: { type: "plain_text", text: "Decline" },
               style: "danger",
               value: event.requestId,
             },

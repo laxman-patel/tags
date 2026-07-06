@@ -1,3 +1,4 @@
+import { formatApprovalQuestion } from "@tags/core/approval-display";
 import type { TagsEvent } from "@tags/core/events";
 import { getApprovalPolicyForSpace } from "@tags/core/policies";
 import {
@@ -24,6 +25,8 @@ export type ApprovalGateArgs = {
   toolName: string;
   toolInput: unknown;
   actorUserId?: string | null;
+  slackChannelId?: string;
+  slackMessageTs?: string;
   approvedTool?: ApprovedToolMatch;
   emit: (event: TagsEvent) => Promise<void>;
 };
@@ -68,6 +71,7 @@ export async function gateSideEffectingTool(
   const expiryMinutes = policy?.defaultExpiryMinutes ?? 60;
 
   const requestId = newId();
+  const requestText = formatApprovalQuestion(args.toolName, args.toolInput);
   const approval = await createApprovalRequest(args.db, {
     organizationId: args.organizationId,
     spaceId: args.spaceId,
@@ -78,18 +82,12 @@ export async function gateSideEffectingTool(
     toolName: args.toolName,
     toolInput: args.toolInput,
     riskLevel: "high",
-    requestText: `Approve ${args.toolName}?`,
+    requestText,
     expiresAt: new Date(Date.now() + expiryMinutes * 60 * 1000),
     requestedBySlackUserId: args.actorUserId ?? undefined,
+    slackChannelId: args.slackChannelId,
+    slackMessageTs: args.slackMessageTs,
   });
-
-  const inputPreviewStr = (() => {
-    try {
-      return JSON.stringify(args.toolInput).slice(0, 500);
-    } catch {
-      return String(args.toolInput).slice(0, 500);
-    }
-  })();
 
   await args.emit({
     type: "approval.requested",
@@ -97,8 +95,7 @@ export async function gateSideEffectingTool(
     requestId,
     toolName: args.toolName,
     riskLevel: approval.riskLevel,
-    requestText: approval.requestText,
-    inputPreview: inputPreviewStr,
+    requestText,
     requestedBySlackUserId: args.actorUserId ?? undefined,
     expiresAt: approval.expiresAt.toISOString(),
   });

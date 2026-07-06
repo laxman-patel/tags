@@ -241,6 +241,8 @@ export async function createApprovalRequest(
     expiresAt: Date;
     requestedByUserId?: string;
     requestedBySlackUserId?: string;
+    slackChannelId?: string;
+    slackMessageTs?: string;
   },
 ): Promise<typeof approvalRequests.$inferSelect> {
   const id = newId();
@@ -261,6 +263,8 @@ export async function createApprovalRequest(
       expiresAt: args.expiresAt,
       requestedByUserId: args.requestedByUserId,
       requestedBySlackUserId: args.requestedBySlackUserId,
+      slackChannelId: args.slackChannelId,
+      slackMessageTs: args.slackMessageTs,
       status: "pending",
     })
     .returning();

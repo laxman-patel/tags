@@ -93,6 +93,7 @@ import {
   loadSpaceSchedules,
   loadSlackChannels,
   loadRunEvents,
+  loadApprovals,
   respondToApproval,
   updateSpaceConfig,
   type ActivityPoint,
@@ -381,34 +382,15 @@ const INITIAL_APPROVALS: Approval[] = [
     id: "apr_001",
     spaceId: "sp_04",
     spaceName: "DevOps Monitor",
-    channel: "devops-alerts",
-    action: "deploy",
-    description: "Deploy infra/k8s-patch-v2.1.4 to production cluster",
+    summary: "Deploy to production cluster",
     requestedAt: "Today, 12:58",
-    requestedBy: "DevOps Monitor agent",
-    context: "Triggered by scheduled health check. Patch addresses CVE-2024-3094.",
   },
   {
     id: "apr_002",
     spaceId: "sp_01",
     spaceName: "Customer Support",
-    channel: "support-bot",
-    action: "send_email",
-    description: "Send refund confirmation to customer@example.com",
+    summary: "Send refund confirmation email",
     requestedAt: "Today, 14:05",
-    requestedBy: "Customer Support agent",
-    context: "User Dana requested a refund for order #8821. Agent drafted confirmation email.",
-  },
-  {
-    id: "apr_003",
-    spaceId: "sp_02",
-    spaceName: "Engineering Assistant",
-    channel: "eng-help",
-    action: "github_write",
-    description: "Merge PR #892 — auth middleware refactor into main",
-    requestedAt: "Today, 14:22",
-    requestedBy: "Engineering Assistant agent",
-    context: "All CI checks passing. Requested by @marcus after code review completion.",
   },
 ];
 
@@ -1757,7 +1739,7 @@ function ApprovalsView({
     <div>
       <PageHeader
         title="Pending approvals"
-        description="Actions the agent is waiting for you to review."
+        description="Quick yes or no — the agent waits until you decide."
         actions={
           approvals.length > 0 ? (
             <Badge variant="warning">{approvals.length} pending</Badge>
@@ -1770,8 +1752,8 @@ function ApprovalsView({
           <LayerCard.Primary>
             <Empty
               icon={<CheckIcon size={40} />}
-              title="No pending approvals"
-              description="All caught up. New approval requests will appear here."
+              title="All caught up"
+              description="Nothing waiting on you right now."
             />
           </LayerCard.Primary>
         </LayerCard>
@@ -1779,11 +1761,12 @@ function ApprovalsView({
         <div className="flex flex-col gap-3">
           {approvals.map((apr) => (
             <LayerCard key={apr.id}>
-              <LayerCard.Secondary className="flex items-center justify-between gap-3">
-                <div className="flex items-center gap-2 min-w-0">
-                  <ActionIcon action={apr.action} />
-                  <Badge variant={ACTION_META[apr.action]?.variant ?? "warning"}>{apr.action}</Badge>
-                  <Text bold truncate>{apr.description}</Text>
+              <LayerCard.Secondary className="flex items-center justify-between gap-4 py-4">
+                <div className="min-w-0 flex-1">
+                  <Text bold>{apr.summary}</Text>
+                  <Text variant="secondary" size="xs" className="mt-1 block">
+                    {apr.spaceName} · {apr.requestedAt}
+                  </Text>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
                   <Button
@@ -1792,7 +1775,7 @@ function ApprovalsView({
                     icon={XIcon}
                     onClick={() => onReject(apr.id)}
                   >
-                    Reject
+                    Decline
                   </Button>
                   <Button
                     variant="primary"
@@ -1804,27 +1787,6 @@ function ApprovalsView({
                   </Button>
                 </div>
               </LayerCard.Secondary>
-              <LayerCard.Primary>
-                <div className="flex flex-col gap-3">
-                  <Text variant="secondary" size="sm" as="p">
-                    {apr.context}
-                  </Text>
-                  <div className="flex items-center gap-4 flex-wrap">
-                    <span className="inline-flex items-center gap-1 text-kumo-subtle">
-                      <BrainIcon size={12} />
-                      <Text variant="secondary" size="xs">{apr.spaceName}</Text>
-                    </span>
-                    <span className="inline-flex items-center gap-1 text-kumo-subtle">
-                      <HashIcon size={12} />
-                      <Text variant="secondary" size="xs">{apr.channel}</Text>
-                    </span>
-                    <span className="inline-flex items-center gap-1 text-kumo-subtle">
-                      <ClockIcon size={12} />
-                      <Text variant="secondary" size="xs">{apr.requestedAt}</Text>
-                    </span>
-                  </div>
-                </div>
-              </LayerCard.Primary>
             </LayerCard>
           ))}
         </div>
@@ -2495,6 +2457,16 @@ function DashboardApp({ clerkEnabled = false }: { clerkEnabled?: boolean }) {
   }, []);
 
   useEffect(() => {
+    if (approvals.length === 0 && view.page !== "approvals") return;
+    const timer = setInterval(() => {
+      loadApprovals()
+        .then(setApprovals)
+        .catch(() => undefined);
+    }, 4000);
+    return () => clearInterval(timer);
+  }, [approvals.length, view.page]);
+
+  useEffect(() => {
     if (view.page !== "run-detail" || view.id in eventsByRun) return;
     loadRunEvents(view.id)
       .then((events) => setEventsByRun((prev) => ({ ...prev, [view.id]: events })))
@@ -2767,10 +2739,9 @@ function DashboardApp({ clerkEnabled = false }: { clerkEnabled?: boolean }) {
     setApprovals((prev) => prev.filter((a) => a.id !== id));
     try {
       await respondToApproval(id, "approved");
-      await refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to approve request");
-      await refresh().catch(() => undefined);
+      await loadApprovals().then(setApprovals).catch(() => undefined);
     }
   };
 
@@ -2778,10 +2749,9 @@ function DashboardApp({ clerkEnabled = false }: { clerkEnabled?: boolean }) {
     setApprovals((prev) => prev.filter((a) => a.id !== id));
     try {
       await respondToApproval(id, "rejected");
-      await refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to reject request");
-      await refresh().catch(() => undefined);
+      await loadApprovals().then(setApprovals).catch(() => undefined);
     }
   };
 

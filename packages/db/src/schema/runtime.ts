@@ -213,6 +213,8 @@ export const approvalRequests = pgTable(
     status: approvalStatusEnum("status").notNull().default("pending"),
     requestedByUserId: uuid("requested_by_user_id").references(() => users.id),
     requestedBySlackUserId: text("requested_by_slack_user_id"),
+    slackChannelId: text("slack_channel_id"),
+    slackMessageTs: text("slack_message_ts"),
     resolvedByUserId: uuid("resolved_by_user_id").references(() => users.id),
     expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),

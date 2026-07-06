@@ -7,6 +7,7 @@ export type TagsMcpRunClaims = {
   spaceId: string;
   channelId: string;
   threadId: string;
+  slackMessageTs?: string;
   actorSlackUserId: string;
   enabledTools: string[];
   enabledConnections?: string[];

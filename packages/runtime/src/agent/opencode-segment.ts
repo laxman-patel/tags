@@ -263,6 +263,7 @@ export async function runOpencodeSegment(
         spaceId: args.spaceId,
         channelId: args.channelId,
         threadId: args.threadId,
+        slackMessageTs: args.slackMessageTs,
         actorSlackUserId: args.actorSlackUserId,
         enabledTools: config.enabledTools,
         enabledConnections: config.enabledConnections,

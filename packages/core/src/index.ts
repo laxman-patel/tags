@@ -1,4 +1,5 @@
 export * from "./events";
+export * from "./approval-display";
 export * from "./ui-cards";
 export * from "./spaces";
 export * from "./spaces-admin";

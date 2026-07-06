@@ -189,6 +189,8 @@ export async function handleComposioMcpRequest(
             toolName: gatedName,
             toolInput: input,
             actorUserId: claims.actorSlackUserId,
+            slackChannelId: claims.channelId,
+            slackMessageTs: claims.slackMessageTs,
             emit,
           });
 
