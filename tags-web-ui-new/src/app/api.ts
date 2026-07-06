@@ -70,6 +70,7 @@ export interface Space {
   recentActivity: string;
   modelId?: string;
   instructions?: string;
+  autoApproveReadOnlyComposio?: boolean;
 }
 
 export interface Run {
@@ -191,6 +192,7 @@ export function updateSpaceConfig(
     availableConnections?: string[];
     enabledConnections?: string[];
     repoUrls?: string[];
+    autoApproveReadOnlyComposio?: boolean;
   },
 ) {
   return requestJson<{ configId: string; version: number }>(`/api/spaces/${spaceId}/config`, {

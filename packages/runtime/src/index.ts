@@ -15,3 +15,4 @@ export {
   createTagsMcpServerConfig,
   handleTagsMcpRequest,
 } from "./tools/tags-mcp";
+export { handleComposioMcpRequest, buildComposioMcpRunToken, createComposioMcpProxyConfig } from "./tools/composio-mcp-proxy";

@@ -9,6 +9,8 @@ export type TagsMcpRunClaims = {
   threadId: string;
   actorSlackUserId: string;
   enabledTools: string[];
+  enabledConnections?: string[];
+  autoApproveReadOnlyComposio?: boolean;
   exp: number;
 };
 

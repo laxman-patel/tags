@@ -1000,6 +1000,7 @@ function SpaceDetailView({
   onSetDefaultRepo,
   onRemoveRepo,
   onSelectRun,
+  onToggleAutoApproveReadOnly,
 }: {
   space: Space;
   runs: Run[];
@@ -1013,6 +1014,7 @@ function SpaceDetailView({
   onSetDefaultRepo: (spaceId: string, repoId: string) => void;
   onRemoveRepo: (spaceId: string, repoId: string) => void;
   onSelectRun: (id: string) => void;
+  onToggleAutoApproveReadOnly: (spaceId: string, enabled: boolean) => void;
 }) {
   const spaceRuns = runs.filter((r) => r.spaceId === space.id);
   const [tab, setTab] = useState("overview");
@@ -1352,6 +1354,21 @@ function SpaceDetailView({
               </div>
             )}
           </div>
+          {composioTools.length > 0 && (
+            <div className="flex items-center justify-between gap-3 border-t border-kumo-hairline px-4 py-3">
+              <div className="min-w-0">
+                <Text bold size="sm">Auto-approve read-only tools</Text>
+                <Text variant="secondary" size="xs" as="p">
+                  Read-only calls (e.g. searching emails, listing repos) run without approval. Write/delete/edit calls always require approval.
+                </Text>
+              </div>
+              <Switch
+                aria-label="Auto-approve read-only connected tools"
+                checked={space.autoApproveReadOnlyComposio ?? false}
+                onCheckedChange={(checked) => onToggleAutoApproveReadOnly(space.id, checked)}
+              />
+            </div>
+          )}
         </LayerCard>
       )}
 
@@ -2688,6 +2705,16 @@ function DashboardApp({ clerkEnabled = false }: { clerkEnabled?: boolean }) {
     }
   };
 
+  const handleToggleAutoApproveReadOnly = async (spaceId: string, enabled: boolean) => {
+    updateSpace(spaceId, (s) => ({ ...s, autoApproveReadOnlyComposio: enabled }));
+    try {
+      await updateSpaceConfig(spaceId, { autoApproveReadOnlyComposio: enabled });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to update auto-approve setting");
+      await refresh().catch(() => undefined);
+    }
+  };
+
   const normalizeRepo = (name: string) => {
     const value = name.trim();
     if (value.startsWith("http://") || value.startsWith("https://") || value.startsWith("git@")) return value;
@@ -2917,6 +2944,7 @@ function DashboardApp({ clerkEnabled = false }: { clerkEnabled?: boolean }) {
                         onSetDefaultRepo={handleSetDefaultRepo}
                         onRemoveRepo={handleRemoveRepo}
                         onSelectRun={(id) => setView({ page: "run-detail", id })}
+                        onToggleAutoApproveReadOnly={handleToggleAutoApproveReadOnly}
                       />
                     )}
                     {view.page === "approvals" && (

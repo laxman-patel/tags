@@ -166,6 +166,7 @@ export type UpdateSpaceConfigInput = {
   repoUrl?: string | null;
   repoUrls?: string[];
   passiveLearningMode?: PassiveLearningMode;
+  autoApproveReadOnlyComposio?: boolean;
 };
 
 export async function createSpaceConfigVersion(db: Db, input: UpdateSpaceConfigInput) {
@@ -215,6 +216,7 @@ export async function createSpaceConfigVersion(db: Db, input: UpdateSpaceConfigI
     passiveLearningMode: parsePassiveLearningMode(
       input.passiveLearningMode ?? previous?.passiveLearningMode ?? "off",
     ),
+    autoApproveReadOnlyComposio: input.autoApproveReadOnlyComposio ?? previous?.autoApproveReadOnlyComposio ?? false,
     repoUrl,
     repoUrls,
     isActive: true,

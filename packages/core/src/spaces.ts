@@ -36,6 +36,7 @@ export type ActiveSpaceConfig = {
   repoUrl?: string | null;
   repoUrls?: string[];
   passiveLearningMode: PassiveLearningMode;
+  autoApproveReadOnlyComposio: boolean;
 };
 
 /**
@@ -110,5 +111,6 @@ export async function loadActiveSpaceConfig(
           ? [row.repoUrl]
           : [],
     passiveLearningMode: parsePassiveLearningMode(row.passiveLearningMode),
+    autoApproveReadOnlyComposio: row.autoApproveReadOnlyComposio ?? false,
   };
 }

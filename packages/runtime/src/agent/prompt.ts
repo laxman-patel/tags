@@ -31,6 +31,7 @@ type OpencodePromptOptions = {
   connectedToolkits?: string[];
   enabledTools?: string[];
   hasComposioApiKey?: boolean;
+  autoApproveReadOnlyComposio?: boolean;
   spaceMemorySnapshot?: string | null;
 };
 
@@ -53,9 +54,10 @@ export function buildOpencodeSystemPrompt(
     connectedToolkits.length > 0 && options?.hasComposioApiKey === false
       ? " These toolkits are configured but currently unavailable because COMPOSIO_API_KEY is missing."
       : "";
+  const autoApprove = options?.autoApproveReadOnlyComposio ?? false;
   const toolContext =
     connectedToolkits.length > 0
-      ? `\n# Connected tools\nThe Space has these Composio toolkits exposed through the opencode MCP server named \"composio\": ${connectedToolkits.join(", ")}.${connectionStatus} Use them when the task clearly requires external tool access. Ask before high-impact external side effects.`
+      ? `\n# Connected tools\nThe Space has these Composio toolkits exposed through the opencode MCP server named \"composio\": ${connectedToolkits.join(", ")}.${connectionStatus} Read-only tools (e.g. searching emails, listing repos) ${autoApprove ? "execute automatically without approval" : "require approval"}. Write/delete/edit tools (e.g. sending emails, creating issues) always require human approval — the run will pause and post an approval request to Slack with Approve/Reject buttons. Proceed normally; the approval gate handles the pause automatically.`
       : "\n# Connected tools\nNo Composio toolkits are enabled for this Space.";
 
   const codingOutputContext = `\n# Coding run output\nWhen you perform repo-changing coding work, create or update .tags/run-output.json in the changed repo. Use this JSON shape when known: {"prUrl":"https://github.com/owner/repo/pull/123","repoUrl":"https://github.com/owner/repo","branch":"branch-name","commitSha":"sha","demo":{"kind":"web","repoSubdir":"optional/path","installCommand":"optional command","startCommand":"command to run the app","readyUrl":"http://127.0.0.1:3000/path","steps":[{"type":"navigate","url":"http://127.0.0.1:3000/path"},{"type":"waitForText","text":"visible fixed UI text"}],"successText":"optional short description"}}. For non-UI work use demo.kind \"terminal\" with a command, or \"none\" with a reason. Do not include secrets.`;

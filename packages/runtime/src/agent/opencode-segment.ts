@@ -27,7 +27,11 @@ import {
   createRuntimeProviders,
   type RuntimeProviderConfig,
 } from "../providers";
-import { createComposioMcpServer } from "../tools/composio";
+import {
+  buildComposioMcpRunToken,
+  createComposioMcpProxyConfig,
+  type ComposioMcpServerConfig,
+} from "../tools/composio-mcp-proxy";
 import {
   buildTagsMcpRunToken,
   createTagsMcpServerConfig,
@@ -206,6 +210,7 @@ export async function runOpencodeSegment(
     enabledTools: config.enabledTools,
     connectedToolkits: config.enabledConnections,
     hasComposioApiKey: Boolean(args.providerConfig.composioApiKey),
+    autoApproveReadOnlyComposio: config.autoApproveReadOnlyComposio,
     spaceMemorySnapshot,
   });
   let prompt = buildOpencodeUserPrompt(messages);
@@ -248,22 +253,38 @@ export async function runOpencodeSegment(
     });
   }
 
-  let composioMcp: Awaited<ReturnType<typeof createComposioMcpServer>> = null;
+  let composioMcp: ComposioMcpServerConfig | null = null;
   try {
-    composioMcp = await createComposioMcpServer({
-      apiKey: args.providerConfig.composioApiKey ?? "",
-      entityId: args.spaceId,
-      toolkits: config.enabledConnections,
-    });
-    if (composioMcp) {
-      mcpServers.composio = composioMcp;
+    const composioToken = buildComposioMcpRunToken(
+      {
+        runId: args.runId,
+        organizationId: args.organizationId,
+        workspaceId: args.workspaceId,
+        spaceId: args.spaceId,
+        channelId: args.channelId,
+        threadId: args.threadId,
+        actorSlackUserId: args.actorSlackUserId,
+        enabledTools: config.enabledTools,
+        enabledConnections: config.enabledConnections,
+        autoApproveReadOnlyComposio: config.autoApproveReadOnlyComposio,
+      },
+      args.providerConfig.mcpSigningKey ?? "",
+    );
+    if (composioToken) {
+      composioMcp = createComposioMcpProxyConfig({
+        appUrl: args.appUrl,
+        token: composioToken,
+      });
     }
   } catch (error) {
     await emit({
       type: "status",
       label: "Composio tools unavailable",
-      detail: error instanceof Error ? error.message : "Failed to create MCP session",
+      detail: error instanceof Error ? error.message : "Failed to create MCP proxy config",
     });
+  }
+  if (composioMcp) {
+    mcpServers.composio = composioMcp;
   }
   const sandboxSession = await getOrCreateSpaceSandboxSession(args.db, {
     organizationId: args.organizationId,

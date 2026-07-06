@@ -142,6 +142,7 @@ export const spaceConfigs = pgTable(
     repoUrl: text("repo_url"),
     repoUrls: jsonb("repo_urls").$type<string[]>().notNull().default([]),
     passiveLearningMode: text("passive_learning_mode").notNull().default("off"),
+    autoApproveReadOnlyComposio: boolean("auto_approve_readonly_composio").notNull().default(false),
     isActive: boolean("is_active").notNull().default(false),
     createdByUserId: uuid("created_by_user_id").references(() => users.id),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),

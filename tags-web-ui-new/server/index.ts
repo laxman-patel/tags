@@ -76,6 +76,7 @@ import {
   RUN_REQUESTED_EVENT,
   buildRuntimeProviderConfig,
   handleTagsMcpRequest,
+  handleComposioMcpRequest,
   inngest,
   loadRuntimeSecrets,
   passiveLearningTickFunction,
@@ -696,6 +697,7 @@ async function buildSpacesPayload(db: Db, organizationId: string) {
         repos,
         modelId: TAGS_MODEL_ID,
         instructions: config?.instructions,
+        autoApproveReadOnlyComposio: config?.autoApproveReadOnlyComposio ?? false,
         workspaceName: row.workspace.name,
         workspaceTeamId: row.workspace.externalWorkspaceId,
       };
@@ -960,6 +962,7 @@ async function updateSpaceConfig(
     availableConnections?: string[];
     enabledConnections?: string[];
     repoUrls?: string[];
+    autoApproveReadOnlyComposio?: boolean;
   },
 ) {
   const space = await getSpaceById(db, spaceId);
@@ -983,6 +986,7 @@ async function updateSpaceConfig(
     runtimeMode: "opencode",
     repoUrls: patch.repoUrls ?? current?.repoUrls ?? [],
     passiveLearningMode: current?.passiveLearningMode,
+    autoApproveReadOnlyComposio: patch.autoApproveReadOnlyComposio ?? current?.autoApproveReadOnlyComposio,
   });
 
   await recordAuditEvent(db, {
@@ -1184,6 +1188,10 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, url: URL) {
 
   if (segments[0] === "mcp" && segments[1] === "tags") {
     return handleMcpApi(req, res, url);
+  }
+
+  if (segments[0] === "mcp" && segments[1] === "composio") {
+    return handleComposioMcpApi(req, res, url);
   }
 
   if (segments[0] === "slack" && segments[1] === "oauth" && segments[2] === "callback") {
@@ -1408,6 +1416,7 @@ async function handleProtectedApi(
           availableConnections?: unknown;
           enabledConnections?: unknown;
           repoUrls?: unknown;
+          autoApproveReadOnlyComposio?: unknown;
         };
         if (body.repoUrls !== undefined) {
           const repoUrls = asStringArray(body.repoUrls);
@@ -1439,6 +1448,8 @@ async function handleProtectedApi(
             body.availableConnections !== undefined ? asStringArray(body.availableConnections) : undefined,
           enabledConnections: body.enabledConnections !== undefined ? asStringArray(body.enabledConnections) : undefined,
           repoUrls: body.repoUrls !== undefined ? asStringArray(body.repoUrls) : undefined,
+          autoApproveReadOnlyComposio:
+            typeof body.autoApproveReadOnlyComposio === "boolean" ? body.autoApproveReadOnlyComposio : undefined,
         });
         if (!result) return sendJson(res, 404, { error: "Not found" });
         apiRequestsCompleted.add(1, { route: "spaces.config", method, outcome: "success" });
@@ -2112,6 +2123,23 @@ async function handleMcpApi(req: IncomingMessage, res: ServerResponse, url: URL)
     db: createDb(secrets.databaseUrl),
     providerConfig: buildRuntimeProviderConfig(secrets),
     encryptionKey: secrets.encryptionKey,
+    appUrl: secrets.appUrl,
+  });
+  return writeWebResponse(res, response);
+}
+
+async function handleComposioMcpApi(req: IncomingMessage, res: ServerResponse, url: URL) {
+  const rawBody = await readRawBody(req);
+  const request = new Request(url.href, {
+    method: req.method,
+    headers: incomingHeaders(req),
+    ...(rawBody && req.method !== "GET" && req.method !== "HEAD" ? { body: rawBody } : {}),
+  });
+  const secrets = loadRuntimeSecrets();
+  const response = await handleComposioMcpRequest(request, {
+    signingSecret: secrets.mcpSigningKey ?? "",
+    db: createDb(secrets.databaseUrl),
+    providerConfig: buildRuntimeProviderConfig(secrets),
     appUrl: secrets.appUrl,
   });
   return writeWebResponse(res, response);
