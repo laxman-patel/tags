@@ -105,7 +105,6 @@ import {
   type RunEvent,
   type RunEventType,
   type RunStatus,
-  type RunTrigger,
   type Schedule,
   type Space,
   type SpaceStatus,
@@ -590,22 +589,6 @@ function formatRunStartedAt(value: string) {
   });
 }
 
-function formatRunTriggerLabel(trigger: RunTrigger): string {
-  switch (trigger) {
-    case "schedule":
-      return "scheduled";
-    case "approval_response":
-      return "approval response";
-    case "mention":
-    case "reply":
-      return trigger;
-    default: {
-      const unreachable: never = trigger;
-      return unreachable;
-    }
-  }
-}
-
 function ToolLogo({
   tool,
   size = "base",
@@ -786,13 +769,11 @@ function WorkspaceConnectionCard({
 
 function SpacesView({
   spaces,
-  runs,
   onSelectSpace,
   onDeleteSpace,
   onNewSpace,
 }: {
   spaces: Space[];
-  runs: Run[];
   onSelectSpace: (id: string) => void;
   onDeleteSpace: (id: string) => Promise<void>;
   onNewSpace: () => void;
@@ -836,7 +817,6 @@ function SpacesView({
           <SpaceProjectCard
             key={space.id}
             space={space}
-            recentRun={runs.find((run) => run.spaceId === space.id)}
             onClick={() => onSelectSpace(space.id)}
             onDelete={() => onDeleteSpace(space.id)}
           />
@@ -848,12 +828,10 @@ function SpacesView({
 
 function SpaceProjectCard({
   space,
-  recentRun,
   onClick,
   onDelete,
 }: {
   space: Space;
-  recentRun?: Run;
   onClick: () => void;
   onDelete: () => Promise<void>;
 }) {
@@ -894,7 +872,11 @@ function SpaceProjectCard({
       >
         <div className="flex items-center justify-between gap-2 px-3 py-2">
           <div className="min-w-0">
-            <Text size="sm" truncate as="div">{space.name}</Text>
+            <Text bold truncate as="div">{space.name}</Text>
+            <div className="mt-1 flex items-center gap-1.5 text-kumo-subtle">
+              <HashIcon size={12} />
+              <Text variant="secondary" size="xs" truncate>{space.channel}</Text>
+            </div>
           </div>
           <DropdownMenu>
             <DropdownMenu.Trigger
@@ -951,30 +933,21 @@ function SpaceProjectCard({
                 ))}
               </div>
             </div>
-            <div className="absolute inset-x-3 bottom-2.5 flex min-w-0 items-center gap-1.5 text-kumo-subtle">
-              <span className={cn("h-1.5 w-1.5 shrink-0 rounded-full", statusTone(space.status))} />
-              <Text variant="secondary" size="xs" truncate>
-                {space.status === "active" ? "production" : space.status}
-                {" · "}
-                {space.channel}
-                {" · "}
-                {displayToolCount(nativeTools.length + composioTools.length)}
-              </Text>
+            <div className="absolute inset-x-3 bottom-2.5 flex items-center justify-between gap-2">
+              <StatusLine space={space} />
+              <div className="flex shrink-0 items-center gap-2 text-kumo-subtle">
+                <span className="inline-flex items-center gap-1">
+                  <WrenchIcon size={12} />
+                  <Text variant="secondary" size="xs">{displayToolCount(nativeTools.length + composioTools.length)}</Text>
+                </span>
+                <span className="inline-flex items-center gap-1">
+                  <ActivityIcon size={12} />
+                  <Text variant="secondary" size="xs">{space.runCount.toLocaleString()}</Text>
+                </span>
+              </div>
             </div>
           </div>
         </div>
-
-        {recentRun && (
-          <div className="flex items-center justify-between gap-2 border-t border-kumo-hairline px-3 py-2">
-            <div className="min-w-0">
-              <Text variant="secondary" size="xs" truncate>{formatRunTriggerLabel(recentRun.trigger)}</Text>
-            </div>
-            <div className="flex items-center gap-1.5 text-kumo-subtle">
-              <ClockIcon size={12} />
-              <Text variant="secondary" size="xs" truncate>{space.lastRun}</Text>
-            </div>
-          </div>
-        )}
       </LayerCard>
 
       <Dialog.Root open={confirmOpen} onOpenChange={setConfirmOpen}>
@@ -2925,7 +2898,6 @@ function DashboardApp({ clerkEnabled = false }: { clerkEnabled?: boolean }) {
                     {view.page === "spaces" && (
                       <SpacesView
                         spaces={spaces}
-                        runs={runs}
                         onSelectSpace={(id) => setView({ page: "space-detail", id })}
                         onDeleteSpace={handleDeleteSpace}
                         onNewSpace={() => setNewSpaceOpen(true)}
