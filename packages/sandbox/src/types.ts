@@ -92,6 +92,8 @@ export interface CodingAgentResult {
   exitCode: number;
   /** Combined stdout/stderr from the opencode run. */
   output: string;
+  /** Only the assistant's text response, extracted from --format json. */
+  replyText?: string;
   /** `git diff` after the run when `repoUrl` was provided. */
   gitDiff?: string;
   /** Map of repo URL -> checkout path inside the sandbox. */

@@ -399,6 +399,7 @@ export async function runOpencodeSegment(
     });
 
     const replyText =
+      result.replyText ||
       cleanOpencodeReply(result.output) ||
       (result.exitCode === 0 ? "Done." : `opencode exited with code ${result.exitCode}.`);
 

@@ -4,6 +4,8 @@ import {
   buildFireworksProviderConfig,
   buildOpencodeFireworksAuthJson,
   createSandboxProvider,
+  extractOpencodeReply,
+  formatOpencodeJsonAsReadable,
   OPENCODE_FIREWORKS_PROVIDER_ID,
   toOpencodeModelId,
 } from "./e2b-provider";
@@ -248,6 +250,7 @@ describe("createSandboxProvider", () => {
     expect(commands.some((command) => command.includes("opencode run --agent 'tags'"))).toBe(
       true,
     );
+    expect(commands.some((command) => command.includes("--format json"))).toBe(true);
   });
 
   it("registers Fireworks router models in opencode config", async () => {
@@ -363,5 +366,69 @@ describe("createSandboxProvider", () => {
     });
 
     expect(result.runOutput?.prUrl).toBe("https://github.com/acme/repo/pull/34");
+  });
+
+  it("extracts replyText from JSON output and converts output to readable", async () => {
+    const sandbox = createMockSandbox("json-sandbox");
+    sandbox.commands.run.mockImplementation(async (command: string) => {
+      if (command === "git diff") {
+        return { stdout: "", stderr: "", exitCode: 0 };
+      }
+      if (command === "cat .tags/run-output.json") {
+        throw new Error("missing");
+      }
+      return {
+        stdout: [
+          JSON.stringify({ type: "tool_use", part: { tool: "bash", state: { status: "completed" } } }),
+          JSON.stringify({ type: "text", part: { type: "text", text: "The repo is about X." } }),
+        ].join("\n"),
+        stderr: "",
+        exitCode: 0,
+      };
+    });
+    mocks.create.mockResolvedValue(sandbox);
+
+    const provider = createSandboxProvider({ modelApiKey: "fw_test_key" });
+    const result = await provider.runCodingAgent({ prompt: "what is this repo about?" });
+
+    expect(result.replyText).toBe("The repo is about X.");
+    expect(result.output).toContain("The repo is about X.");
+    expect(result.output).toContain("✓ bash");
+  });
+});
+
+describe("extractOpencodeReply", () => {
+  it("extracts only text events from JSON output", () => {
+    const raw = [
+      JSON.stringify({ type: "tool_use", part: { tool: "bash", state: { status: "completed" } } }),
+      JSON.stringify({ type: "text", part: { type: "text", text: "Here is the answer." } }),
+      JSON.stringify({ type: "tool_use", part: { tool: "read", state: { status: "completed" } } }),
+      JSON.stringify({ type: "text", part: { type: "text", text: "More detail." } }),
+    ].join("\n");
+    expect(extractOpencodeReply(raw)).toBe("Here is the answer.\n\nMore detail.");
+  });
+
+  it("returns null for non-JSON output", () => {
+    expect(extractOpencodeReply("Just plain text output.")).toBeNull();
+  });
+
+  it("returns null when no text events exist", () => {
+    const raw = JSON.stringify({ type: "tool_use", part: { tool: "bash", state: { status: "completed" } } });
+    expect(extractOpencodeReply(raw)).toBeNull();
+  });
+});
+
+describe("formatOpencodeJsonAsReadable", () => {
+  it("converts JSON events to readable text", () => {
+    const raw = [
+      JSON.stringify({ type: "tool_use", part: { tool: "bash", state: { status: "completed" } } }),
+      JSON.stringify({ type: "text", part: { type: "text", text: "The answer." } }),
+      JSON.stringify({ type: "tool_use", part: { tool: "read", state: { status: "error", error: "file not found" } } }),
+    ].join("\n");
+    expect(formatOpencodeJsonAsReadable(raw)).toBe("✓ bash\nThe answer.\n✗ read failed: file not found");
+  });
+
+  it("returns null for non-JSON output", () => {
+    expect(formatOpencodeJsonAsReadable("Plain text only.")).toBeNull();
   });
 });

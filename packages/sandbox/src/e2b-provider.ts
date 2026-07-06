@@ -145,6 +145,114 @@ function combineOutput(result: CommandLike): string {
   return stripAnsi(`${result.stdout ?? ""}\n${result.stderr ?? ""}`).trim();
 }
 
+type OpencodeJsonEvent = {
+  type: string;
+  part?: {
+    type?: string;
+    text?: string;
+    tool?: string;
+    state?: {
+      status?: string;
+      error?: string;
+      output?: string;
+    };
+  };
+  error?: {
+    name?: string;
+    data?: { message?: string };
+  };
+};
+
+/**
+ * Parse opencode --format json output and extract only the assistant's text
+ * response (type: "text" events). Returns null if the output isn't valid JSON
+ * events, so callers can fall back to cleanOpencodeReply.
+ */
+export function extractOpencodeReply(raw: string): string | null {
+  const lines = raw.split("\n");
+  const textParts: string[] = [];
+  let parsedAny = false;
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    try {
+      const event: OpencodeJsonEvent = JSON.parse(trimmed);
+      parsedAny = true;
+      if (event.type === "text" && event.part?.text) {
+        textParts.push(event.part.text);
+      }
+    } catch {
+      // Not a JSON line — skip.
+    }
+  }
+
+  if (!parsedAny) return null;
+  return textParts.join("\n\n").trim() || null;
+}
+
+/**
+ * Convert opencode --format json output to a human-readable format for the DB
+ * run timeline and UI cards. Returns null if the output isn't JSON events.
+ */
+export function formatOpencodeJsonAsReadable(raw: string): string | null {
+  const lines = raw.split("\n");
+  const parts: string[] = [];
+  let parsedAny = false;
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    try {
+      const event: OpencodeJsonEvent = JSON.parse(trimmed);
+      parsedAny = true;
+
+      if (event.type === "text" && event.part?.text) {
+        parts.push(event.part.text);
+      } else if (event.type === "tool_use" && event.part) {
+        const status = event.part.state?.status;
+        if (status === "completed") {
+          parts.push(`✓ ${event.part.tool}`);
+        } else if (status === "error") {
+          const err = event.part.state?.error || "failed";
+          parts.push(`✗ ${event.part.tool} failed: ${err}`);
+        }
+      } else if (event.type === "error" && event.error) {
+        const msg = event.error?.data?.message || event.error?.name || "Unknown error";
+        parts.push(`❌ ${msg}`);
+      }
+    } catch {
+      if (parsedAny) parts.push(trimmed);
+    }
+  }
+
+  if (!parsedAny) return null;
+  return parts.join("\n").trim() || null;
+}
+
+/** Format a single JSON event line for live DB streaming. Returns null to skip. */
+function formatJsonLineForStream(line: string): string | null {
+  try {
+    const event: OpencodeJsonEvent = JSON.parse(line);
+    if (event.type === "text" && event.part?.text) {
+      return event.part.text;
+    }
+    if (event.type === "tool_use" && event.part) {
+      const status = event.part.state?.status;
+      if (status === "completed") return `✓ ${event.part.tool}`;
+      if (status === "error") return `✗ ${event.part.tool} failed`;
+      return null;
+    }
+    if (event.type === "error" && event.error) {
+      const msg = event.error?.data?.message || event.error?.name || "Error";
+      return `❌ ${msg}`;
+    }
+    return null;
+  } catch {
+    return line.trim() || null;
+  }
+}
+
 function mergeRunOutputFromText(
   existing: CodingAgentResult["runOutput"],
   output: string,
@@ -346,7 +454,7 @@ export async function prepareOpencodeFireworksRun(
   const agentFlag = args.request.systemPrompt?.trim()
     ? ` --agent ${shellQuote(TAGS_AGENT_NAME)}`
     : "";
-  const command = `FIREWORKS_API_KEY=${shellQuote(modelApiKey)} ${opencodeConfigPath ? `OPENCODE_CONFIG=${shellQuote(opencodeConfigPath)} ` : ""}opencode run${agentFlag} --model ${shellQuote(args.model)} ${shellQuote(args.request.prompt)}`;
+  const command = `FIREWORKS_API_KEY=${shellQuote(modelApiKey)} ${opencodeConfigPath ? `OPENCODE_CONFIG=${shellQuote(opencodeConfigPath)} ` : ""}opencode run${agentFlag} --format json --model ${shellQuote(args.model)} ${shellQuote(args.request.prompt)}`;
   return { opencodeConfigPath, command };
 }
 
@@ -398,6 +506,7 @@ export function createSandboxProvider(config: SandboxProviderConfig = {}): Sandb
 
       let streamed = "";
       let completed = false;
+      let lineBuffer = "";
 
       try {
         const { cwd, repoPaths } = await ensureWorkspace(sandbox, request, config);
@@ -414,7 +523,16 @@ export function createSandboxProvider(config: SandboxProviderConfig = {}): Sandb
           const clean = stripAnsi(chunk);
           streamed += clean;
           if (request.onOutput && clean) {
-            await request.onOutput(clean);
+            lineBuffer += clean;
+            const lines = lineBuffer.split("\n");
+            lineBuffer = lines.pop() ?? "";
+            for (const line of lines) {
+              if (!line.trim()) continue;
+              const formatted = formatJsonLineForStream(line);
+              if (formatted) {
+                await request.onOutput(formatted + "\n");
+              }
+            }
           }
         };
 
@@ -438,6 +556,22 @@ export function createSandboxProvider(config: SandboxProviderConfig = {}): Sandb
           } else {
             throw error;
           }
+        }
+
+        // Flush remaining line buffer to onOutput.
+        if (lineBuffer.trim() && request.onOutput) {
+          const formatted = formatJsonLineForStream(lineBuffer);
+          if (formatted) {
+            await request.onOutput(formatted + "\n");
+          }
+        }
+
+        // Parse --format json output: extract reply text and convert to readable
+        // format for the DB timeline / UI cards. Falls back to raw output if not JSON.
+        const replyText = extractOpencodeReply(output);
+        const readable = formatOpencodeJsonAsReadable(output);
+        if (readable) {
+          output = readable;
         }
 
         let gitDiff: string | undefined;
@@ -480,6 +614,7 @@ export function createSandboxProvider(config: SandboxProviderConfig = {}): Sandb
           gitDiff,
           repoPaths: Object.keys(repoPaths).length > 0 ? repoPaths : undefined,
           runOutput,
+          ...(replyText ? { replyText } : {}),
         };
       } finally {
         if (!request.session?.keepAlive || (createdSandbox && !completed)) {
