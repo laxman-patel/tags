@@ -164,9 +164,11 @@ type OpencodeJsonEvent = {
 };
 
 /**
- * Parse opencode --format json output and extract only the assistant's text
- * response (type: "text" events). Returns null if the output isn't valid JSON
- * events, so callers can fall back to cleanOpencodeReply.
+ * Parse opencode --format json output and extract only the assistant's final
+ * text response. Text emitted before tool calls (e.g. "Let me check the repo…")
+ * is narration/preamble and is excluded — only text after the last tool_use
+ * event (the actual answer) is kept. Returns null if the output isn't valid
+ * JSON events, so callers can fall back to cleanOpencodeReply.
  */
 export function extractOpencodeReply(raw: string): string | null {
   const lines = raw.split("\n");
@@ -179,7 +181,11 @@ export function extractOpencodeReply(raw: string): string | null {
     try {
       const event: OpencodeJsonEvent = JSON.parse(trimmed);
       parsedAny = true;
-      if (event.type === "text" && event.part?.text) {
+      if (event.type === "tool_use") {
+        // Discard narration/preamble emitted before tool calls; only text
+        // after the last tool_use (the actual answer) is kept.
+        textParts.length = 0;
+      } else if (event.type === "text" && event.part?.text) {
         textParts.push(event.part.text);
       }
     } catch {

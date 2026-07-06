@@ -398,22 +398,35 @@ describe("createSandboxProvider", () => {
 });
 
 describe("extractOpencodeReply", () => {
-  it("extracts only text events from JSON output", () => {
+  it("extracts only text events after the last tool_use (filters narration)", () => {
     const raw = [
+      JSON.stringify({ type: "text", part: { type: "text", text: "Let me check the repo." } }),
       JSON.stringify({ type: "tool_use", part: { tool: "bash", state: { status: "completed" } } }),
-      JSON.stringify({ type: "text", part: { type: "text", text: "Here is the answer." } }),
+      JSON.stringify({ type: "text", part: { type: "text", text: "Now let me read the files." } }),
       JSON.stringify({ type: "tool_use", part: { tool: "read", state: { status: "completed" } } }),
+      JSON.stringify({ type: "text", part: { type: "text", text: "Here is the answer." } }),
       JSON.stringify({ type: "text", part: { type: "text", text: "More detail." } }),
     ].join("\n");
     expect(extractOpencodeReply(raw)).toBe("Here is the answer.\n\nMore detail.");
+  });
+
+  it("keeps all text when there are no tool_use events", () => {
+    const raw = [
+      JSON.stringify({ type: "text", part: { type: "text", text: "Hello." } }),
+      JSON.stringify({ type: "text", part: { type: "text", text: "World." } }),
+    ].join("\n");
+    expect(extractOpencodeReply(raw)).toBe("Hello.\n\nWorld.");
   });
 
   it("returns null for non-JSON output", () => {
     expect(extractOpencodeReply("Just plain text output.")).toBeNull();
   });
 
-  it("returns null when no text events exist", () => {
-    const raw = JSON.stringify({ type: "tool_use", part: { tool: "bash", state: { status: "completed" } } });
+  it("returns null when no text events exist after tool_use", () => {
+    const raw = [
+      JSON.stringify({ type: "text", part: { type: "text", text: "Let me check." } }),
+      JSON.stringify({ type: "tool_use", part: { tool: "bash", state: { status: "completed" } } }),
+    ].join("\n");
     expect(extractOpencodeReply(raw)).toBeNull();
   });
 });
