@@ -41,8 +41,9 @@ export function buildComposioMcpRunToken(
   signingSecret: string,
 ): string | null {
   if (!signingSecret) return null;
-  if (!context.enabledConnections || context.enabledConnections.length === 0) return null;
-  return createTagsMcpRunToken(context, signingSecret);
+  const enabledConnections = normalizeComposioToolkits(context.enabledConnections);
+  if (enabledConnections.length === 0) return null;
+  return createTagsMcpRunToken({ ...context, enabledConnections }, signingSecret);
 }
 
 /**
@@ -50,7 +51,7 @@ export function buildComposioMcpRunToken(
  * real app actions (e.g. GITHUB_CREATE_AN_ISSUE), not tool-router meta tools, so
  * opencode calls them by name and the approval gate can match them per-action.
  */
-type ComposioRawTool = {
+export type ComposioRawTool = {
   slug: string;
   name: string;
   description?: string;
@@ -62,6 +63,18 @@ type ComposioExecuteResponse = {
   error: string | null;
   successful: boolean;
   logId?: string;
+};
+
+type ComposioToolClient = {
+  create: (userId: string, options: { mcp: true; toolkits: string[] }) => Promise<unknown>;
+  tools: {
+    getRawComposioTools: (options: { toolkits: string[]; limit: number }) => Promise<unknown>;
+    execute: (slug: string, options: {
+      userId: string;
+      arguments: Record<string, unknown>;
+      dangerouslySkipVersionCheck: true;
+    }) => Promise<unknown>;
+  };
 };
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -176,6 +189,16 @@ export function coerceInputForJsonSchema(
   );
 }
 
+export function normalizeComposioToolkits(toolkits: readonly string[] | undefined): string[] {
+  return Array.from(
+    new Set(
+      (toolkits ?? [])
+        .map((toolkit) => toolkit.trim().toLowerCase())
+        .filter(Boolean),
+    ),
+  );
+}
+
 const READ_ONLY_ACTION_VERBS = new Set([
   "GET",
   "LIST",
@@ -216,6 +239,65 @@ function toolExecuteResponseToMcpResult(response: ComposioExecuteResponse): McpC
   };
 }
 
+export async function executeComposioAction(
+  composio: ComposioToolClient,
+  args: {
+    spaceId: string;
+    slug: string;
+    input: Record<string, unknown>;
+  },
+): Promise<McpCallToolResult> {
+  const response = (await composio.tools.execute(args.slug, {
+    userId: args.spaceId,
+    arguments: args.input,
+    dangerouslySkipVersionCheck: true,
+  })) as ComposioExecuteResponse;
+  return toolExecuteResponseToMcpResult(response);
+}
+
+export async function executeComposioActionForSpace(args: {
+  apiKey: string;
+  spaceId: string;
+  toolkits: string[];
+  slug: string;
+  input: Record<string, unknown>;
+}): Promise<McpCallToolResult> {
+  const toolkits = normalizeComposioToolkits(args.toolkits);
+  if (!args.apiKey || toolkits.length === 0) {
+    return {
+      isError: true,
+      content: [{ type: "text", text: "Composio not configured" }],
+    };
+  }
+
+  const composio = new Composio({ apiKey: args.apiKey }) as ComposioToolClient;
+  await composio.create(args.spaceId, {
+    mcp: true,
+    toolkits,
+  });
+  return executeComposioAction(composio, {
+    spaceId: args.spaceId,
+    slug: args.slug,
+    input: args.input,
+  });
+}
+
+export async function listComposioMcpToolsForSpace(args: {
+  composio: ComposioToolClient;
+  spaceId: string;
+  toolkits: string[];
+}): Promise<ComposioRawTool[]> {
+  await args.composio.create(args.spaceId, {
+    mcp: true,
+    toolkits: args.toolkits,
+  });
+
+  return (await args.composio.tools.getRawComposioTools({
+    toolkits: args.toolkits,
+    limit: 500,
+  })) as ComposioRawTool[];
+}
+
 export async function handleComposioMcpRequest(
   request: Request,
   deps: {
@@ -238,20 +320,23 @@ export async function handleComposioMcpRequest(
     return new Response("Unauthorized", { status: 401 });
   }
 
-  const toolkits = claims.enabledConnections ?? [];
+  const toolkits = normalizeComposioToolkits(claims.enabledConnections);
   const apiKey = deps.providerConfig.composioApiKey ?? "";
   if (!apiKey || toolkits.length === 0) {
     return new Response("Composio not configured", { status: 503 });
   }
 
-  const composio = new Composio({ apiKey });
+  const composio = new Composio({ apiKey }) as ComposioToolClient;
   // Expose the toolkits' real actions directly (not the tool-router meta tools)
   // so opencode calls each action by name and the approval gate can match it
-  // per-action against space_tool_approvals.
-  const tools = (await composio.tools.getRawComposioTools({
+  // per-action against space_tool_approvals. Creating the Space-scoped session
+  // first ensures Composio binds these actions to the connected account for
+  // this Space entity.
+  const tools = await listComposioMcpToolsForSpace({
+    composio,
+    spaceId: claims.spaceId,
     toolkits,
-    limit: 500,
-  })) as unknown as ComposioRawTool[];
+  });
 
   // Approval is opt-in per Space: a tool only pauses for a human when its key is
   // present in space_tool_approvals. By default every tool runs immediately.
@@ -273,12 +358,11 @@ export async function handleComposioMcpRequest(
     slug: string,
     input: Record<string, unknown>,
   ): Promise<McpCallToolResult> => {
-    const response = (await composio.tools.execute(slug, {
-      userId: claims.spaceId,
-      arguments: input,
-      dangerouslySkipVersionCheck: true,
-    })) as unknown as ComposioExecuteResponse;
-    return toolExecuteResponseToMcpResult(response);
+    return executeComposioAction(composio, {
+      spaceId: claims.spaceId,
+      slug,
+      input,
+    });
   };
 
   for (const tool of tools) {

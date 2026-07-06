@@ -15,6 +15,16 @@ export function parsePassiveLearningMode(value: string | null | undefined): Pass
   return "off";
 }
 
+export function normalizeConnectionIds(connections: readonly string[] | undefined): string[] {
+  return Array.from(
+    new Set(
+      (connections ?? [])
+        .map((connection) => connection.trim().toLowerCase())
+        .filter(Boolean),
+    ),
+  );
+}
+
 export type ActiveSpaceConfig = {
   id: string;
   organizationId: string;
@@ -87,7 +97,7 @@ export async function loadActiveSpaceConfig(
   if (!row) return null;
 
   const legacyConnections = row.enabledTools.filter((toolId) => !isNativeToolId(toolId));
-  const enabledConnections = Array.from(new Set([...(row.enabledConnections ?? []), ...legacyConnections]));
+  const enabledConnections = normalizeConnectionIds([...(row.enabledConnections ?? []), ...legacyConnections]);
 
   return {
     id: row.id,
@@ -99,7 +109,7 @@ export async function loadActiveSpaceConfig(
     instructions: row.instructions,
     enabledSkills: row.enabledSkills,
     enabledTools: alwaysEnabledNativeTools(),
-    availableConnections: Array.from(new Set([...(row.availableConnections ?? []), ...enabledConnections])),
+    availableConnections: normalizeConnectionIds([...(row.availableConnections ?? []), ...enabledConnections]),
     enabledConnections,
     maxSteps: row.maxSteps,
     runtimeMode: parseRuntimeMode(row.runtimeMode),

@@ -24,7 +24,14 @@ import {
   workspaces,
 } from "@tags/db";
 import { TAGS_MODEL_ID } from "./model-labels";
-import { parseRuntimeMode, parsePassiveLearningMode, loadActiveSpaceConfig, type RuntimeMode, type PassiveLearningMode } from "./spaces";
+import {
+  normalizeConnectionIds,
+  parseRuntimeMode,
+  parsePassiveLearningMode,
+  loadActiveSpaceConfig,
+  type RuntimeMode,
+  type PassiveLearningMode,
+} from "./spaces";
 import { alwaysEnabledNativeTools } from "./tools";
 
 export type CreateSpaceInput = {
@@ -206,13 +213,14 @@ export async function createSpaceConfigVersion(db: Db, input: UpdateSpaceConfigI
     instructions: input.instructions,
     enabledSkills: input.enabledSkills ?? previous?.enabledSkills ?? [],
     enabledTools: alwaysEnabledNativeTools(),
-    availableConnections:
+    availableConnections: normalizeConnectionIds(
       input.availableConnections ??
       previous?.availableConnections ??
       input.enabledConnections ??
       previous?.enabledConnections ??
       [],
-    enabledConnections: input.enabledConnections ?? previous?.enabledConnections ?? [],
+    ),
+    enabledConnections: normalizeConnectionIds(input.enabledConnections ?? previous?.enabledConnections ?? []),
     maxSteps: input.maxSteps ?? previous?.maxSteps ?? 12,
     runtimeMode: input.runtimeMode ?? previous?.runtimeMode ?? "opencode",
     passiveLearningMode: parsePassiveLearningMode(

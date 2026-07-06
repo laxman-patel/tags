@@ -54,6 +54,14 @@ function bestConnectedAccountStatus(current: string | undefined, next: string) {
   return connectedAccountStatusRank(next) > connectedAccountStatusRank(current) ? next : current;
 }
 
+function normalizeToolkitId(toolkit: string): string {
+  return toolkit.trim().toLowerCase();
+}
+
+function normalizeToolkitIds(toolkits: readonly string[]): string[] {
+  return Array.from(new Set(toolkits.map(normalizeToolkitId).filter(Boolean)));
+}
+
 /**
  * Starts Composio OAuth for a toolkit scoped to the Space entity id.
  * Returns the hosted connect URL from `session.authorize()`.
@@ -67,12 +75,13 @@ export async function authorizeComposioToolkit(args: {
   if (!args.apiKey) return { connectUrl: null, connectionId: null };
 
   const composio = new Composio({ apiKey: args.apiKey });
+  const toolkit = normalizeToolkitId(args.toolkit);
   const session = await composio.create(args.entityId, {
     mcp: true,
-    toolkits: [args.toolkit],
+    toolkits: [toolkit],
   });
   const connection = await session.authorize(
-    args.toolkit,
+    toolkit,
     args.callbackUrl ? { callbackUrl: args.callbackUrl } : undefined,
   );
 
@@ -166,14 +175,15 @@ export async function createComposioMcpServer(args: {
   entityId: string;
   toolkits: string[];
 }): Promise<ComposioMcpServerConfig | null> {
-  if (!args.apiKey || args.toolkits.length === 0) {
+  const toolkits = normalizeToolkitIds(args.toolkits);
+  if (!args.apiKey || toolkits.length === 0) {
     return null;
   }
 
   const composio = new Composio({ apiKey: args.apiKey });
   const session = await composio.create(args.entityId, {
     mcp: true,
-    toolkits: args.toolkits,
+    toolkits,
   });
 
   return {
@@ -226,11 +236,16 @@ export async function listComposioToolkitActions(args: {
   entityId: string;
   toolkit: string;
 }): Promise<ComposioActionSummary[]> {
-  if (!args.apiKey || !args.toolkit) return [];
+  const toolkit = normalizeToolkitId(args.toolkit);
+  if (!args.apiKey || !toolkit) return [];
 
   const composio = new Composio({ apiKey: args.apiKey });
+  await composio.create(args.entityId, {
+    mcp: true,
+    toolkits: [toolkit],
+  });
   const tools = await composio.tools.getRawComposioTools({
-    toolkits: [args.toolkit],
+    toolkits: [toolkit],
     limit: 500,
   });
 

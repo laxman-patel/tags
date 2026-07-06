@@ -56,6 +56,7 @@ import { loadRuntimeSecrets } from "../secrets";
 import { loadWorkspaceRuntime } from "./workspace-slack";
 import { upsertDemoRecordingCommentWithComposio } from "../integrations/composio-github";
 import { loadComposioTools } from "../tools/composio";
+import { executeComposioActionForSpace, normalizeComposioToolkits } from "../tools/composio-mcp-proxy";
 import type { UICard } from "@tags/core/ui-cards";
 import { recordDemo, type TagsRunOutput } from "@tags/sandbox";
 import { withSpan } from "@superlog/otel-helpers";
@@ -797,43 +798,38 @@ async function executeApprovedToolStep(
       throw new Error(`No active config for space ${input.spaceId}`);
     }
 
-    const composio = await loadComposioTools({
+    const rawName = segment.toolName.slice("composio.".length);
+    const toolInput =
+      segment.toolInput && typeof segment.toolInput === "object" && !Array.isArray(segment.toolInput)
+        ? segment.toolInput as Record<string, unknown>
+        : {};
+    const output = await executeComposioActionForSpace({
       apiKey: secrets.composioApiKey ?? "",
-      entityId: input.spaceId,
-      toolkits: config.enabledConnections,
+      spaceId: input.spaceId,
+      toolkits: normalizeComposioToolkits(config.enabledConnections),
+      slug: rawName,
+      input: toolInput,
     });
 
-    if (!composio) {
-      throw new Error(`Composio tools unavailable for ${segment.toolName}`);
+    if (output.isError) {
+      const message = output.content
+        .map((item) => typeof item.text === "string" ? item.text : JSON.stringify(item))
+        .join("\n");
+      throw new Error(message || `Composio tool failed: ${rawName}`);
     }
 
-    try {
-      const rawName = segment.toolName.slice("composio.".length);
-      const composioTool = composio.tools[rawName] as
-        | { execute?: (toolInput: unknown, options: unknown) => Promise<unknown> }
-        | undefined;
+    await completeToolInvocation(db, segment.invocationId, {
+      status: "succeeded",
+      result: output,
+    });
 
-      if (!composioTool?.execute) {
-        throw new Error(`Composio tool not found: ${rawName}`);
-      }
+    await emit({
+      type: "tool.finished",
+      toolName: segment.toolName,
+      outputPreview: output,
+    });
 
-      const output = await composioTool.execute(segment.toolInput, {});
-
-      await completeToolInvocation(db, segment.invocationId, {
-        status: "succeeded",
-        result: output,
-      });
-
-      await emit({
-        type: "tool.finished",
-        toolName: segment.toolName,
-        outputPreview: output,
-      });
-
-      return { modelOutput: output };
-    } finally {
-      await composio.close();
-    }
+    return { modelOutput: output };
   }
 
   const providers = await createRuntimeProviders(providerConfig);

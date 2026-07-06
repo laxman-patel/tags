@@ -1,22 +1,34 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { listComposioConnectedAccountStatuses, resolveToolkitConnectionStatus } from "./composio";
+import {
+  listComposioConnectedAccountStatuses,
+  listComposioToolkitActions,
+  resolveToolkitConnectionStatus,
+} from "./composio";
 
 const composioMocks = vi.hoisted(() => ({
+  create: vi.fn(),
   connectedAccountsList: vi.fn(),
+  getRawComposioTools: vi.fn(),
 }));
 
 vi.mock("@composio/core", () => ({
   Composio: vi.fn(function Composio() {
     return {
+      create: composioMocks.create,
       connectedAccounts: {
         list: composioMocks.connectedAccountsList,
+      },
+      tools: {
+        getRawComposioTools: composioMocks.getRawComposioTools,
       },
     };
   }),
 }));
 
 beforeEach(() => {
+  composioMocks.create.mockReset();
   composioMocks.connectedAccountsList.mockReset();
+  composioMocks.getRawComposioTools.mockReset();
 });
 
 describe("resolveToolkitConnectionStatus", () => {
@@ -60,6 +72,48 @@ describe("resolveToolkitConnectionStatus", () => {
         accountStatus: "INITIALIZING",
       }),
     ).toBe("needs_auth");
+  });
+});
+
+describe("listComposioToolkitActions", () => {
+  it("creates the Space-scoped session before listing action slugs", async () => {
+    composioMocks.create.mockResolvedValue({});
+    composioMocks.getRawComposioTools.mockResolvedValue([
+      {
+        slug: "SLACK_SEND_MESSAGE",
+        name: "Send message",
+        description: "Send a Slack message",
+      },
+    ]);
+
+    await expect(
+      listComposioToolkitActions({
+        apiKey: "composio-key",
+        entityId: "space_123",
+        toolkit: " Slack ",
+      }),
+    ).resolves.toEqual([
+      {
+        slug: "SLACK_SEND_MESSAGE",
+        name: "Send message",
+        description: "Send a Slack message",
+        readOnly: false,
+      },
+    ]);
+
+    expect(composioMocks.create).toHaveBeenCalledWith("space_123", {
+      mcp: true,
+      toolkits: ["slack"],
+    });
+    expect(composioMocks.getRawComposioTools).toHaveBeenCalledWith({
+      toolkits: ["slack"],
+      limit: 500,
+    });
+    const createCallOrder = composioMocks.create.mock.invocationCallOrder[0];
+    const listCallOrder = composioMocks.getRawComposioTools.mock.invocationCallOrder[0];
+    expect(createCallOrder).toBeDefined();
+    expect(listCallOrder).toBeDefined();
+    expect(createCallOrder!).toBeLessThan(listCallOrder!);
   });
 });
 

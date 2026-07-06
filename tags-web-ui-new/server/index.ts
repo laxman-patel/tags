@@ -545,7 +545,7 @@ function legacyComposioConnections(enabledTools: string[] | undefined) {
 }
 
 function mergeConnections(...groups: Array<string[] | undefined>) {
-  return Array.from(new Set(groups.flatMap((group) => group ?? []).map((item) => item.trim()).filter(Boolean)));
+  return Array.from(new Set(groups.flatMap((group) => group ?? []).map((item) => item.trim().toLowerCase()).filter(Boolean)));
 }
 
 function composioAuthState(args: { hasApiKey: boolean; enabled: boolean; accountStatus?: string | null }) {
@@ -689,7 +689,7 @@ async function buildSpacesPayload(db: Db, organizationId: string) {
           })),
           ...availableConnections.map((toolkitId) => {
             const enabled = enabledConnectionSet.has(toolkitId);
-            const accountStatus = accountStatuses[toolkitId];
+            const accountStatus = accountStatuses[toolkitId.trim().toLowerCase()];
             return {
               id: toolkitId,
               kind: "composio",
