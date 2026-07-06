@@ -1,4 +1,3 @@
-import { createMCPClient } from "@ai-sdk/mcp";
 import { Composio } from "@composio/core";
 import type { Db } from "@tags/db";
 import { appendRunEvent } from "@tags/core/runs";
@@ -46,17 +45,23 @@ export function buildComposioMcpRunToken(
   return createTagsMcpRunToken(context, signingSecret);
 }
 
-type ComposioToolDef = {
+/**
+ * A single Composio action as returned by `getRawComposioTools`. These are the
+ * real app actions (e.g. GITHUB_CREATE_AN_ISSUE), not tool-router meta tools, so
+ * opencode calls them by name and the approval gate can match them per-action.
+ */
+type ComposioRawTool = {
+  slug: string;
   name: string;
   description?: string;
-  inputSchema?: JsonSchema;
-  annotations?: {
-    readOnlyHint?: boolean;
-    destructiveHint?: boolean;
-    idempotentHint?: boolean;
-    openWorldHint?: boolean;
-    title?: string;
-  };
+  inputParameters?: JsonSchema;
+};
+
+type ComposioExecuteResponse = {
+  data: Record<string, unknown>;
+  error: string | null;
+  successful: boolean;
+  logId?: string;
 };
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -64,17 +69,6 @@ type McpCallToolResult = Record<string, any> & {
   content: Array<Record<string, any>>;
   isError?: boolean;
 };
-
-/**
- * Composio's own orchestration tools. These are never app side effects (they
- * batch calls or manage connections) so they always run without approval,
- * regardless of Space configuration.
- */
-const COMPOSIO_INTERNAL_TOOLS = new Set(["multi_execute", "composio_manage_connections"]);
-
-export function isComposioInternalTool(name: string): boolean {
-  return COMPOSIO_INTERNAL_TOOLS.has(name.toLowerCase());
-}
 
 type JsonSchema = {
   type?: string | string[];
@@ -182,12 +176,44 @@ export function coerceInputForJsonSchema(
   );
 }
 
-export function isReadOnlyTool(tool: Pick<ComposioToolDef, "annotations">): boolean {
-  return tool.annotations?.readOnlyHint === true;
+const READ_ONLY_ACTION_VERBS = new Set([
+  "GET",
+  "LIST",
+  "SEARCH",
+  "FIND",
+  "FETCH",
+  "READ",
+  "RETRIEVE",
+  "COUNT",
+  "CHECK",
+]);
+
+/**
+ * Composio slugs are `TOOLKIT_VERB_...`. A read verb means the action doesn't
+ * mutate state — used only to pick a sensible default risk for the approval
+ * card. Gating itself never depends on this.
+ */
+export function isReadOnlyComposioActionSlug(slug: string): boolean {
+  return slug
+    .toUpperCase()
+    .split("_")
+    .some((word) => READ_ONLY_ACTION_VERBS.has(word));
 }
 
-function composioToolRisk(tool: Pick<ComposioToolDef, "annotations">): "medium" | "high" {
-  return tool.annotations?.destructiveHint === true ? "high" : "medium";
+function composioActionRisk(slug: string): "low" | "medium" {
+  return isReadOnlyComposioActionSlug(slug) ? "low" : "medium";
+}
+
+function toolExecuteResponseToMcpResult(response: ComposioExecuteResponse): McpCallToolResult {
+  if (response.successful === false) {
+    return {
+      isError: true,
+      content: [{ type: "text", text: response.error ?? "Composio tool failed" }],
+    };
+  }
+  return {
+    content: [{ type: "text", text: JSON.stringify(response.data ?? {}) }],
+  };
 }
 
 export async function handleComposioMcpRequest(
@@ -219,21 +245,13 @@ export async function handleComposioMcpRequest(
   }
 
   const composio = new Composio({ apiKey });
-  const session = await composio.create(claims.spaceId, {
-    mcp: true,
+  // Expose the toolkits' real actions directly (not the tool-router meta tools)
+  // so opencode calls each action by name and the approval gate can match it
+  // per-action against space_tool_approvals.
+  const tools = (await composio.tools.getRawComposioTools({
     toolkits,
-  });
-
-  const mcpClient = await createMCPClient({
-    transport: {
-      type: "http",
-      url: session.mcp.url,
-      headers: session.mcp.headers,
-    },
-  });
-
-  const listResult = await mcpClient.listTools();
-  const tools = (listResult.tools ?? []) as unknown as ComposioToolDef[];
+    limit: 500,
+  })) as unknown as ComposioRawTool[];
 
   // Approval is opt-in per Space: a tool only pauses for a human when its key is
   // present in space_tool_approvals. By default every tool runs immediately.
@@ -251,21 +269,36 @@ export async function handleComposioMcpRequest(
     },
   );
 
+  const executeComposioTool = async (
+    slug: string,
+    input: Record<string, unknown>,
+  ): Promise<McpCallToolResult> => {
+    const response = (await composio.tools.execute(slug, {
+      userId: claims.spaceId,
+      arguments: input,
+      dangerouslySkipVersionCheck: true,
+    })) as unknown as ComposioExecuteResponse;
+    return toolExecuteResponseToMcpResult(response);
+  };
+
   for (const tool of tools) {
-    const requiresApproval =
-      !isComposioInternalTool(tool.name) &&
-      approvalKeys.has(composioToolApprovalKey(tool.name));
-    const gatedName = `composio.${tool.name}`;
+    const slug = tool.slug;
+    const inputSchema = tool.inputParameters;
+    const requiresApproval = approvalKeys.has(composioToolApprovalKey(slug));
+    const gatedName = `composio.${slug}`;
 
     server.registerTool(
-      tool.name,
+      slug,
       {
-        description: tool.description ?? tool.name,
-        inputSchema: jsonSchemaToZodRawShape(tool.inputSchema),
-        annotations: tool.annotations,
+        description: tool.description ?? tool.name ?? slug,
+        inputSchema: jsonSchemaToZodRawShape(inputSchema),
+        annotations: {
+          title: tool.name ?? slug,
+          readOnlyHint: isReadOnlyComposioActionSlug(slug),
+        },
       },
       (async (input: Record<string, unknown>): Promise<McpCallToolResult> => {
-        const coercedInput = coerceInputForJsonSchema(input, tool.inputSchema);
+        const coercedInput = coerceInputForJsonSchema(input, inputSchema);
         await emit({
           type: "tool.started",
           toolName: gatedName,
@@ -274,16 +307,13 @@ export async function handleComposioMcpRequest(
 
         if (!requiresApproval) {
           try {
-            const result = await mcpClient.callTool({
-              name: tool.name,
-              arguments: coercedInput,
-            });
+            const result = await executeComposioTool(slug, coercedInput);
             await emit({
               type: "tool.finished",
               toolName: gatedName,
               outputPreview: result,
             });
-            return result as McpCallToolResult;
+            return result;
           } catch (error) {
             const message = error instanceof Error ? error.message : "Composio tool failed";
             await emit({
@@ -310,7 +340,7 @@ export async function handleComposioMcpRequest(
             actorUserId: claims.actorSlackUserId,
             slackChannelId: claims.channelId,
             slackMessageTs: claims.slackMessageTs,
-            riskLevel: composioToolRisk(tool),
+            riskLevel: composioActionRisk(slug),
             emit,
           });
 
@@ -325,16 +355,13 @@ export async function handleComposioMcpRequest(
             return gate.cachedResult as McpCallToolResult;
           }
 
-          const result = await mcpClient.callTool({
-            name: tool.name,
-            arguments: coercedInput,
-          });
+          const result = await executeComposioTool(slug, coercedInput);
           await emit({
             type: "tool.finished",
             toolName: gatedName,
             outputPreview: result,
           });
-          return result as McpCallToolResult;
+          return result;
         } catch (error) {
           if (error instanceof ApprovalPauseError) {
             return {
@@ -368,8 +395,6 @@ export async function handleComposioMcpRequest(
 
   await server.connect(transport);
   const response = await transport.handleRequest(request);
-
-  mcpClient.close().catch(() => {});
 
   return response;
 }

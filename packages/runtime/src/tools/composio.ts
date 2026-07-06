@@ -192,47 +192,56 @@ export type ComposioActionSummary = {
   readOnly: boolean;
 };
 
+const READ_ONLY_ACTION_VERBS = new Set([
+  "GET",
+  "LIST",
+  "SEARCH",
+  "FIND",
+  "FETCH",
+  "READ",
+  "RETRIEVE",
+  "COUNT",
+  "CHECK",
+]);
+
 /**
- * Lists the individual actions (subtools) a toolkit exposes, via the same MCP
- * session the runtime uses — so the slugs returned here match the keys the
- * approval gate checks against exactly.
+ * Composio slugs are `TOOLKIT_VERB_...` (e.g. GITHUB_GET_A_REPOSITORY). We treat
+ * an action as read-only when any word is a read verb. This is only a UI hint —
+ * approval gating never relies on it.
+ */
+function isLikelyReadOnlyActionSlug(slug: string): boolean {
+  return slug
+    .toUpperCase()
+    .split("_")
+    .some((word) => READ_ONLY_ACTION_VERBS.has(word));
+}
+
+/**
+ * Lists the real actions (subtools) a toolkit exposes — e.g. GitHub returns
+ * GITHUB_CREATE_AN_ISSUE etc., not Composio's generic tool-router meta tools.
+ * The returned slugs match the approval keys the gate checks (`composio:<SLUG>`).
  */
 export async function listComposioToolkitActions(args: {
   apiKey: string;
   entityId: string;
   toolkit: string;
 }): Promise<ComposioActionSummary[]> {
-  const session = await createComposioMcpServer({
-    apiKey: args.apiKey,
-    entityId: args.entityId,
+  if (!args.apiKey || !args.toolkit) return [];
+
+  const composio = new Composio({ apiKey: args.apiKey });
+  const tools = await composio.tools.getRawComposioTools({
     toolkits: [args.toolkit],
-  });
-  if (!session) return [];
-
-  const mcpClient = await createMCPClient({
-    transport: { type: "http", url: session.url, headers: session.headers },
+    limit: 500,
   });
 
-  try {
-    const listResult = await mcpClient.listTools();
-    const tools = (listResult.tools ?? []) as unknown as Array<{
-      name: string;
-      description?: string;
-      annotations?: { readOnlyHint?: boolean; title?: string };
-    }>;
-    const internal = new Set(["multi_execute", "composio_manage_connections"]);
-    return tools
-      .filter((tool) => !internal.has(tool.name.toLowerCase()))
-      .map((tool) => ({
-        slug: tool.name,
-        name: tool.annotations?.title ?? tool.name,
-        description: tool.description ?? "",
-        readOnly: tool.annotations?.readOnlyHint === true,
-      }))
-      .sort((a, b) => a.slug.localeCompare(b.slug));
-  } finally {
-    await mcpClient.close().catch(() => {});
-  }
+  return tools
+    .map((tool) => ({
+      slug: tool.slug,
+      name: tool.name?.trim() || tool.slug,
+      description: tool.description ?? "",
+      readOnly: isLikelyReadOnlyActionSlug(tool.slug),
+    }))
+    .sort((a, b) => a.slug.localeCompare(b.slug));
 }
 
 export async function loadComposioTools(args: {

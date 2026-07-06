@@ -99,7 +99,6 @@ import {
   loadSpaceApprovalTools,
   setSpaceApprovalTool,
   loadToolkitActions,
-  nativeToolApprovalKey,
   composioToolApprovalKey,
   type ActivityPoint,
   type Approval,
@@ -107,7 +106,6 @@ import {
   type ComposioAction,
   type ComposioDirectoryTool,
   type GitHubRepo,
-  type NativeApprovableTool,
   type Repo,
   type Run,
   type RunEvent,
@@ -1031,7 +1029,6 @@ function SpaceDetailView({
   const [directoryLoading, setDirectoryLoading] = useState(false);
   const [composioDirectory, setComposioDirectory] = useState<ComposioDirectoryTool[]>([]);
   const [approvalKeys, setApprovalKeys] = useState<Set<string>>(new Set());
-  const [nativeApprovable, setNativeApprovable] = useState<NativeApprovableTool[]>([]);
   const [approvalToolsLoaded, setApprovalToolsLoaded] = useState(false);
   const [approvalDialogTool, setApprovalDialogTool] = useState<Tool | null>(null);
   const [toolkitActions, setToolkitActions] = useState<Record<string, ComposioAction[]>>({});
@@ -1077,7 +1074,6 @@ function SpaceDetailView({
     loadSpaceApprovalTools(space.id)
       .then((payload) => {
         setApprovalKeys(new Set(payload.toolKeys));
-        setNativeApprovable(payload.native);
         setApprovalToolsLoaded(true);
       })
       .catch(() => setApprovalToolsLoaded(true));
@@ -1327,48 +1323,6 @@ function SpaceDetailView({
 
       {tab === "tools" && (
         <div className="flex flex-col gap-4">
-          <LayerCard className="p-0 overflow-hidden">
-            <div className="flex items-center gap-2 border-b border-kumo-hairline px-4 py-3">
-              <ShieldCheckIcon size={15} className="text-kumo-subtle shrink-0" />
-              <div className="min-w-0">
-                <Text bold size="sm">Approvals</Text>
-                <Text variant="secondary" size="xs" as="p">
-                  Everything runs instantly by default. Flip on approval for any action you want a
-                  human to sign off on first — decisions land in Slack and here, always in sync.
-                </Text>
-              </div>
-            </div>
-
-            <div className="px-4 pt-3 uppercase tracking-wide">
-              <Text variant="secondary" size="xs">Built-in actions</Text>
-            </div>
-            <div className="divide-y divide-kumo-hairline mt-1">
-              {nativeApprovable.map((native) => {
-                const key = nativeToolApprovalKey(native.id);
-                return (
-                  <div key={native.id} className="flex items-center gap-3 px-4 py-3">
-                    <ActionIcon action={native.id} />
-                    <div className="min-w-0 flex-1">
-                      <Text bold size="sm" truncate>{native.label}</Text>
-                      <Text variant="secondary" size="xs" truncate as="p">{native.description}</Text>
-                    </div>
-                    <ApprovalToggle
-                      label={`Require approval for ${native.label}`}
-                      checked={approvalKeys.has(key)}
-                      disabled={!approvalToolsLoaded}
-                      onChange={(checked) => toggleApproval(key, checked)}
-                    />
-                  </div>
-                );
-              })}
-              {nativeApprovable.length === 0 && (
-                <div className="px-4 py-3">
-                  <Text variant="secondary" size="xs">Loading actions…</Text>
-                </div>
-              )}
-            </div>
-          </LayerCard>
-
           <LayerCard className="p-0 overflow-hidden">
             <div className="flex items-center justify-between gap-3 border-b border-kumo-hairline px-4 py-3">
               <div className="flex min-w-0 items-baseline gap-2">
@@ -1872,6 +1826,78 @@ function ApprovalToggle({
   );
 }
 
+const MARKDOWN_INLINE = /(`[^`]+`)|(\*\*[^*]+\*\*)|(\*[^*]+\*)|(\[[^\]]+\]\([^)\s]+\))/g;
+
+function renderMarkdownInline(text: string, keyPrefix: string): ReactNode[] {
+  const nodes: ReactNode[] = [];
+  let lastIndex = 0;
+  let token = 0;
+  for (let match = MARKDOWN_INLINE.exec(text); match; match = MARKDOWN_INLINE.exec(text)) {
+    if (match.index > lastIndex) nodes.push(text.slice(lastIndex, match.index));
+    const raw = match[0];
+    const key = `${keyPrefix}-${token++}`;
+    if (raw.startsWith("`")) {
+      nodes.push(
+        <code key={key} className="rounded border border-kumo-hairline bg-kumo-recessed px-1 py-0.5 font-mono text-[0.85em]">
+          {raw.slice(1, -1)}
+        </code>,
+      );
+    } else if (raw.startsWith("**")) {
+      nodes.push(<strong key={key}>{raw.slice(2, -2)}</strong>);
+    } else if (raw.startsWith("*")) {
+      nodes.push(<em key={key}>{raw.slice(1, -1)}</em>);
+    } else {
+      const link = /^\[([^\]]+)\]\(([^)\s]+)\)$/.exec(raw);
+      nodes.push(
+        link ? (
+          <a key={key} href={link[2]} target="_blank" rel="noreferrer" className="text-kumo-default underline underline-offset-2">
+            {link[1]}
+          </a>
+        ) : (
+          raw
+        ),
+      );
+    }
+    lastIndex = MARKDOWN_INLINE.lastIndex;
+  }
+  if (lastIndex < text.length) nodes.push(text.slice(lastIndex));
+  return nodes;
+}
+
+/** Minimal markdown renderer for tool descriptions: paragraphs, bullet lists, and inline emphasis/code/links. */
+function Markdown({ text, className }: { text: string; className?: string }) {
+  const blocks = text.trim().split(/\n{2,}/).filter(Boolean);
+  return (
+    <div className={cn("flex flex-col gap-1.5", className)}>
+      {blocks.map((block, blockIdx) => {
+        const lines = block.split("\n");
+        const isList = lines.length > 0 && lines.every((line) => /^\s*[-*]\s+/.test(line));
+        if (isList) {
+          return (
+            <ul key={blockIdx} className="flex list-disc flex-col gap-0.5 pl-4">
+              {lines.map((line, lineIdx) => (
+                <li key={lineIdx}>
+                  {renderMarkdownInline(line.replace(/^\s*[-*]\s+/, ""), `${blockIdx}-${lineIdx}`)}
+                </li>
+              ))}
+            </ul>
+          );
+        }
+        return (
+          <p key={blockIdx}>
+            {lines.map((line, lineIdx) => (
+              <span key={lineIdx}>
+                {lineIdx > 0 && <br />}
+                {renderMarkdownInline(line, `${blockIdx}-${lineIdx}`)}
+              </span>
+            ))}
+          </p>
+        );
+      })}
+    </div>
+  );
+}
+
 function ToolApprovalsDialog({
   tool,
   onClose,
@@ -1963,11 +1989,11 @@ function ToolApprovalsDialog({
                         {action.readOnly && <Badge variant="neutral">read-only</Badge>}
                       </div>
                       {action.description && (
-                        <div className="mt-0.5 line-clamp-2">
-                          <Text variant="secondary" size="xs">{action.description}</Text>
+                        <div className="mt-1 text-xs text-kumo-subtle [&_p]:leading-relaxed">
+                          <Markdown text={action.description} />
                         </div>
                       )}
-                      <div className="mt-0.5 font-mono opacity-70">
+                      <div className="mt-1 font-mono opacity-70">
                         <Text variant="secondary" size="xs">{action.slug}</Text>
                       </div>
                     </div>

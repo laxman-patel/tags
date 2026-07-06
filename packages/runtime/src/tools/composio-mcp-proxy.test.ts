@@ -1,35 +1,21 @@
 import { describe, expect, it } from "vitest";
 import {
   coerceInputForJsonSchema,
-  isComposioInternalTool,
-  isReadOnlyTool,
+  isReadOnlyComposioActionSlug,
   jsonSchemaToZodRawShape,
 } from "./composio-mcp-proxy";
 
 describe("composio-mcp-proxy classification", () => {
-  it("treats readOnlyHint:true as read-only", () => {
-    expect(isReadOnlyTool({ annotations: { readOnlyHint: true } })).toBe(true);
+  it("treats read-verb action slugs as read-only", () => {
+    expect(isReadOnlyComposioActionSlug("GITHUB_GET_A_REPOSITORY")).toBe(true);
+    expect(isReadOnlyComposioActionSlug("GMAIL_LIST_MESSAGES")).toBe(true);
+    expect(isReadOnlyComposioActionSlug("GITHUB_SEARCH_ISSUES")).toBe(true);
   });
 
-  it("treats readOnlyHint:false as write", () => {
-    expect(isReadOnlyTool({ annotations: { readOnlyHint: false } })).toBe(false);
-  });
-
-  it("treats missing annotations as not read-only", () => {
-    expect(isReadOnlyTool({})).toBe(false);
-    expect(isReadOnlyTool({ annotations: {} })).toBe(false);
-    expect(isReadOnlyTool({ annotations: { destructiveHint: true } })).toBe(false);
-  });
-
-  it("flags Composio internal orchestration tools (always auto-run)", () => {
-    expect(isComposioInternalTool("multi_execute")).toBe(true);
-    expect(isComposioInternalTool("MULTI_EXECUTE")).toBe(true);
-    expect(isComposioInternalTool("composio_manage_connections")).toBe(true);
-  });
-
-  it("does not flag app tools as internal", () => {
-    expect(isComposioInternalTool("GMAIL_SEND_EMAIL")).toBe(false);
-    expect(isComposioInternalTool("GITHUB_CREATE_AN_ISSUE")).toBe(false);
+  it("treats mutating action slugs as not read-only", () => {
+    expect(isReadOnlyComposioActionSlug("GMAIL_SEND_EMAIL")).toBe(false);
+    expect(isReadOnlyComposioActionSlug("GITHUB_CREATE_AN_ISSUE")).toBe(false);
+    expect(isReadOnlyComposioActionSlug("GITHUB_DELETE_A_REPOSITORY")).toBe(false);
   });
 
   it("preserves basic JSON schema types for MCP tool inputs", () => {
