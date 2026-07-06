@@ -292,10 +292,18 @@ export async function listComposioMcpToolsForSpace(args: {
     toolkits: args.toolkits,
   });
 
-  return (await args.composio.tools.getRawComposioTools({
-    toolkits: args.toolkits,
-    limit: 500,
-  })) as ComposioRawTool[];
+  const toolsBySlug = new Map<string, ComposioRawTool>();
+  for (const toolkit of args.toolkits) {
+    const tools = (await args.composio.tools.getRawComposioTools({
+      toolkits: [toolkit],
+      limit: 500,
+    })) as ComposioRawTool[];
+    for (const tool of tools) {
+      toolsBySlug.set(tool.slug, tool);
+    }
+  }
+
+  return [...toolsBySlug.values()];
 }
 
 export async function handleComposioMcpRequest(

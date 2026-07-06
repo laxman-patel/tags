@@ -100,12 +100,15 @@ describe("composio-mcp-proxy classification", () => {
     expect(token).toBeNull();
   });
 
-  it("creates a Space-scoped Composio session before listing raw tools", async () => {
-    const tools = [{ slug: "GMAIL_LIST_MESSAGES", name: "List messages" }];
+  it("creates a Space-scoped Composio session and lists each toolkit independently", async () => {
+    const githubTools = [{ slug: "GITHUB_CREATE_AN_ISSUE", name: "Create issue" }];
+    const gmailTools = [{ slug: "GMAIL_LIST_MESSAGES", name: "List messages" }];
     const composio = {
       create: vi.fn().mockResolvedValue({}),
       tools: {
-        getRawComposioTools: vi.fn().mockResolvedValue(tools),
+        getRawComposioTools: vi.fn()
+          .mockResolvedValueOnce(githubTools)
+          .mockResolvedValueOnce(gmailTools),
         execute: vi.fn(),
       },
     };
@@ -114,15 +117,19 @@ describe("composio-mcp-proxy classification", () => {
       listComposioMcpToolsForSpace({
         composio,
         spaceId: "space_1",
-        toolkits: normalizeComposioToolkits([" Gmail "]),
+        toolkits: normalizeComposioToolkits([" GitHub ", " Gmail "]),
       }),
-    ).resolves.toBe(tools);
+    ).resolves.toEqual([...githubTools, ...gmailTools]);
 
     expect(composio.create).toHaveBeenCalledWith("space_1", {
       mcp: true,
-      toolkits: ["gmail"],
+      toolkits: ["github", "gmail"],
     });
-    expect(composio.tools.getRawComposioTools).toHaveBeenCalledWith({
+    expect(composio.tools.getRawComposioTools).toHaveBeenNthCalledWith(1, {
+      toolkits: ["github"],
+      limit: 500,
+    });
+    expect(composio.tools.getRawComposioTools).toHaveBeenNthCalledWith(2, {
       toolkits: ["gmail"],
       limit: 500,
     });
