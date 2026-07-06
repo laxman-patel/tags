@@ -7,6 +7,7 @@ import {
   type SpaceSandboxStatus,
 } from "@tags/core/space-sandboxes";
 import { loadActiveSpaceConfig } from "@tags/core/spaces";
+import { TAGS_MODEL_ID } from "@tags/core/model-labels";
 import { truncateForPreview } from "@tags/core/ui-cards";
 import type { Db } from "@tags/db";
 import { DEFAULT_OPENCODE_TEMPLATE, REPO_PATH, REPOS_ROOT, WORKDIR } from "@tags/sandbox";
@@ -81,7 +82,7 @@ export function createRunCodingAgentTool(
           ...(multiRepo
             ? { repoUrls }
             : { repoUrl: primaryRepoUrl }),
-          model: config.modelId,
+          model: TAGS_MODEL_ID,
           session: {
             sandboxId: sandboxLease.externalSandboxId,
             keepAlive: true,

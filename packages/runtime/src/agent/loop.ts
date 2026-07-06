@@ -12,6 +12,7 @@ import {
   updateRunStatus,
 } from "@tags/core/runs";
 import { loadActiveSpaceConfig } from "@tags/core/spaces";
+import { TAGS_MODEL_ID } from "@tags/core/model-labels";
 import { recordUsage } from "@tags/core/usage";
 import type { Db } from "@tags/db";
 import { SlackStreamAdapter, buildRunLinkBlock, buildChannelContextBlock, isChannelContextRequest } from "@tags/slack";
@@ -226,7 +227,7 @@ export async function runAgentSegment(args: AgentLoopArgs): Promise<AgentSegment
 
   try {
     const result = streamText({
-      model: fireworks(config.modelId),
+      model: fireworks(TAGS_MODEL_ID),
       instructions,
       messages,
       tools,
@@ -261,7 +262,7 @@ export async function runAgentSegment(args: AgentLoopArgs): Promise<AgentSegment
       organizationId: args.organizationId,
       spaceId: args.spaceId,
       runId: args.runId,
-      modelId: config.modelId,
+      modelId: TAGS_MODEL_ID,
       promptTokens: usage?.inputTokens ?? 0,
       completionTokens: usage?.outputTokens ?? 0,
     });
@@ -283,11 +284,11 @@ export async function runAgentSegment(args: AgentLoopArgs): Promise<AgentSegment
     agentSegmentsCompleted.add(1, {
       outcome: "complete",
       "space.id": args.spaceId,
-      "model.id": config.modelId,
+      "model.id": TAGS_MODEL_ID,
     });
     span.setAttributes({
       outcome: "complete",
-      "gen_ai.request.model": config.modelId,
+      "gen_ai.request.model": TAGS_MODEL_ID,
       "llm.tokens.input": usage?.inputTokens ?? 0,
       "llm.tokens.output": usage?.outputTokens ?? 0,
     });
@@ -295,7 +296,7 @@ export async function runAgentSegment(args: AgentLoopArgs): Promise<AgentSegment
       "space.id": args.spaceId,
       "run.id": args.runId,
       outcome: "complete",
-      "model.id": config.modelId,
+      "model.id": TAGS_MODEL_ID,
     });
     return { kind: "complete", text: fullText };
   } catch (error) {

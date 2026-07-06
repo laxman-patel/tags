@@ -1,6 +1,7 @@
 import { createFireworks } from "@ai-sdk/fireworks";
 import { generateObject, generateText } from "ai";
 import { z } from "zod";
+import { TAGS_MODEL_ID } from "@tags/core/model-labels";
 import {
   addMemoryEntry,
   MemoryFullError,
@@ -18,7 +19,7 @@ import {
 import type { Db } from "@tags/db";
 
 const SUMMARY_THRESHOLD = 20;
-const SUMMARY_MODEL = "accounts/fireworks/routers/glm-5p2-fast";
+const SUMMARY_MODEL = TAGS_MODEL_ID;
 
 type MemoryConsolidationProposal = {
   oldText: string;

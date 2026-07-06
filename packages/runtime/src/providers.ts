@@ -9,8 +9,6 @@ export type RuntimeProviderConfig = {
   e2bApiKey?: string;
   /** Fireworks key — registered with opencode auth before sandbox runs. */
   fireworksApiKey?: string;
-  /** opencode `--model` string for the sandbox coding agent. */
-  opencodeModel?: string;
   /** E2B template name (default: pre-built `opencode` template). */
   e2bOpencodeTemplate?: string;
   /** E2B desktop template used for post-change demo recording. */
@@ -51,7 +49,6 @@ export async function createRuntimeProviders(
     apiKey: config.e2bApiKey,
     template: config.e2bOpencodeTemplate,
     modelApiKey: config.fireworksApiKey,
-    model: config.opencodeModel,
   });
 
   let r2: RuntimeProviders["r2"];

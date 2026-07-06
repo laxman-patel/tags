@@ -22,6 +22,7 @@ import {
   usageRecords,
   workspaces,
 } from "@tags/db";
+import { TAGS_MODEL_ID } from "./model-labels";
 import { parseRuntimeMode, parsePassiveLearningMode, loadActiveSpaceConfig, type RuntimeMode, type PassiveLearningMode } from "./spaces";
 import { alwaysEnabledNativeTools } from "./tools";
 
@@ -31,7 +32,6 @@ export type CreateSpaceInput = {
   externalSpaceId: string;
   name: string;
   slug: string;
-  modelId: string;
   instructions: string;
   enabledTools?: string[];
   runtimeMode?: RuntimeMode;
@@ -140,7 +140,7 @@ export async function createSpaceWithConfig(db: Db, input: CreateSpaceInput) {
     organizationId: input.organizationId,
     spaceId,
     version: 1,
-    modelId: input.modelId,
+    modelId: TAGS_MODEL_ID,
     instructions: input.instructions,
     enabledTools: alwaysEnabledNativeTools(),
     availableConnections: [],
@@ -155,7 +155,6 @@ export async function createSpaceWithConfig(db: Db, input: CreateSpaceInput) {
 export type UpdateSpaceConfigInput = {
   spaceId: string;
   organizationId: string;
-  modelId: string;
   reasoning?: string;
   instructions: string;
   enabledSkills?: string[];
@@ -199,7 +198,7 @@ export async function createSpaceConfigVersion(db: Db, input: UpdateSpaceConfigI
     organizationId: input.organizationId,
     spaceId: input.spaceId,
     version: nextVersion,
-    modelId: input.modelId,
+    modelId: TAGS_MODEL_ID,
     reasoning: input.reasoning ?? previous?.reasoning ?? "provider-default",
     instructions: input.instructions,
     enabledSkills: input.enabledSkills ?? previous?.enabledSkills ?? [],

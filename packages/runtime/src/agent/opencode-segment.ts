@@ -1,5 +1,5 @@
 import type { TagsEvent } from "@tags/core/events";
-import { resolveRuntimeModelId } from "@tags/core/model-labels";
+import { TAGS_MODEL_ID } from "@tags/core/model-labels";
 import { formatToolResultForUser, truncateForPreview } from "@tags/core/ui-cards";
 import type { UICard } from "@tags/core/ui-cards";
 import { checkSpaceBudget } from "@tags/core/policies";
@@ -303,7 +303,7 @@ export async function runOpencodeSegment(
     const result = await providers.sandbox.runCodingAgent({
       prompt,
       systemPrompt,
-      model: resolveRuntimeModelId(config.modelId),
+      model: TAGS_MODEL_ID,
       ...(multiRepo
         ? { repoUrls }
         : { repoUrl: primaryRepoUrl ?? undefined }),
@@ -422,7 +422,7 @@ export async function runOpencodeSegment(
       organizationId: args.organizationId,
       spaceId: args.spaceId,
       runId: args.runId,
-      modelId: config.modelId,
+      modelId: TAGS_MODEL_ID,
       promptTokens,
       completionTokens,
     });

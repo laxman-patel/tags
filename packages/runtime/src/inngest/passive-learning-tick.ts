@@ -4,6 +4,7 @@ import { and, eq } from "drizzle-orm";
 import { createFireworks } from "@ai-sdk/fireworks";
 import { generateObject } from "ai";
 import { z } from "zod";
+import { TAGS_MODEL_ID } from "@tags/core/model-labels";
 import {
   addMemoryEntry,
   MemoryFullError,
@@ -17,7 +18,7 @@ import { createR2Client, type R2Storage } from "@tags/storage";
 import { inngest } from "./client";
 import { loadRuntimeSecrets } from "../secrets";
 
-const PASSIVE_MODEL = "accounts/fireworks/routers/glm-5p2-fast";
+const PASSIVE_MODEL = TAGS_MODEL_ID;
 
 async function findPassiveLearningSpaces(db: ReturnType<typeof createDb>) {
   const rows = await db

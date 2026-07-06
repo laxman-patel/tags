@@ -1,6 +1,7 @@
 import { and, eq } from "drizzle-orm";
 import type { Db } from "@tags/db";
 import { spaceConfigs, spaces, workspaces } from "@tags/db";
+import { TAGS_MODEL_ID } from "./model-labels";
 import { alwaysEnabledNativeTools, isNativeToolId } from "./tools";
 
 export const RUNTIME_MODES = ["opencode", "orchestrator"] as const;
@@ -92,7 +93,7 @@ export async function loadActiveSpaceConfig(
     organizationId: row.organizationId,
     spaceId: row.spaceId,
     version: row.version,
-    modelId: row.modelId,
+    modelId: TAGS_MODEL_ID,
     reasoning: row.reasoning,
     instructions: row.instructions,
     enabledSkills: row.enabledSkills,

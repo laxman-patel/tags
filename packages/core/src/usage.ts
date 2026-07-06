@@ -3,15 +3,10 @@ import type { Db } from "@tags/db";
 import { newId, runs, usageRecords } from "@tags/db";
 
 /**
- * Micro-USD per 1M tokens. Keys must match Fireworks model ids used by spaces.
- * Unknown models fall back to DEFAULT_COST_RATES with a warning — budget enforcement
- * then uses that estimate rather than silently pretending the rate is known.
+ * Micro-USD per 1M tokens for GLM 5.2 Fast (Tags' only inference model).
  */
 const MODEL_COST_RATES: Record<string, { input: number; output: number }> = {
-  "accounts/fireworks/models/kimi-k2-instruct": { input: 60_000, output: 250_000 },
   "accounts/fireworks/routers/glm-5p2-fast": { input: 100_000, output: 200_000 },
-  "openai/gpt-4o-mini": { input: 150_000, output: 600_000 },
-  "openai/gpt-4o": { input: 2_500_000, output: 10_000_000 },
 };
 
 const DEFAULT_COST_RATES = { input: 500_000, output: 1_500_000 };

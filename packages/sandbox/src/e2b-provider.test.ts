@@ -60,8 +60,8 @@ describe("fireworks model helpers", () => {
   });
 
   it("strips the opencode provider prefix", () => {
-    expect(bareFireworksModelId("fireworks-ai/accounts/fireworks/models/kimi-k2-instruct")).toBe(
-      "accounts/fireworks/models/kimi-k2-instruct",
+    expect(bareFireworksModelId("fireworks-ai/accounts/fireworks/routers/glm-5p2-fast")).toBe(
+      "accounts/fireworks/routers/glm-5p2-fast",
     );
   });
 

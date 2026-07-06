@@ -40,7 +40,7 @@ import {
   NATIVE_TOOL_METADATA,
 } from "@tags/core/tools";
 import { spaceHasGitHubConnection } from "@tags/core/composio-toolkits";
-import { TAGS_DEFAULT_MODEL_ID } from "@tags/core/model-labels";
+import { TAGS_MODEL_ID } from "@tags/core/model-labels";
 import { resolveOrCreateUser } from "@tags/core/users";
 import { getSpaceDailyUsage, getUsageBySpace } from "@tags/core/usage";
 import {
@@ -689,7 +689,7 @@ async function buildSpacesPayload(db: Db, organizationId: string) {
           }),
         ],
         repos,
-        modelId: config?.modelId,
+        modelId: TAGS_MODEL_ID,
         instructions: config?.instructions,
         workspaceName: row.workspace.name,
         workspaceTeamId: row.workspace.externalWorkspaceId,
@@ -841,7 +841,6 @@ async function updateSpaceConfig(
   const result = await createSpaceConfigVersion(db, {
     spaceId,
     organizationId: space.organizationId,
-    modelId: current?.modelId ?? TAGS_DEFAULT_MODEL_ID,
     reasoning: current?.reasoning,
     instructions: current?.instructions ?? "You are Tags, an AI teammate for this Slack channel.",
     enabledSkills: current?.enabledSkills ?? [],
@@ -1551,7 +1550,6 @@ async function createSpaceForAccount(
           externalSpaceId: selected.id,
           name,
           slug,
-          modelId: TAGS_DEFAULT_MODEL_ID,
           instructions: "You are Tags, an AI teammate for this Slack channel.",
         });
       } catch (error) {

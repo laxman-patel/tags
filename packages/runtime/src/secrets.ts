@@ -13,7 +13,6 @@ const runtimeSecretsSchema = z.object({
   E2B_OPENCODE_TEMPLATE: z.string().optional(),
   E2B_DEMO_TEMPLATE: z.string().default("tags-demo-desktop"),
   COMPOSIO_API_KEY: z.string().optional(),
-  OPENCODE_MODEL: z.string().optional(),
   INNGEST_SIGNING_KEY: z.string().optional(),
   DEMO_RECORDING_ENABLED: z
     .string()
@@ -35,7 +34,6 @@ export type RuntimeSecrets = {
   e2bOpencodeTemplate?: string;
   e2bDemoTemplate: string;
   composioApiKey?: string;
-  opencodeModel?: string;
   mcpSigningKey?: string;
   r2?: R2Config;
   demoRecording: {
@@ -69,7 +67,6 @@ export function loadRuntimeSecrets(): RuntimeSecrets {
     e2bOpencodeTemplate: env.E2B_OPENCODE_TEMPLATE,
     e2bDemoTemplate: env.E2B_DEMO_TEMPLATE,
     composioApiKey: env.COMPOSIO_API_KEY,
-    opencodeModel: env.OPENCODE_MODEL,
     mcpSigningKey: env.INNGEST_SIGNING_KEY,
     demoRecording: {
       enabled: env.DEMO_RECORDING_ENABLED,
@@ -93,7 +90,6 @@ export function buildRuntimeProviderConfig(
     e2bOpencodeTemplate: secrets.e2bOpencodeTemplate,
     e2bDemoTemplate: secrets.e2bDemoTemplate,
     fireworksApiKey: secrets.fireworksApiKey,
-    opencodeModel: secrets.opencodeModel,
     mcpSigningKey: secrets.mcpSigningKey,
     demoRecording: secrets.demoRecording,
   };
