@@ -36,16 +36,15 @@ export async function canApprove(
   const policy = await getApprovalPolicyForSpace(db, args.spaceId);
   if (!policy) return true;
 
-  if (
-    args.requesterSlackUserId &&
-    args.slackUserId &&
-    args.requesterSlackUserId === args.slackUserId &&
-    !policy.allowSelfApprove
-  ) {
-    return false;
-  }
-
   if (policy.approverAllowlist.length > 0) {
+    if (
+      args.requesterSlackUserId &&
+      args.slackUserId &&
+      args.requesterSlackUserId === args.slackUserId &&
+      !policy.allowSelfApprove
+    ) {
+      return false;
+    }
     return Boolean(args.slackUserId && policy.approverAllowlist.includes(args.slackUserId));
   }
 
@@ -87,7 +86,7 @@ export async function createDefaultPolicies(db: Db, organizationId: string) {
     name: "Default approval policy",
     requireAdminRole: false,
     approverAllowlist: [],
-    allowSelfApprove: false,
+    allowSelfApprove: true,
     defaultExpiryMinutes: 60,
   });
 

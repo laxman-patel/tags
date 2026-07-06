@@ -23,7 +23,7 @@ import { maybeExtractMemories, maybeSummarizeThread } from "../context/post-run"
 import { createRuntimeProviders, type RuntimeProviderConfig } from "../providers";
 import { loadComposioTools, type ComposioToolsHandle } from "../tools/composio";
 import { wrapComposioToolsWithApproval } from "../tools/composio-governance";
-import { gateSideEffectingTool, isApprovedToolMatch } from "../tools/approval-gate";
+import { isApprovedToolMatch } from "../tools/approval-gate";
 import { resolveTools, type ToolRegistryOptions } from "../tools/registry";
 import { toolIdempotencyKey, type TagsTool, type ToolContext } from "../tools/types";
 import { withSpan } from "@superlog/otel-helpers";
@@ -495,30 +495,6 @@ function buildAiTools(
         const idempotencyKey = toolIdempotencyKey(args.runId, tagsTool.name, input);
 
         if (
-          tagsTool.sideEffecting &&
-          needsApproval(tagsTool.approval, input) &&
-          !isApprovedToolMatch(args.approvedTool, tagsTool.name, idempotencyKey)
-        ) {
-          const gate = await gateSideEffectingTool({
-            db: args.db,
-            runId: args.runId,
-            organizationId: args.organizationId,
-            spaceId: args.spaceId,
-            threadId: args.threadId,
-            toolName: tagsTool.name,
-            toolInput: input,
-            actorUserId: args.actorUserId,
-            slackChannelId: args.channelId,
-            slackMessageTs: args.slackMessageTs,
-            approvedTool: args.approvedTool,
-            emit,
-          });
-          if (gate.cachedResult !== undefined) {
-            return gate.cachedResult;
-          }
-        }
-
-        if (
           args.approvedTool &&
           tagsTool.sideEffecting &&
           isApprovedToolMatch(args.approvedTool, tagsTool.name, idempotencyKey)
@@ -587,22 +563,3 @@ function buildAiTools(
   return record;
 }
 
-function needsApproval(
-  policy: TagsTool["approval"],
-  input: unknown,
-): boolean {
-  switch (policy.kind) {
-    case "never":
-      return false;
-    case "always":
-      return true;
-    case "once":
-      return true;
-    case "predicate":
-      return policy.needsApproval(input);
-    default: {
-      const _exhaustive: never = policy;
-      return _exhaustive;
-    }
-  }
-}
