@@ -39,6 +39,7 @@ import {
   isNativeToolId,
   NATIVE_TOOL_METADATA,
 } from "@tags/core/tools";
+import { spaceHasGitHubConnection } from "@tags/core/composio-toolkits";
 import { resolveOrCreateUser } from "@tags/core/users";
 import { getSpaceDailyUsage, getUsageBySpace } from "@tags/core/usage";
 import {
@@ -82,9 +83,15 @@ import {
   authorizeComposioToolkit,
   listComposioConnectedAccountStatuses,
   listComposioToolkits,
+  loadComposioTools,
   resolveToolkitConnectionStatus,
   type ComposioToolkitDirectoryItem,
 } from "@tags/runtime/tools/composio";
+import {
+  listGitHubReposWithComposio,
+  parseGitHubRepoUrl,
+  testGitHubRepoAccessWithComposio,
+} from "@tags/runtime/integrations/composio-github";
 import {
   DEFAULT_SLACK_BOT_SCOPES,
   addReaction,
@@ -530,6 +537,110 @@ function composioAuthState(args: { hasApiKey: boolean; enabled: boolean; account
   if (status === "connected") return "connected";
   if (status === "needs_auth" || status === "missing_api_key") return "requires_auth";
   return "not_authenticated";
+}
+
+async function loadGitHubConnectionContext(db: Db, spaceId: string) {
+  const config = await loadActiveSpaceConfig(db, spaceId);
+  const availableConnections = mergeConnections(
+    config?.availableConnections,
+    legacyComposioConnections(config?.enabledTools),
+  );
+  const apiKey = process.env.COMPOSIO_API_KEY ?? "";
+  const accountStatuses =
+    availableConnections.length > 0
+      ? await listComposioConnectedAccountStatuses({
+          apiKey,
+          entityId: spaceId,
+        }).catch(() => ({} as Record<string, string>))
+      : {};
+  return { config, availableConnections, accountStatuses, apiKey };
+}
+
+async function loadGitHubReposForSpace(db: Db, spaceId: string) {
+  const context = await loadGitHubConnectionContext(db, spaceId);
+  if (
+    !spaceHasGitHubConnection({
+      availableConnections: context.availableConnections,
+      accountStatuses: context.accountStatuses,
+    })
+  ) {
+    return { ok: false as const, error: "github_not_connected" as const };
+  }
+  if (!context.apiKey) {
+    return { ok: false as const, error: "composio_not_configured" as const };
+  }
+
+  const composio = await loadComposioTools({
+    apiKey: context.apiKey,
+    entityId: spaceId,
+    toolkits: ["github"],
+  });
+  if (!composio) {
+    return { ok: false as const, error: "github_tools_unavailable" as const };
+  }
+
+  try {
+    const result = await listGitHubReposWithComposio({ tools: composio.tools });
+    if (!result.ok) {
+      return {
+        ok: false as const,
+        error: "github_list_failed" as const,
+        message: result.message,
+      };
+    }
+    return { ok: true as const, repos: result.repos };
+  } finally {
+    await composio.close();
+  }
+}
+
+async function validateRepoUrlsForSpace(db: Db, spaceId: string, repoUrls: string[]) {
+  const context = await loadGitHubConnectionContext(db, spaceId);
+  if (
+    !spaceHasGitHubConnection({
+      availableConnections: context.availableConnections,
+      accountStatuses: context.accountStatuses,
+    })
+  ) {
+    return { ok: false as const, error: "github_not_connected" as const };
+  }
+  if (!context.apiKey) {
+    return { ok: false as const, error: "composio_not_configured" as const };
+  }
+
+  const composio = await loadComposioTools({
+    apiKey: context.apiKey,
+    entityId: spaceId,
+    toolkits: ["github"],
+  });
+  if (!composio) {
+    return { ok: false as const, error: "github_tools_unavailable" as const };
+  }
+
+  try {
+    for (const url of repoUrls) {
+      const ref = parseGitHubRepoUrl(url);
+      if (!ref) {
+        return { ok: false as const, error: "invalid_repo_url" as const, url };
+      }
+      const access = await testGitHubRepoAccessWithComposio({
+        tools: composio.tools,
+        owner: ref.owner,
+        repo: ref.repo,
+      });
+      if (!access.ok) {
+        return {
+          ok: false as const,
+          error: "repo_inaccessible" as const,
+          url,
+          message: access.message,
+        };
+      }
+    }
+    return { ok: true as const };
+  } finally {
+    await composio.close();
+  }
 }
 
 async function buildSpacesPayload(db: Db, organizationId: string) {
@@ -1158,6 +1269,31 @@ async function handleProtectedApi(
         });
       }
 
+      if (method === "GET" && segments[0] === "spaces" && segments[2] === "github" && segments[3] === "repos") {
+        const spaceId = segments[1];
+        if (!spaceId) return sendJson(res, 400, { error: "space id is required" });
+        const space = await requireSpaceInOrg(db, spaceId, organizationId);
+        if (!space) return sendJson(res, 404, { error: "Not found" });
+
+        const result = await loadGitHubReposForSpace(db, spaceId);
+        if (!result.ok) {
+          if (result.error === "composio_not_configured") {
+            apiRequestsCompleted.add(1, { route: "spaces.github.repos", method, outcome: "missing_config" });
+            return sendJson(res, 503, { error: "COMPOSIO_API_KEY is required to list GitHub repositories" });
+          }
+          if (result.error === "github_list_failed") {
+            apiRequestsCompleted.add(1, { route: "spaces.github.repos", method, outcome: "failure" });
+            return sendJson(res, 502, { error: result.error, message: result.message });
+          }
+          apiRequestsCompleted.add(1, { route: "spaces.github.repos", method, outcome: "forbidden" });
+          return sendJson(res, 403, { error: "github_not_connected" });
+        }
+
+        apiRequestsCompleted.add(1, { route: "spaces.github.repos", method, outcome: "success" });
+        span.setAttributes({ outcome: "success", "space.id": spaceId, "github.repos.count": result.repos.length });
+        return sendJson(res, 200, { repos: result.repos, source: "github" });
+      }
+
       if (method === "PATCH" && segments[0] === "spaces" && segments[2] === "config") {
         const spaceId = segments[1];
         if (!spaceId) return sendJson(res, 400, { error: "space id is required" });
@@ -1169,6 +1305,30 @@ async function handleProtectedApi(
           enabledConnections?: unknown;
           repoUrls?: unknown;
         };
+        if (body.repoUrls !== undefined) {
+          const repoUrls = asStringArray(body.repoUrls);
+          const validation = await validateRepoUrlsForSpace(db, spaceId, repoUrls);
+          if (!validation.ok) {
+            if (validation.error === "composio_not_configured") {
+              apiRequestsCompleted.add(1, { route: "spaces.config", method, outcome: "missing_config" });
+              return sendJson(res, 503, { error: "COMPOSIO_API_KEY is required to connect repositories" });
+            }
+            if (validation.error === "invalid_repo_url") {
+              apiRequestsCompleted.add(1, { route: "spaces.config", method, outcome: "invalid_request" });
+              return sendJson(res, 400, { error: validation.error, url: validation.url });
+            }
+            if (validation.error === "repo_inaccessible") {
+              apiRequestsCompleted.add(1, { route: "spaces.config", method, outcome: "forbidden" });
+              return sendJson(res, 403, {
+                error: validation.error,
+                url: validation.url,
+                message: validation.message,
+              });
+            }
+            apiRequestsCompleted.add(1, { route: "spaces.config", method, outcome: "forbidden" });
+            return sendJson(res, 403, { error: "github_not_connected" });
+          }
+        }
         const result = await updateSpaceConfig(db, spaceId, {
           enabledTools: body.enabledTools !== undefined ? asStringArray(body.enabledTools) : undefined,
           availableConnections:

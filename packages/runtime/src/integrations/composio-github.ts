@@ -26,6 +26,45 @@ type ComposioExecutableTool = {
 
 export type ComposioToolMap = Record<string, ComposioExecutableTool>;
 
+export type GitHubRepoSummary = {
+  id: string;
+  fullName: string;
+  htmlUrl: string;
+  private: boolean;
+  defaultBranch?: string | null;
+};
+
+export type GitHubRepoListResult =
+  | {
+      ok: true;
+      repos: GitHubRepoSummary[];
+    }
+  | {
+      ok: false;
+      status: "github_tool_unavailable" | "request_failed";
+      message: string;
+    };
+
+export type GitHubRepoRef = {
+  owner: string;
+  repo: string;
+};
+
+export function parseGitHubRepoUrl(url: string): GitHubRepoRef | null {
+  try {
+    const parsed = new URL(url);
+    if (parsed.hostname !== "github.com") return null;
+    const [owner, repo] = parsed.pathname.split("/").filter(Boolean);
+    if (!owner || !repo) return null;
+    if (repo.endsWith(".git")) {
+      return { owner, repo: repo.slice(0, -4) };
+    }
+    return { owner, repo };
+  } catch {
+    return null;
+  }
+}
+
 export function parseGitHubPrUrl(url: string): GitHubPrRef | null {
   try {
     const parsed = new URL(url);
@@ -107,6 +146,84 @@ function resultRecord(value: unknown): Record<string, unknown> {
 
 function resultMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+function repoFullName(value: unknown): string | undefined {
+  if (typeof value !== "object" || value === null) return undefined;
+  const record = value as Record<string, unknown>;
+  const fullName = record.full_name ?? record.fullName;
+  return typeof fullName === "string" ? fullName : undefined;
+}
+
+function repoHtmlUrl(value: unknown): string | undefined {
+  if (typeof value !== "object" || value === null) return undefined;
+  const record = value as Record<string, unknown>;
+  const url = record.html_url ?? record.htmlUrl;
+  return typeof url === "string" ? url : undefined;
+}
+
+function repoId(value: unknown): string | undefined {
+  if (typeof value !== "object" || value === null) return undefined;
+  const record = value as Record<string, unknown>;
+  const id = record.id ?? record.node_id ?? record.nodeId;
+  return typeof id === "number" || typeof id === "string" ? String(id) : undefined;
+}
+
+function repoDefaultBranch(value: unknown): string | null {
+  if (typeof value !== "object" || value === null) return null;
+  const record = value as Record<string, unknown>;
+  const branch = record.default_branch ?? record.defaultBranch;
+  return typeof branch === "string" ? branch : null;
+}
+
+function normalizeGitHubRepo(value: unknown): GitHubRepoSummary | null {
+  if (typeof value !== "object" || value === null) return null;
+  const record = value as Record<string, unknown>;
+  const fullName = repoFullName(record);
+  const htmlUrl = repoHtmlUrl(record);
+  if (!fullName || !htmlUrl) return null;
+  return {
+    id: repoId(record) ?? fullName,
+    fullName,
+    htmlUrl,
+    private: Boolean(record.private),
+    defaultBranch: repoDefaultBranch(record),
+  };
+}
+
+export async function listGitHubReposWithComposio(args: {
+  tools: ComposioToolMap;
+}): Promise<GitHubRepoListResult> {
+  const listTool = findTool(args.tools, [
+    /^GITHUB_GET_REPOS$/i,
+    /^GITHUB_LIST_REPOSITORIES_FOR_THE_AUTHENTICATED_USER$/i,
+    /github.*list.*repositor/i,
+    /github.*get.*repos$/i,
+  ]);
+
+  if (!listTool) {
+    return {
+      ok: false,
+      status: "github_tool_unavailable",
+      message: "Composio GitHub repository list tool is unavailable.",
+    };
+  }
+
+  try {
+    const [, tool] = listTool;
+    const result = await tool.execute!({}, {});
+    const repos = asArray(result)
+      .map((item) => normalizeGitHubRepo(item))
+      .filter((item): item is GitHubRepoSummary => item !== null)
+      .sort((left, right) => left.fullName.localeCompare(right.fullName));
+    return { ok: true, repos };
+  } catch (error) {
+    return {
+      ok: false,
+      status: "request_failed",
+      message: `Composio GitHub repo list failed: ${resultMessage(error)}`,
+    };
+  }
 }
 
 export async function testGitHubRepoAccessWithComposio(args: {

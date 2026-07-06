@@ -40,6 +40,14 @@ export interface Repo {
   isDefault: boolean;
 }
 
+export interface GitHubRepo {
+  id: string;
+  fullName: string;
+  htmlUrl: string;
+  private: boolean;
+  defaultBranch?: string | null;
+}
+
 export interface SpaceDailyUsage {
   date: string;
   runs: number;
@@ -203,6 +211,10 @@ export function loadComposioDirectory() {
 
 export function loadSlackChannels() {
   return requestJson<{ channels: SlackChannel[]; source: "slack" }>("/api/slack/channels");
+}
+
+export function loadGitHubRepos(spaceId: string) {
+  return requestJson<{ repos: GitHubRepo[]; source: "github" }>(`/api/spaces/${spaceId}/github/repos`);
 }
 
 export function authorizeComposioTool(spaceId: string, toolkitId: string) {

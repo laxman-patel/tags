@@ -78,6 +78,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import { isGitHubToolkitConnected } from "@tags/core/composio-toolkits";
 import {
   createSpace,
   deleteSpace as deleteSpaceRequest,
@@ -86,6 +87,7 @@ import {
   loadControlPlane,
   loadComposioDirectory,
   loadComposioToolStatus,
+  loadGitHubRepos,
   loadSpaceArtifacts,
   loadSpaceSchedules,
   loadSlackChannels,
@@ -96,6 +98,7 @@ import {
   type Approval,
   type Artifact,
   type ComposioDirectoryTool,
+  type GitHubRepo,
   type Repo,
   type Run,
   type RunEvent,
@@ -569,19 +572,6 @@ function displayToolCount(value: number) {
   return value === 1 ? "1 tool" : `${value} tools`;
 }
 
-function toolAuthLabel(tool: Tool) {
-  if (tool.authState === "connected") return "Connected";
-  if (tool.authStatus) return `Composio: ${tool.authStatus}`;
-  if (tool.authState === "requires_auth") return "Authorization pending";
-  return "Not connected";
-}
-
-function toolAuthBadgeVariant(tool: Tool): "success" | "warning" | "neutral" {
-  if (tool.authState === "connected") return "success";
-  if (tool.authState === "requires_auth") return "warning";
-  return "neutral";
-}
-
 function formatChartDay(value: string) {
   const date = new Date(`${value}T00:00:00Z`);
   if (Number.isNaN(date.getTime())) return value;
@@ -1034,7 +1024,7 @@ function SpaceDetailView({
   authLoadingToolId: string | null;
   onToggleTool: (spaceId: string, toolId: string, enabled: boolean) => void;
   onRemoveTool: (spaceId: string, toolId: string) => void;
-  onAddRepo: (spaceId: string, name: string) => void;
+  onAddRepo: (spaceId: string, fullName: string) => void | Promise<void>;
   onSetDefaultRepo: (spaceId: string, repoId: string) => void;
   onRemoveRepo: (spaceId: string, repoId: string) => void;
   onSelectRun: (id: string) => void;
@@ -1044,7 +1034,6 @@ function SpaceDetailView({
   const [addRepoOpen, setAddRepoOpen] = useState(false);
   const [addToolOpen, setAddToolOpen] = useState(false);
   const [addScheduleOpen, setAddScheduleOpen] = useState(false);
-  const [newRepoName, setNewRepoName] = useState("");
   const [schedulePrompt, setSchedulePrompt] = useState("");
   const [scheduleCron, setScheduleCron] = useState("");
   const [scheduleTimezone, setScheduleTimezone] = useState("UTC");
@@ -1060,6 +1049,7 @@ function SpaceDetailView({
   const [composioDirectory, setComposioDirectory] = useState<ComposioDirectoryTool[]>([]);
   const composioTools = space.tools.filter(isComposioTool);
   const readyComposioTools = composioTools.filter((tool) => tool.authState === "connected" && tool.enabled);
+  const githubConnected = isGitHubToolkitConnected(space.tools);
   const dailyUsage = space.dailyUsage.map((point) => ({
     d: formatChartDay(point.date),
     runs: point.runs,
@@ -1249,14 +1239,24 @@ function SpaceDetailView({
                 variant="secondary"
                 size="sm"
                 icon={PlusIcon}
-                onClick={() => setAddRepoOpen(true)}
+                onClick={() => {
+                  if (githubConnected) {
+                    setAddRepoOpen(true);
+                    return;
+                  }
+                  setTab("tools");
+                }}
               >
-                Add repo
+                {githubConnected ? "Add repo" : "Connect GitHub"}
               </Button>
             </LayerCard.Secondary>
             <LayerCard.Primary>
               {space.repos.length === 0 ? (
-                <Text variant="secondary" size="sm">No repositories connected. Add one to give the agent code context.</Text>
+                <Text variant="secondary" size="sm">
+                  {githubConnected
+                    ? "No repositories connected. Add one to give the agent code context."
+                    : "Connect GitHub in Tools to add repositories."}
+                </Text>
               ) : (
                 <div className="flex flex-col divide-y divide-kumo-hairline -my-2">
                   {space.repos.map((repo) => (
@@ -1319,7 +1319,7 @@ function SpaceDetailView({
                 <Empty
                   icon={<WrenchIcon size={40} />}
                   title="No external tools"
-                  description="Add GitHub or another service when this Space needs access outside Slack."
+                  description="Add GitHub to connect repositories, or another service when this Space needs access outside Slack."
                 />
                 <div className="mt-5 flex justify-center">
                   <Button variant="primary" icon={PlusIcon} onClick={() => setAddToolOpen(true)}>
@@ -1336,12 +1336,7 @@ function SpaceDetailView({
                     <div key={tool.id} className="group grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 px-4 py-3">
                       <ToolLogo tool={tool} size="sm" />
                       <div className="min-w-0">
-                        <div className="flex min-w-0 flex-wrap items-center gap-2">
-                          <Text bold size="sm" truncate>{tool.name}</Text>
-                          <Badge variant={toolAuthBadgeVariant(tool)} appearance="dot">
-                            {toolAuthLabel(tool)}
-                          </Badge>
-                        </div>
+                        <Text bold size="sm" truncate>{tool.name}</Text>
                         <Text variant="secondary" size="xs" truncate as="p">
                           {tool.toolsCount ? displayToolCount(tool.toolsCount) : tool.description}
                         </Text>
@@ -1349,7 +1344,7 @@ function SpaceDetailView({
                       <div className="flex items-center justify-end gap-2">
                         {connected ? (
                           <Switch
-                            label={tool.enabled ? "Enabled" : "Disabled"}
+                            aria-label={tool.enabled ? `Disable ${tool.name}` : `Enable ${tool.name}`}
                             checked={tool.enabled}
                             onCheckedChange={(checked) => onToggleTool(space.id, tool.id, checked)}
                           />
@@ -1543,57 +1538,13 @@ function SpaceDetailView({
         </Dialog>
       </Dialog.Root>
 
-      {/* Add repository dialog */}
-      <Dialog.Root open={addRepoOpen} onOpenChange={setAddRepoOpen}>
-        <Dialog className="p-6 max-w-md">
-          <div className="flex items-start justify-between gap-4 mb-4">
-            <Dialog.Title>
-              <Text variant="heading3">Connect a repository</Text>
-            </Dialog.Title>
-            <Dialog.Close
-              aria-label="Close"
-              render={(p) => (
-                <Button {...p} variant="ghost" shape="square" size="sm" icon={XIcon} aria-label="Close" />
-              )}
-            />
-          </div>
-          <Dialog.Description>
-            <Text variant="secondary" size="sm">
-              Give the agent access to a GitHub repository for code context.
-            </Text>
-          </Dialog.Description>
-          <div className="mt-4">
-            <Field label="Repository" description="Format: org/repo">
-              <Input
-                placeholder="acme/monorepo"
-                value={newRepoName}
-                onChange={(e) => setNewRepoName(e.target.value)}
-                autoFocus
-              />
-            </Field>
-          </div>
-          <div className="flex items-center justify-end gap-2 mt-6">
-            <Dialog.Close
-              render={(p) => (
-                <Button {...p} variant="ghost">
-                  Cancel
-                </Button>
-              )}
-            />
-            <Button
-              variant="primary"
-              disabled={!newRepoName.trim()}
-              onClick={() => {
-                onAddRepo(space.id, newRepoName.trim());
-                setNewRepoName("");
-                setAddRepoOpen(false);
-              }}
-            >
-              Connect
-            </Button>
-          </div>
-        </Dialog>
-      </Dialog.Root>
+      <AddRepoDialog
+        open={addRepoOpen}
+        onOpenChange={setAddRepoOpen}
+        spaceId={space.id}
+        existingRepos={space.repos}
+        onAddRepo={onAddRepo}
+      />
 
       {/* Add tool from Composio directory */}
       <Dialog.Root
@@ -2105,6 +2056,196 @@ function RunDetailView({ run, events, onBack }: { run: Run; events: RunEvent[]; 
   );
 }
 
+function AddRepoDialog({
+  open,
+  onOpenChange,
+  spaceId,
+  existingRepos,
+  onAddRepo,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  spaceId: string;
+  existingRepos: Repo[];
+  onAddRepo: (spaceId: string, fullName: string) => void | Promise<void>;
+}) {
+  const [query, setQuery] = useState("");
+  const [selectedRepo, setSelectedRepo] = useState<GitHubRepo | null>(null);
+  const [repos, setRepos] = useState<GitHubRepo[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    setLoading(true);
+    setError(null);
+    loadGitHubRepos(spaceId)
+      .then((payload) => {
+        setRepos(payload.repos);
+      })
+      .catch((loadError) => {
+        setRepos([]);
+        setError(loadError instanceof Error ? loadError.message : "Failed to load GitHub repositories");
+      })
+      .finally(() => setLoading(false));
+  }, [open, spaceId]);
+
+  const existingRepoSet = new Set(
+    existingRepos.flatMap((repo) => [
+      repo.name.toLowerCase(),
+      repo.id.toLowerCase(),
+      repo.id.replace(/^https:\/\/github.com\//i, "").replace(/\.git$/, "").toLowerCase(),
+    ]),
+  );
+  const availableRepos = repos.filter(
+    (repo) =>
+      !existingRepoSet.has(repo.fullName.toLowerCase()) &&
+      !existingRepoSet.has(repo.htmlUrl.toLowerCase()),
+  );
+  const filteredRepos = availableRepos
+    .filter((repo) => {
+      const normalizedQuery = query.trim().toLowerCase();
+      return !normalizedQuery || repo.fullName.toLowerCase().includes(normalizedQuery);
+    })
+    .slice(0, 24);
+
+  const reset = () => {
+    setQuery("");
+    setSelectedRepo(null);
+    setSubmitting(false);
+  };
+
+  const handleSubmit = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!selectedRepo) return;
+    setSubmitting(true);
+    try {
+      await onAddRepo(spaceId, selectedRepo.fullName);
+      reset();
+      onOpenChange(false);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <Dialog.Root
+      open={open}
+      onOpenChange={(nextOpen) => {
+        onOpenChange(nextOpen);
+        if (!nextOpen) reset();
+      }}
+    >
+      <Dialog className="flex max-h-[calc(100vh-2rem)] !w-[calc(100vw-2rem)] max-w-[440px] flex-col overflow-hidden p-0 sm:!w-[440px]">
+        <form onSubmit={handleSubmit} className="flex min-h-0 flex-col">
+          <div className="flex items-center justify-between gap-4 border-b border-kumo-hairline px-5 py-4">
+            <div className="min-w-0">
+              <Dialog.Title>Connect a repository</Dialog.Title>
+              <Dialog.Description>
+                <Text variant="secondary" size="xs" as="p">
+                  Choose a GitHub repository from your connected account.
+                </Text>
+              </Dialog.Description>
+            </div>
+            <Dialog.Close
+              aria-label="Close"
+              render={(p) => (
+                <Button {...p} variant="ghost" shape="square" size="sm" icon={XIcon} aria-label="Close" type="button" />
+              )}
+            />
+          </div>
+
+          <div className="flex min-h-0 flex-col gap-4 overflow-y-auto px-5 py-5">
+            <Field label="Repository">
+              <div className="flex flex-col gap-3">
+                <div className="relative w-full">
+                  <MagnifyingGlassIcon size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-kumo-subtle" />
+                  <Input
+                    value={selectedRepo ? selectedRepo.fullName : query}
+                    onChange={(event) => {
+                      setSelectedRepo(null);
+                      setQuery(event.target.value);
+                    }}
+                    placeholder="Search repositories"
+                    aria-label="GitHub repository"
+                    className="w-full pl-9"
+                    autoFocus
+                  />
+                </div>
+
+                <div className="max-h-56 overflow-y-auto rounded-lg border border-kumo-hairline bg-kumo-base p-1">
+                  {loading ? (
+                    <div className="flex items-center gap-2 px-3 py-3 text-kumo-subtle">
+                      <ArrowClockwiseIcon size={14} className="animate-spin" />
+                      <Text variant="secondary" size="xs">Loading repositories</Text>
+                    </div>
+                  ) : error ? (
+                    <div className="px-3 py-3">
+                      <Text variant="error" size="xs">{error}</Text>
+                    </div>
+                  ) : filteredRepos.length === 0 ? (
+                    <div className="px-3 py-3">
+                      <Text variant="secondary" size="xs">No matching repositories.</Text>
+                    </div>
+                  ) : (
+                    filteredRepos.map((repo) => {
+                      const selected = selectedRepo?.id === repo.id;
+                      return (
+                        <button
+                          key={repo.id}
+                          type="button"
+                          aria-pressed={selected}
+                          onClick={() => {
+                            setSelectedRepo(repo);
+                            setQuery(repo.fullName);
+                          }}
+                          className={cn(
+                            "flex w-full items-center justify-between gap-3 rounded-md border border-transparent px-3 py-2.5 text-left transition-[background-color,border-color,color,transform] duration-150 ease-out active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kumo-focus",
+                            selected
+                              ? "border-kumo-hairline bg-kumo-tint text-kumo-default"
+                              : "text-kumo-subtle hover:bg-kumo-tint hover:text-kumo-default",
+                          )}
+                        >
+                          <span className="inline-flex min-w-0 items-center gap-2">
+                            <GitBranchIcon size={14} className="shrink-0" />
+                            <Text size="sm" truncate>{repo.fullName}</Text>
+                          </span>
+                          <span className="flex shrink-0 items-center gap-2">
+                            {repo.private && (
+                              <Badge variant="neutral" appearance="dot">
+                                Private
+                              </Badge>
+                            )}
+                            {selected && <CheckIcon size={15} className="text-kumo-default" />}
+                          </span>
+                        </button>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+            </Field>
+          </div>
+
+          <div className="flex items-center justify-end gap-2 border-t border-kumo-hairline px-5 py-4">
+            <Dialog.Close
+              render={(p) => (
+                <Button {...p} variant="ghost" type="button">
+                  Cancel
+                </Button>
+              )}
+            />
+            <Button variant="primary" type="submit" disabled={submitting || !selectedRepo}>
+              {submitting ? "Connecting" : "Connect"}
+            </Button>
+          </div>
+        </form>
+      </Dialog>
+    </Dialog.Root>
+  );
+}
+
 function NewSpaceDialog({
   open,
   onOpenChange,
@@ -2558,11 +2699,11 @@ function DashboardApp({ clerkEnabled = false }: { clerkEnabled?: boolean }) {
     return `https://github.com/${value.replace(/^\/+/, "")}`;
   };
 
-  const handleAddRepo = async (spaceId: string, name: string) => {
+  const handleAddRepo = async (spaceId: string, fullName: string) => {
     const space = spaces.find((s) => s.id === spaceId);
     if (!space) return;
-    const repoUrl = normalizeRepo(name);
-    const repos = [...space.repos, { id: repoUrl, name, isDefault: space.repos.length === 0 }];
+    const repoUrl = normalizeRepo(fullName);
+    const repos = [...space.repos, { id: repoUrl, name: fullName, isDefault: space.repos.length === 0 }];
     updateSpace(spaceId, (s) => ({ ...s, repos }));
     try {
       await persistRepos(spaceId, repos);
