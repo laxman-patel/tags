@@ -1964,8 +1964,7 @@ function RunDetailView({ run, events, eventsLoading, onBack }: { run: Run; event
     pending: "bg-kumo-warning",
   };
 
-  const toolCallCount = events.filter((e) => e.type === "tool_call").length;
-  const triggeredByDisplay = run.triggeredBy.startsWith("@") ? run.triggeredBy : run.triggeredBy === "scheduled" ? "scheduled" : `@${run.triggeredBy}`;
+  const toolCallCount = run.toolCalls;
 
   return (
     <div>
@@ -1981,7 +1980,7 @@ function RunDetailView({ run, events, eventsLoading, onBack }: { run: Run; event
           { label: "Started", value: formatRunStartedAt(run.startedAt), icon: <ClockIcon size={14} /> },
           { label: "Duration", value: run.duration, icon: <ActivityIcon size={14} /> },
           { label: "Tool calls", value: toolCallCount, icon: <LightningIcon size={14} /> },
-          { label: "Triggered by", value: triggeredByDisplay, icon: <BrainIcon size={14} /> },
+          { label: "Triggered by", value: run.triggeredBy, icon: <BrainIcon size={14} /> },
         ]}
       />
 
@@ -2032,14 +2031,17 @@ function RunDetailView({ run, events, eventsLoading, onBack }: { run: Run; event
                     </LayerCard.Secondary>
                     <LayerCard.Primary>
                       {event.detail && (
-                        <Text variant="secondary" size="xs" as="p">
+                        <p className="text-xs text-kumo-subtle break-words">
                           {event.detail}
-                        </Text>
+                        </p>
                       )}
                       {event.json && (
-                        <div className="mt-2">
+                        <div className="mt-2 max-w-full overflow-x-auto rounded-md border border-kumo-fill bg-kumo-base [&_pre]:whitespace-pre-wrap [&_pre]:break-words [&_pre]:overflow-wrap-anywhere [&_pre]:p-2.5 [&_pre]:text-xs [&_pre]:max-h-80 [&_pre]:overflow-y-auto">
                           <Code.Block code={event.json} lang="jsonc" />
                         </div>
+                      )}
+                      {!event.detail && !event.json && (
+                        <p className="text-xs text-kumo-subtle">—</p>
                       )}
                     </LayerCard.Primary>
                   </LayerCard>

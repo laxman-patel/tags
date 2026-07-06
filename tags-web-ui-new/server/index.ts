@@ -52,6 +52,7 @@ import {
 } from "@tags/core/runs";
 import {
   approvalRequests,
+  asc,
   count,
   createDb,
   and,
@@ -740,6 +741,60 @@ async function buildRunsPayload(db: Db, organizationId: string, slackClient?: Sl
   const countByRun = new Map(counts.map((entry) => [entry.runId, Number(entry.count)]));
 
   const unresolvedSlackUserIds = new Set<string>();
+
+  // For runs without inputMessageId (legacy), find the trigger message via thread.
+  const runsNeedingFallback = rows.filter((row) => !row.msgAuthorType && row.run.trigger !== "schedule");
+  if (runsNeedingFallback.length > 0) {
+    const threadIds = [...new Set(runsNeedingFallback.map((row) => row.run.threadId))];
+    const fallbackMsgs = await db
+      .select({
+        threadId: messages.threadId,
+        authorId: messages.authorId,
+        createdAt: messages.createdAt,
+        displayName: users.displayName,
+      })
+      .from(messages)
+      .leftJoin(
+        users,
+        and(
+          eq(messages.authorId, users.externalUserId),
+          eq(users.externalProvider, "slack"),
+          eq(users.organizationId, organizationId),
+        ),
+      )
+      .where(and(inArray(messages.threadId, threadIds), eq(messages.authorType, "human")))
+      .orderBy(asc(messages.createdAt));
+
+    const msgsByThread = new Map<string, typeof fallbackMsgs>();
+    for (const m of fallbackMsgs) {
+      const arr = msgsByThread.get(m.threadId) ?? [];
+      arr.push(m);
+      msgsByThread.set(m.threadId, arr);
+    }
+
+    for (const row of runsNeedingFallback) {
+      const threadMsgs = msgsByThread.get(row.run.threadId);
+      if (!threadMsgs || threadMsgs.length === 0) continue;
+      const runStart = row.run.startedAt.getTime();
+      let best = threadMsgs[0]!;
+      let bestDiff = Math.abs(best.createdAt.getTime() - runStart);
+      for (const m of threadMsgs) {
+        const diff = Math.abs(m.createdAt.getTime() - runStart);
+        if (diff < bestDiff) {
+          best = m;
+          bestDiff = diff;
+        }
+      }
+      row.msgAuthorType = "human";
+      row.msgAuthorId = best.authorId;
+      row.userDisplayName = best.displayName;
+      if (best.authorId && best.authorId !== "unknown" && !best.displayName) {
+        unresolvedSlackUserIds.add(best.authorId);
+      }
+    }
+  }
+
+  // Also resolve names for runs that had inputMessageId but no cached display name.
   for (const row of rows) {
     if (row.msgAuthorType === "human" && row.msgAuthorId && row.msgAuthorId !== "unknown" && !row.userDisplayName) {
       unresolvedSlackUserIds.add(row.msgAuthorId);
@@ -782,7 +837,7 @@ function formatTriggeredBy(
     if (name) return name.startsWith("@") ? name : `@${name}`;
     return `@${authorId}`;
   }
-  return trigger;
+  return trigger === "approval_response" ? "approval response" : trigger;
 }
 
 async function resolveSlackUserNames(

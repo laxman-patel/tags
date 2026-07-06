@@ -259,8 +259,12 @@ function eventType(value: string): RunEventType {
 function prettyJson(value: unknown): string | undefined {
   if (value == null || typeof value === "string" || typeof value === "number" || typeof value === "boolean") return undefined;
   try {
-    const out = JSON.stringify(value, null, 2);
-    return out === "{}" ? undefined : out;
+    let out = JSON.stringify(value, null, 2);
+    if (out === "{}") return undefined;
+    if (out.length > 5000) {
+      out = out.slice(0, 5000) + "\n…(truncated)";
+    }
+    return out;
   } catch {
     return undefined;
   }
