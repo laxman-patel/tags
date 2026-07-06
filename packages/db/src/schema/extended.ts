@@ -6,12 +6,34 @@ import {
   pgTable,
   text,
   timestamp,
+  uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
 import { artifactKindEnum, memoryKindEnum } from "./enums";
 import { organizations, spaces, users } from "./org";
 import { messages, runs, threads } from "./runtime";
 import { sourceEnum } from "./enums";
+
+/**
+ * Per-Space, per-subtool approval opt-in. A row means the tool identified by
+ * `toolKey` requires human approval before it runs in this Space. No row means
+ * it runs immediately. The default posture is "nothing requires approval".
+ */
+export const spaceToolApprovals = pgTable(
+  "space_tool_approvals",
+  {
+    id: uuid("id").primaryKey(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id),
+    spaceId: uuid("space_id")
+      .notNull()
+      .references(() => spaces.id),
+    toolKey: text("tool_key").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [uniqueIndex("space_tool_approvals_space_key_idx").on(table.spaceId, table.toolKey)],
+);
 
 export const approvalPolicies = pgTable("approval_policies", {
   id: uuid("id").primaryKey(),

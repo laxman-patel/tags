@@ -12,11 +12,10 @@ const inputSchema = z.object({
 export function createCreateScheduleTool(db: Db): TagsTool {
   return {
     name: "create_schedule",
-    description:
-      "Create a recurring scheduled task for this Space (requires human approval).",
+    description: "Create a recurring scheduled task for this Space.",
     inputSchema,
     risk: "high",
-    approval: { kind: "always" },
+    approval: { kind: "never" },
     sideEffecting: true,
     async execute(input: unknown, ctx: ToolContext) {
       const parsed = inputSchema.parse(input);

@@ -96,11 +96,18 @@ import {
   loadApprovals,
   respondToApproval,
   updateSpaceConfig,
+  loadSpaceApprovalTools,
+  setSpaceApprovalTool,
+  loadToolkitActions,
+  nativeToolApprovalKey,
+  composioToolApprovalKey,
   type ActivityPoint,
   type Approval,
   type Artifact,
+  type ComposioAction,
   type ComposioDirectoryTool,
   type GitHubRepo,
+  type NativeApprovableTool,
   type Repo,
   type Run,
   type RunEvent,
@@ -1023,6 +1030,13 @@ function SpaceDetailView({
   const [directorySource, setDirectorySource] = useState<"composio" | "fallback">("fallback");
   const [directoryLoading, setDirectoryLoading] = useState(false);
   const [composioDirectory, setComposioDirectory] = useState<ComposioDirectoryTool[]>([]);
+  const [approvalKeys, setApprovalKeys] = useState<Set<string>>(new Set());
+  const [nativeApprovable, setNativeApprovable] = useState<NativeApprovableTool[]>([]);
+  const [approvalToolsLoaded, setApprovalToolsLoaded] = useState(false);
+  const [approvalDialogTool, setApprovalDialogTool] = useState<Tool | null>(null);
+  const [toolkitActions, setToolkitActions] = useState<Record<string, ComposioAction[]>>({});
+  const [toolkitActionsLoading, setToolkitActionsLoading] = useState(false);
+  const [actionSearch, setActionSearch] = useState("");
   const composioTools = space.tools.filter(isComposioTool);
   const readyComposioTools = composioTools.filter((tool) => tool.authState === "connected" && tool.enabled);
   const githubConnected = isGitHubToolkitConnected(space.tools);
@@ -1057,6 +1071,56 @@ function SpaceDetailView({
       })
       .finally(() => setDirectoryLoading(false));
   }, [addToolOpen, composioDirectory.length, directoryLoading]);
+
+  useEffect(() => {
+    if (tab !== "tools" || approvalToolsLoaded) return;
+    loadSpaceApprovalTools(space.id)
+      .then((payload) => {
+        setApprovalKeys(new Set(payload.toolKeys));
+        setNativeApprovable(payload.native);
+        setApprovalToolsLoaded(true);
+      })
+      .catch(() => setApprovalToolsLoaded(true));
+  }, [tab, approvalToolsLoaded, space.id]);
+
+  useEffect(() => {
+    if (!approvalDialogTool) return;
+    const toolkitId = approvalDialogTool.id;
+    if (toolkitActions[toolkitId] || toolkitActionsLoading) return;
+    setToolkitActionsLoading(true);
+    loadToolkitActions(space.id, toolkitId)
+      .then((payload) => setToolkitActions((prev) => ({ ...prev, [toolkitId]: payload.actions })))
+      .catch(() => setToolkitActions((prev) => ({ ...prev, [toolkitId]: [] })))
+      .finally(() => setToolkitActionsLoading(false));
+  }, [approvalDialogTool, toolkitActions, toolkitActionsLoading, space.id]);
+
+  const toggleApproval = async (toolKey: string, required: boolean) => {
+    setApprovalKeys((prev) => {
+      const next = new Set(prev);
+      if (required) next.add(toolKey);
+      else next.delete(toolKey);
+      return next;
+    });
+    try {
+      await setSpaceApprovalTool(space.id, toolKey, required);
+    } catch {
+      setApprovalKeys((prev) => {
+        const next = new Set(prev);
+        if (required) next.delete(toolKey);
+        else next.add(toolKey);
+        return next;
+      });
+    }
+  };
+
+  const composioApprovalCount = (toolkitId: string) => {
+    const prefix = `composio:${toolkitId.toUpperCase()}`;
+    let count = 0;
+    for (const key of approvalKeys) {
+      if (key === prefix || key.startsWith(`${prefix}_`)) count += 1;
+    }
+    return count;
+  };
 
   useEffect(() => {
     if (tab !== "schedules" || schedules || schedulesLoading) return;
@@ -1262,96 +1326,146 @@ function SpaceDetailView({
       )}
 
       {tab === "tools" && (
-        <LayerCard className="p-0 overflow-hidden">
-          <div className="flex items-center justify-between gap-3 border-b border-kumo-hairline px-4 py-3">
-            <div className="flex min-w-0 items-baseline gap-2">
-              <Text bold>Tools</Text>
-              {composioTools.length > 0 && (
-                <Text variant="secondary" size="xs">
-                  {readyComposioTools.length}/{composioTools.length} ready
+        <div className="flex flex-col gap-4">
+          <LayerCard className="p-0 overflow-hidden">
+            <div className="flex items-center gap-2 border-b border-kumo-hairline px-4 py-3">
+              <ShieldCheckIcon size={15} className="text-kumo-subtle shrink-0" />
+              <div className="min-w-0">
+                <Text bold size="sm">Approvals</Text>
+                <Text variant="secondary" size="xs" as="p">
+                  Everything runs instantly by default. Flip on approval for any action you want a
+                  human to sign off on first — decisions land in Slack and here, always in sync.
                 </Text>
+              </div>
+            </div>
+
+            <div className="px-4 pt-3 uppercase tracking-wide">
+              <Text variant="secondary" size="xs">Built-in actions</Text>
+            </div>
+            <div className="divide-y divide-kumo-hairline mt-1">
+              {nativeApprovable.map((native) => {
+                const key = nativeToolApprovalKey(native.id);
+                return (
+                  <div key={native.id} className="flex items-center gap-3 px-4 py-3">
+                    <ActionIcon action={native.id} />
+                    <div className="min-w-0 flex-1">
+                      <Text bold size="sm" truncate>{native.label}</Text>
+                      <Text variant="secondary" size="xs" truncate as="p">{native.description}</Text>
+                    </div>
+                    <ApprovalToggle
+                      label={`Require approval for ${native.label}`}
+                      checked={approvalKeys.has(key)}
+                      disabled={!approvalToolsLoaded}
+                      onChange={(checked) => toggleApproval(key, checked)}
+                    />
+                  </div>
+                );
+              })}
+              {nativeApprovable.length === 0 && (
+                <div className="px-4 py-3">
+                  <Text variant="secondary" size="xs">Loading actions…</Text>
+                </div>
               )}
             </div>
-            <Button
-              variant="primary"
-              size="sm"
-              icon={PlusIcon}
-              onClick={() => setAddToolOpen(true)}
-            >
-              Add
-            </Button>
-          </div>
+          </LayerCard>
 
-          <div>
-            {composioTools.length === 0 ? (
-              <div className="px-5 py-12">
-                <Empty
-                  icon={<WrenchIcon size={40} />}
-                  title="No external tools"
-                  description="Add GitHub to connect repositories, or another service when this Space needs access outside Slack."
-                />
-                <div className="mt-5 flex justify-center">
-                  <Button variant="primary" icon={PlusIcon} onClick={() => setAddToolOpen(true)}>
-                    Add tool
-                  </Button>
-                </div>
+          <LayerCard className="p-0 overflow-hidden">
+            <div className="flex items-center justify-between gap-3 border-b border-kumo-hairline px-4 py-3">
+              <div className="flex min-w-0 items-baseline gap-2">
+                <Text bold>Connected tools</Text>
+                {composioTools.length > 0 && (
+                  <Text variant="secondary" size="xs">
+                    {readyComposioTools.length}/{composioTools.length} ready
+                  </Text>
+                )}
               </div>
-            ) : (
-              <div className="divide-y divide-kumo-hairline">
-                {composioTools.map((tool) => {
-                  const connected = tool.authState === "connected";
-                  const authLoading = authLoadingToolId === `${space.id}:${tool.id}`;
-                  return (
-                    <div key={tool.id} className="group grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 px-4 py-3">
-                      <ToolLogo tool={tool} size="sm" />
-                      <div className="min-w-0">
-                        <Text bold size="sm" truncate>{tool.name}</Text>
-                        <Text variant="secondary" size="xs" truncate as="p">
-                          {tool.toolsCount ? displayToolCount(tool.toolsCount) : tool.description}
-                        </Text>
-                      </div>
-                      <div className="flex items-center justify-end gap-2">
-                        {connected ? (
-                          <Switch
-                            aria-label={tool.enabled ? `Disable ${tool.name}` : `Enable ${tool.name}`}
-                            checked={tool.enabled}
-                            onCheckedChange={(checked) => onToggleTool(space.id, tool.id, checked)}
-                          />
-                        ) : (
-                          <Button
-                            variant="secondary"
-                            size="sm"
-                            loading={authLoading}
-                            disabled={authLoading}
-                            onClick={() => onAuthTool(space.id, tool.id)}
-                          >
-                            Reconnect
-                          </Button>
-                        )}
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          shape="square"
-                          icon={XIcon}
-                          aria-label={`Remove ${tool.name}`}
-                          onClick={() => onRemoveTool(space.id, tool.id)}
-                        />
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-          {composioTools.length > 0 && (
-            <div className="border-t border-kumo-hairline px-4 py-3">
-              <Text bold size="sm">Approval policy</Text>
-              <Text variant="secondary" size="xs" as="p">
-                Composio read-only calls run immediately. Write, edit, and delete calls pause for approval in Slack and the dashboard.
-              </Text>
+              <Button
+                variant="primary"
+                size="sm"
+                icon={PlusIcon}
+                onClick={() => setAddToolOpen(true)}
+              >
+                Add
+              </Button>
             </div>
-          )}
-        </LayerCard>
+
+            <div>
+              {composioTools.length === 0 ? (
+                <div className="px-5 py-12">
+                  <Empty
+                    icon={<WrenchIcon size={40} />}
+                    title="No external tools"
+                    description="Add GitHub to connect repositories, or another service when this Space needs access outside Slack."
+                  />
+                  <div className="mt-5 flex justify-center">
+                    <Button variant="primary" icon={PlusIcon} onClick={() => setAddToolOpen(true)}>
+                      Add tool
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <div className="divide-y divide-kumo-hairline">
+                  {composioTools.map((tool) => {
+                    const connected = tool.authState === "connected";
+                    const authLoading = authLoadingToolId === `${space.id}:${tool.id}`;
+                    const approvalCount = composioApprovalCount(tool.id);
+                    return (
+                      <div key={tool.id} className="group grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 px-4 py-3">
+                        <ToolLogo tool={tool} size="sm" />
+                        <div className="min-w-0">
+                          <Text bold size="sm" truncate>{tool.name}</Text>
+                          <Text variant="secondary" size="xs" truncate as="p">
+                            {tool.toolsCount ? displayToolCount(tool.toolsCount) : tool.description}
+                          </Text>
+                        </div>
+                        <div className="flex items-center justify-end gap-2">
+                          {connected && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              icon={ShieldCheckIcon}
+                              onClick={() => {
+                                setActionSearch("");
+                                setApprovalDialogTool(tool);
+                              }}
+                            >
+                              {approvalCount > 0 ? `Approvals · ${approvalCount}` : "Approvals"}
+                            </Button>
+                          )}
+                          {connected ? (
+                            <Switch
+                              aria-label={tool.enabled ? `Disable ${tool.name}` : `Enable ${tool.name}`}
+                              checked={tool.enabled}
+                              onCheckedChange={(checked) => onToggleTool(space.id, tool.id, checked)}
+                            />
+                          ) : (
+                            <Button
+                              variant="secondary"
+                              size="sm"
+                              loading={authLoading}
+                              disabled={authLoading}
+                              onClick={() => onAuthTool(space.id, tool.id)}
+                            >
+                              Reconnect
+                            </Button>
+                          )}
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            shape="square"
+                            icon={XIcon}
+                            aria-label={`Remove ${tool.name}`}
+                            onClick={() => onRemoveTool(space.id, tool.id)}
+                          />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </LayerCard>
+        </div>
       )}
 
       {tab === "schedules" && (
@@ -1636,6 +1750,17 @@ function SpaceDetailView({
         </Dialog>
       </Dialog.Root>
 
+      <ToolApprovalsDialog
+        tool={approvalDialogTool}
+        onClose={() => setApprovalDialogTool(null)}
+        actions={approvalDialogTool ? toolkitActions[approvalDialogTool.id] : undefined}
+        loading={toolkitActionsLoading}
+        approvalKeys={approvalKeys}
+        onToggle={toggleApproval}
+        search={actionSearch}
+        onSearchChange={setActionSearch}
+      />
+
       {tab === "runs" && (
         <LayerCard className="p-0">
           {spaceRuns.length === 0 ? (
@@ -1726,6 +1851,144 @@ function ActionIcon({ action, size = 16 }: { action: string; size?: number }) {
   return <Icon size={size} className="text-kumo-subtle" />;
 }
 
+function ApprovalToggle({
+  label,
+  checked,
+  disabled,
+  onChange,
+}: {
+  label: string;
+  checked: boolean;
+  disabled?: boolean;
+  onChange: (checked: boolean) => void;
+}) {
+  return (
+    <Switch
+      aria-label={label}
+      checked={checked}
+      disabled={disabled}
+      onCheckedChange={onChange}
+    />
+  );
+}
+
+function ToolApprovalsDialog({
+  tool,
+  onClose,
+  actions,
+  loading,
+  approvalKeys,
+  onToggle,
+  search,
+  onSearchChange,
+}: {
+  tool: Tool | null;
+  onClose: () => void;
+  actions: ComposioAction[] | undefined;
+  loading: boolean;
+  approvalKeys: Set<string>;
+  onToggle: (toolKey: string, required: boolean) => void;
+  search: string;
+  onSearchChange: (value: string) => void;
+}) {
+  const query = search.trim().toLowerCase();
+  const visible = (actions ?? []).filter((action) => {
+    if (!query) return true;
+    return (
+      action.slug.toLowerCase().includes(query) ||
+      action.name.toLowerCase().includes(query) ||
+      action.description.toLowerCase().includes(query)
+    );
+  });
+  const requiredCount = (actions ?? []).filter((action) =>
+    approvalKeys.has(composioToolApprovalKey(action.slug)),
+  ).length;
+
+  return (
+    <Dialog.Root open={Boolean(tool)} onOpenChange={(next) => (next ? undefined : onClose())}>
+      <Dialog className="p-0 max-w-2xl" size="lg">
+        <div className="flex items-start justify-between gap-4 border-b border-kumo-hairline px-5 py-4">
+          <div className="flex min-w-0 items-center gap-3">
+            {tool && <ToolLogo tool={tool} size="sm" />}
+            <div className="min-w-0">
+              <Dialog.Title>{tool?.name ?? "Tool"} approvals</Dialog.Title>
+              <Dialog.Description>
+                <Text variant="secondary" size="sm">
+                  Pick which actions pause for a human. Everything else runs instantly.
+                </Text>
+              </Dialog.Description>
+            </div>
+          </div>
+          <Dialog.Close
+            aria-label="Close"
+            render={(p) => (
+              <Button {...p} variant="ghost" shape="square" size="sm" icon={XIcon} aria-label="Close" />
+            )}
+          />
+        </div>
+        <div className="flex items-center gap-3 border-b border-kumo-hairline px-5 py-3">
+          <Input
+            size="sm"
+            value={search}
+            onChange={(event) => onSearchChange(event.target.value)}
+            placeholder="Search actions"
+            aria-label="Search tool actions"
+            className="min-w-0 flex-1"
+          />
+          <Badge variant={requiredCount > 0 ? "warning" : "neutral"}>
+            {requiredCount > 0 ? `${requiredCount} need approval` : "None gated"}
+          </Badge>
+        </div>
+        <div className="max-h-[440px] overflow-y-auto">
+          {loading && !actions ? (
+            <div className="flex min-h-40 items-center justify-center">
+              <Loader />
+            </div>
+          ) : visible.length === 0 ? (
+            <Empty
+              icon={<WrenchIcon size={36} />}
+              title={query ? "No matching actions" : "No actions"}
+              description={query ? "Try another search." : "This tool exposes no configurable actions."}
+            />
+          ) : (
+            <div className="divide-y divide-kumo-hairline">
+              {visible.map((action) => {
+                const key = composioToolApprovalKey(action.slug);
+                const checked = approvalKeys.has(key);
+                return (
+                  <div key={action.slug} className="flex items-start gap-3 px-5 py-3">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex min-w-0 items-center gap-2">
+                        <Text bold size="sm" truncate>{action.name}</Text>
+                        {action.readOnly && <Badge variant="neutral">read-only</Badge>}
+                      </div>
+                      {action.description && (
+                        <div className="mt-0.5 line-clamp-2">
+                          <Text variant="secondary" size="xs">{action.description}</Text>
+                        </div>
+                      )}
+                      <div className="mt-0.5 font-mono opacity-70">
+                        <Text variant="secondary" size="xs">{action.slug}</Text>
+                      </div>
+                    </div>
+                    <div className="pt-0.5">
+                      <ApprovalToggle
+                        label={`Require approval for ${action.name}`}
+                        checked={checked}
+                        onChange={(next) => onToggle(key, next)}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </Dialog>
+    </Dialog.Root>
+  );
+}
+
 function ApprovalsView({
   approvals,
   onApprove,
@@ -1766,7 +2029,17 @@ function ApprovalsView({
                     <div className="flex flex-wrap items-center gap-2">
                       <ActionIcon action={apr.toolName.replace(/^composio\./, "")} />
                       <Text bold>{apr.summary}</Text>
-                      <Badge variant="warning">{apr.riskLevel}</Badge>
+                      <Badge
+                        variant={
+                          apr.riskLevel === "high"
+                            ? "error"
+                            : apr.riskLevel === "medium"
+                              ? "warning"
+                              : "neutral"
+                        }
+                      >
+                        {apr.riskLevel} risk
+                      </Badge>
                     </div>
                     <Text variant="secondary" size="xs" className="mt-1 block">
                       {apr.spaceName} · {apr.requestedAt} · {formatApprovalExpiry(apr.expiresAt)}
@@ -2461,14 +2734,23 @@ function DashboardApp({ clerkEnabled = false }: { clerkEnabled?: boolean }) {
   }, []);
 
   useEffect(() => {
-    if (approvals.length === 0 && view.page !== "approvals") return;
-    const timer = setInterval(() => {
+    // Keep Slack and the dashboard in sync: poll fast while reviewing approvals,
+    // and at a relaxed cadence elsewhere so new requests surface promptly.
+    const intervalMs = view.page === "approvals" ? 2000 : 5000;
+    const poll = () => {
+      if (document.hidden) return;
       loadApprovals()
         .then(setApprovals)
         .catch(() => undefined);
-    }, 1500);
-    return () => clearInterval(timer);
-  }, [approvals.length, view.page]);
+    };
+    const timer = setInterval(poll, intervalMs);
+    const onFocus = () => poll();
+    window.addEventListener("focus", onFocus);
+    return () => {
+      clearInterval(timer);
+      window.removeEventListener("focus", onFocus);
+    };
+  }, [view.page]);
 
   useEffect(() => {
     if (view.page !== "run-detail" || view.id in eventsByRun) return;

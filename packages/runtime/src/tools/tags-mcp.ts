@@ -2,10 +2,16 @@ import { appendRunEvent } from "@tags/core/runs";
 import type { TagsEvent } from "@tags/core/events";
 import { eq, workspaces, type Db } from "@tags/db";
 import { decryptSlackBotToken } from "@tags/core/slack-installations";
+import {
+  NATIVE_APPROVABLE_TOOLS,
+  listApprovalRequiredToolKeys,
+  toolApprovalKey,
+} from "@tags/core/tool-approvals";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 import { z } from "zod";
 import type { ComposioMcpServerConfig } from "./composio";
+import { gateSideEffectingTool } from "./approval-gate";
 import { resolveTools } from "./registry";
 import type { TagsTool, ToolContext } from "./types";
 import {
@@ -15,6 +21,10 @@ import {
 } from "./tags-mcp-token";
 import { createRuntimeProviders, type RuntimeProviderConfig, type RuntimeProviders } from "../providers";
 import { ApprovalPauseError, QuestionPauseError } from "../agent/types";
+
+const NATIVE_RISK_BY_ID = new Map(
+  NATIVE_APPROVABLE_TOOLS.map((tool) => [tool.id, tool.risk] as const),
+);
 
 /** Native tools that cannot run inside the opencode sandbox MCP bridge. */
 export const OPENCODE_MCP_EXCLUDED_TOOLS = new Set([
@@ -70,6 +80,7 @@ function registerTagsToolOnMcpServer(
   server: McpServer,
   tagsTool: TagsTool,
   toolCtx: ToolContext,
+  deps: { db: Db; requiresApproval: boolean },
 ): void {
   server.registerTool(
     tagsTool.name,
@@ -85,6 +96,39 @@ function registerTagsToolOnMcpServer(
       });
 
       try {
+        if (deps.requiresApproval) {
+          // Throws ApprovalPauseError (creates the request + pauses the run)
+          // unless this exact call was already approved.
+          const gate = await gateSideEffectingTool({
+            db: deps.db,
+            runId: toolCtx.runId,
+            organizationId: toolCtx.organizationId,
+            spaceId: toolCtx.spaceId,
+            threadId: toolCtx.threadId,
+            toolName: tagsTool.name,
+            toolInput: input,
+            actorUserId: toolCtx.actorUserId,
+            slackChannelId: toolCtx.channelId,
+            riskLevel: NATIVE_RISK_BY_ID.get(tagsTool.name) ?? "medium",
+            emit: toolCtx.emit,
+          });
+
+          // Already approved and executed earlier in this run: return the stored
+          // result instead of running the tool again.
+          if (gate.cachedResult !== undefined) {
+            await toolCtx.emit({
+              type: "tool.finished",
+              toolName: tagsTool.name,
+              outputPreview: gate.cachedResult,
+            });
+            return {
+              content: [
+                { type: "text", text: JSON.stringify(gate.cachedResult, null, 2) },
+              ],
+            };
+          }
+        }
+
         const result = await tagsTool.execute(input, toolCtx);
         await toolCtx.emit({
           type: "tool.finished",
@@ -204,6 +248,10 @@ export async function handleTagsMcpRequest(
     ...providers,
   }).filter((tool) => !OPENCODE_MCP_EXCLUDED_TOOLS.has(tool.name));
 
+  // Approval is opt-in per Space: a native tool only pauses when its key is in
+  // space_tool_approvals. By default nothing requires approval.
+  const approvalKeys = await listApprovalRequiredToolKeys(deps.db, claims.spaceId);
+
   const server = new McpServer(
     { name: "tags", version: "1.0.0" },
     {
@@ -213,7 +261,11 @@ export async function handleTagsMcpRequest(
   );
 
   for (const tagsTool of tools) {
-    registerTagsToolOnMcpServer(server, tagsTool, toolCtx);
+    const requiresApproval = approvalKeys.has(toolApprovalKey("native", tagsTool.name));
+    registerTagsToolOnMcpServer(server, tagsTool, toolCtx, {
+      db: deps.db,
+      requiresApproval,
+    });
   }
 
   const transport = new WebStandardStreamableHTTPServerTransport({

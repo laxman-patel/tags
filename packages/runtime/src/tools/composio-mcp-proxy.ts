@@ -2,6 +2,10 @@ import { createMCPClient } from "@ai-sdk/mcp";
 import { Composio } from "@composio/core";
 import type { Db } from "@tags/db";
 import { appendRunEvent } from "@tags/core/runs";
+import {
+  composioToolApprovalKey,
+  listApprovalRequiredToolKeys,
+} from "@tags/core/tool-approvals";
 import type { TagsEvent } from "@tags/core/events";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
@@ -61,10 +65,16 @@ type McpCallToolResult = Record<string, any> & {
   isError?: boolean;
 };
 
-const AUTO_APPROVED_COMPOSIO_INTERNAL_TOOLS = new Set([
-  "multi_execute",
-  "composio_manage_connections",
-]);
+/**
+ * Composio's own orchestration tools. These are never app side effects (they
+ * batch calls or manage connections) so they always run without approval,
+ * regardless of Space configuration.
+ */
+const COMPOSIO_INTERNAL_TOOLS = new Set(["multi_execute", "composio_manage_connections"]);
+
+export function isComposioInternalTool(name: string): boolean {
+  return COMPOSIO_INTERNAL_TOOLS.has(name.toLowerCase());
+}
 
 type JsonSchema = {
   type?: string | string[];
@@ -176,10 +186,8 @@ export function isReadOnlyTool(tool: Pick<ComposioToolDef, "annotations">): bool
   return tool.annotations?.readOnlyHint === true;
 }
 
-export function isAutoApprovedComposioTool(
-  tool: Pick<ComposioToolDef, "name" | "annotations">,
-): boolean {
-  return isReadOnlyTool(tool) || AUTO_APPROVED_COMPOSIO_INTERNAL_TOOLS.has(tool.name.toLowerCase());
+function composioToolRisk(tool: Pick<ComposioToolDef, "annotations">): "medium" | "high" {
+  return tool.annotations?.destructiveHint === true ? "high" : "medium";
 }
 
 export async function handleComposioMcpRequest(
@@ -227,6 +235,10 @@ export async function handleComposioMcpRequest(
   const listResult = await mcpClient.listTools();
   const tools = (listResult.tools ?? []) as unknown as ComposioToolDef[];
 
+  // Approval is opt-in per Space: a tool only pauses for a human when its key is
+  // present in space_tool_approvals. By default every tool runs immediately.
+  const approvalKeys = await listApprovalRequiredToolKeys(deps.db, claims.spaceId);
+
   const emit = async (event: TagsEvent) => {
     await appendRunEvent(deps.db, claims.runId, event);
   };
@@ -235,12 +247,14 @@ export async function handleComposioMcpRequest(
     { name: "composio", version: "1.0.0" },
     {
       instructions:
-        "Composio-connected tools for this Space. Read-only and Composio-internal orchestration tools execute automatically; write/delete/edit app tools require human approval.",
+        "Composio-connected tools for this Space. Tools run immediately unless an admin has marked them as requiring approval, in which case they pause for a human decision in Slack and the Tags dashboard.",
     },
   );
 
   for (const tool of tools) {
-    const autoApproved = isAutoApprovedComposioTool(tool);
+    const requiresApproval =
+      !isComposioInternalTool(tool.name) &&
+      approvalKeys.has(composioToolApprovalKey(tool.name));
     const gatedName = `composio.${tool.name}`;
 
     server.registerTool(
@@ -258,7 +272,7 @@ export async function handleComposioMcpRequest(
           inputPreview: coercedInput,
         });
 
-        if (autoApproved) {
+        if (!requiresApproval) {
           try {
             const result = await mcpClient.callTool({
               name: tool.name,
@@ -285,7 +299,7 @@ export async function handleComposioMcpRequest(
         }
 
         try {
-          await gateSideEffectingTool({
+          const gate = await gateSideEffectingTool({
             db: deps.db,
             runId: claims.runId,
             organizationId: claims.organizationId,
@@ -296,8 +310,20 @@ export async function handleComposioMcpRequest(
             actorUserId: claims.actorSlackUserId,
             slackChannelId: claims.channelId,
             slackMessageTs: claims.slackMessageTs,
+            riskLevel: composioToolRisk(tool),
             emit,
           });
+
+          // Already approved and executed earlier in this run: return the stored
+          // result instead of calling the tool a second time.
+          if (gate.cachedResult !== undefined) {
+            await emit({
+              type: "tool.finished",
+              toolName: gatedName,
+              outputPreview: gate.cachedResult,
+            });
+            return gate.cachedResult as McpCallToolResult;
+          }
 
           const result = await mcpClient.callTool({
             name: tool.name,

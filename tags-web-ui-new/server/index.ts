@@ -40,6 +40,12 @@ import {
   isNativeToolId,
   NATIVE_TOOL_METADATA,
 } from "@tags/core/tools";
+import {
+  NATIVE_APPROVABLE_TOOLS,
+  listSpaceToolApprovals,
+  parseToolApprovalKey,
+  setSpaceToolApproval,
+} from "@tags/core/tool-approvals";
 import { spaceHasGitHubConnection } from "@tags/core/composio-toolkits";
 import { TAGS_MODEL_ID } from "@tags/core/model-labels";
 import { resolveOrCreateUser } from "@tags/core/users";
@@ -89,6 +95,7 @@ import {
 import {
   authorizeComposioToolkit,
   listComposioConnectedAccountStatuses,
+  listComposioToolkitActions,
   listComposioToolkits,
   resolveToolkitConnectionStatus,
   type ComposioToolkitDirectoryItem,
@@ -101,6 +108,7 @@ import {
 import {
   DEFAULT_SLACK_BOT_SCOPES,
   addReaction,
+  buildApprovalResolutionCard,
   buildSlackAuthorizeUrl,
   createSlackClient,
   ensureSlackUserDisplayName,
@@ -1137,30 +1145,6 @@ function slackErrorRedirect(error: unknown) {
   return dashboardRedirect({ slack_error: code });
 }
 
-function approvalResolvedBlocks(args: {
-  decision: "approved" | "rejected";
-  summary: string;
-  actorSlackUserId?: string;
-  source?: "slack_interaction" | "control_plane";
-}) {
-  const icon = args.decision === "approved" ? "✅" : "❌";
-  const verb = args.decision === "approved" ? "Approved" : "Declined";
-  const actor = args.actorSlackUserId
-    ? `<@${args.actorSlackUserId}>`
-    : args.source === "control_plane"
-      ? "Tags dashboard"
-      : "You";
-  return [
-    {
-      type: "section",
-      text: {
-        type: "mrkdwn",
-        text: `${icon} *${verb}* — ${args.summary}\n_by ${actor}_`,
-      },
-    },
-  ];
-}
-
 async function persistApprovalSlackRef(
   db: Db,
   approvalId: string,
@@ -1181,14 +1165,13 @@ async function notifyApprovalResolvedOnSlack(args: {
   actorSlackUserId?: string;
   source: "slack_interaction" | "control_plane";
 }) {
-  const summary = formatApprovalSummary(args.resolved.toolName, args.resolved.toolInput);
-  const blocks = approvalResolvedBlocks({
+  const card = buildApprovalResolutionCard({
     decision: args.decision,
-    summary,
+    toolName: args.resolved.toolName,
+    toolInput: args.resolved.toolInput,
     actorSlackUserId: args.actorSlackUserId,
-    source: args.source,
+    source: args.source === "control_plane" ? "dashboard" : "slack",
   });
-  const text = `${args.decision === "approved" ? "Approved" : "Declined"} — ${summary}`;
 
   if (args.source === "control_plane") {
     const slackBundle = await getAccountSlackClient(args.db, args.organizationId).catch(() => null);
@@ -1197,12 +1180,12 @@ async function notifyApprovalResolvedOnSlack(args: {
       slackBundle.client,
       args.resolved.slackChannelId,
       args.resolved.slackMessageTs,
-      text,
-      blocks,
+      card.text,
+      card.blocks,
     );
   }
 
-  return { text, blocks };
+  return card;
 }
 
 async function emitApprovalResolved(args: {
@@ -1620,6 +1603,83 @@ async function handleProtectedApi(
         apiRequestsCompleted.add(1, { route: "spaces.tools.status", method, outcome: "success" });
         span.setAttributes({ outcome: "success", "space.id": spaceId, "toolkit.id": toolkit, "toolkit.auth_state": authState });
         return sendJson(res, 200, { authState, authStatus });
+      }
+
+      if (
+        method === "GET" &&
+        segments[0] === "spaces" &&
+        segments[2] === "approval-tools" &&
+        segments.length === 3
+      ) {
+        const spaceId = segments[1];
+        if (!spaceId) return sendJson(res, 400, { error: "space id is required" });
+        const space = await requireSpaceInOrg(db, spaceId, organizationId);
+        if (!space) return sendJson(res, 404, { error: "Not found" });
+        const toolKeys = await listSpaceToolApprovals(db, spaceId);
+        apiRequestsCompleted.add(1, { route: "spaces.approval-tools", method, outcome: "success" });
+        return sendJson(res, 200, {
+          toolKeys,
+          native: NATIVE_APPROVABLE_TOOLS,
+        });
+      }
+
+      if (
+        method === "PUT" &&
+        segments[0] === "spaces" &&
+        segments[2] === "approval-tools" &&
+        segments.length === 3
+      ) {
+        const spaceId = segments[1];
+        if (!spaceId) return sendJson(res, 400, { error: "space id is required" });
+        const space = await requireSpaceInOrg(db, spaceId, organizationId);
+        if (!space) return sendJson(res, 404, { error: "Not found" });
+        const body = (await readJson(req)) as { toolKey?: unknown; required?: unknown };
+        const toolKey = typeof body.toolKey === "string" ? body.toolKey : "";
+        if (!parseToolApprovalKey(toolKey)) {
+          apiRequestsCompleted.add(1, { route: "spaces.approval-tools", method, outcome: "invalid_request" });
+          return sendJson(res, 400, { error: "invalid tool key" });
+        }
+        const required = body.required === true;
+        await setSpaceToolApproval(db, {
+          organizationId,
+          spaceId,
+          toolKey,
+          required,
+        });
+        await recordAuditEvent(db, {
+          organizationId,
+          spaceId,
+          actorUserId: account.user.id,
+          actorType: "human",
+          eventType: "approval.tool.updated",
+          payload: { toolKey, required, source: "control_plane" },
+        });
+        apiRequestsCompleted.add(1, { route: "spaces.approval-tools", method, outcome: "success" });
+        return sendJson(res, 200, { toolKey, required });
+      }
+
+      if (
+        method === "GET" &&
+        segments[0] === "spaces" &&
+        segments[2] === "tools" &&
+        segments[4] === "actions"
+      ) {
+        const spaceId = segments[1];
+        const toolkit = decodeURIComponent(segments[3] ?? "");
+        if (!spaceId || !toolkit) return sendJson(res, 400, { error: "space id and toolkit are required" });
+        const space = await requireSpaceInOrg(db, spaceId, organizationId);
+        if (!space) return sendJson(res, 404, { error: "Not found" });
+        if (!process.env.COMPOSIO_API_KEY) {
+          apiRequestsCompleted.add(1, { route: "spaces.tools.actions", method, outcome: "missing_config" });
+          return sendJson(res, 400, { error: "COMPOSIO_API_KEY is required to list tool actions" });
+        }
+        const actions = await listComposioToolkitActions({
+          apiKey: process.env.COMPOSIO_API_KEY,
+          entityId: spaceId,
+          toolkit,
+        }).catch(() => []);
+        apiRequestsCompleted.add(1, { route: "spaces.tools.actions", method, outcome: "success" });
+        return sendJson(res, 200, { actions });
       }
 
       if (method === "GET" && segments[0] === "approvals" && segments.length === 1) {
@@ -2140,14 +2200,13 @@ async function handleApprovalInteraction(
     : await resolveApprovalByRequestId(db, approval.requestId, decision, actor.id);
   if (!resolved) return null;
 
-  const summary = formatApprovalSummary(resolved.toolName, resolved.toolInput);
-  const blocks = approvalResolvedBlocks({
+  const card = buildApprovalResolutionCard({
     decision,
-    summary,
+    toolName: resolved.toolName,
+    toolInput: resolved.toolInput,
     actorSlackUserId,
-    source: "slack_interaction",
+    source: "slack",
   });
-  const text = `${decision === "approved" ? "Approved" : "Declined"} — ${summary}`;
 
   await emitApprovalResolved({
     db,
@@ -2162,7 +2221,9 @@ async function handleApprovalInteraction(
   });
 
   if (payload.channel?.id && payload.message?.ts) {
-    void updateMessage(slack, payload.channel.id, payload.message.ts, text, blocks).catch(() => {});
+    void updateMessage(slack, payload.channel.id, payload.message.ts, card.text, card.blocks).catch(
+      () => {},
+    );
   }
 
   return null;

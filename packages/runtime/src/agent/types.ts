@@ -43,6 +43,9 @@ export type AgentSegmentResult =
       toolName: string;
       toolInput: unknown;
       invocationId: string;
+      riskLevel?: string;
+      requestedBySlackUserId?: string;
+      expiresAt?: string;
     }
   | {
       kind: "question_required";

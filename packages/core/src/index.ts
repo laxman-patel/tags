@@ -11,6 +11,7 @@ export * from "./audit";
 export * from "./artifacts";
 export * from "./usage";
 export * from "./policies";
+export * from "./tool-approvals";
 export * from "./users";
 export * from "./schedules";
 export * from "./space-sandboxes";

@@ -185,6 +185,56 @@ export async function createComposioMcpServer(args: {
   };
 }
 
+export type ComposioActionSummary = {
+  slug: string;
+  name: string;
+  description: string;
+  readOnly: boolean;
+};
+
+/**
+ * Lists the individual actions (subtools) a toolkit exposes, via the same MCP
+ * session the runtime uses — so the slugs returned here match the keys the
+ * approval gate checks against exactly.
+ */
+export async function listComposioToolkitActions(args: {
+  apiKey: string;
+  entityId: string;
+  toolkit: string;
+}): Promise<ComposioActionSummary[]> {
+  const session = await createComposioMcpServer({
+    apiKey: args.apiKey,
+    entityId: args.entityId,
+    toolkits: [args.toolkit],
+  });
+  if (!session) return [];
+
+  const mcpClient = await createMCPClient({
+    transport: { type: "http", url: session.url, headers: session.headers },
+  });
+
+  try {
+    const listResult = await mcpClient.listTools();
+    const tools = (listResult.tools ?? []) as unknown as Array<{
+      name: string;
+      description?: string;
+      annotations?: { readOnlyHint?: boolean; title?: string };
+    }>;
+    const internal = new Set(["multi_execute", "composio_manage_connections"]);
+    return tools
+      .filter((tool) => !internal.has(tool.name.toLowerCase()))
+      .map((tool) => ({
+        slug: tool.name,
+        name: tool.annotations?.title ?? tool.name,
+        description: tool.description ?? "",
+        readOnly: tool.annotations?.readOnlyHint === true,
+      }))
+      .sort((a, b) => a.slug.localeCompare(b.slug));
+  } finally {
+    await mcpClient.close().catch(() => {});
+  }
+}
+
 export async function loadComposioTools(args: {
   apiKey: string;
   entityId: string;

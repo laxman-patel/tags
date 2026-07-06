@@ -1,6 +1,7 @@
 import { formatApprovalQuestion } from "@tags/core/approval-display";
 import type { TagsEvent } from "@tags/core/events";
 import { getApprovalPolicyForSpace } from "@tags/core/policies";
+import type { ToolRiskLevel } from "@tags/core/tool-approvals";
 import {
   createApprovalRequest,
   createToolInvocation,
@@ -28,6 +29,7 @@ export type ApprovalGateArgs = {
   actorUserId?: string | null;
   slackChannelId?: string;
   slackMessageTs?: string;
+  riskLevel?: ToolRiskLevel;
   approvedTool?: ApprovedToolMatch;
   emit: (event: TagsEvent) => Promise<void>;
 };
@@ -93,7 +95,7 @@ export async function gateSideEffectingTool(
     requestId,
     toolName: args.toolName,
     toolInput: args.toolInput,
-    riskLevel: "high",
+    riskLevel: args.riskLevel ?? "medium",
     requestText,
     expiresAt: new Date(Date.now() + expiryMinutes * 60 * 1000),
     requestedBySlackUserId: args.actorUserId ?? undefined,

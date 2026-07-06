@@ -16,6 +16,7 @@ import {
   schedules,
   spaceConfigs,
   spaceSandboxSessions,
+  spaceToolApprovals,
   spaces,
   threads,
   toolInvocations,
@@ -84,6 +85,7 @@ export async function deleteSpace(db: Db, input: { spaceId: string; organization
     await tx.delete(messages).where(eq(messages.spaceId, input.spaceId));
     await tx.delete(threads).where(eq(threads.spaceId, input.spaceId));
     await tx.delete(schedules).where(eq(schedules.spaceId, input.spaceId));
+    await tx.delete(spaceToolApprovals).where(eq(spaceToolApprovals.spaceId, input.spaceId));
     await tx.delete(spaceConfigs).where(eq(spaceConfigs.spaceId, input.spaceId));
     await tx.delete(auditEvents).where(eq(auditEvents.spaceId, input.spaceId));
     await tx.delete(spaces).where(eq(spaces.id, input.spaceId));

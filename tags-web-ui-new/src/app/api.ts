@@ -250,6 +250,50 @@ export function respondToApproval(approvalId: string, decision: "approved" | "re
   });
 }
 
+export interface NativeApprovableTool {
+  id: string;
+  label: string;
+  description: string;
+  risk: "none" | "low" | "medium" | "high";
+}
+
+export interface ComposioAction {
+  slug: string;
+  name: string;
+  description: string;
+  readOnly: boolean;
+}
+
+export function nativeToolApprovalKey(id: string) {
+  return `native:${id}`;
+}
+
+export function composioToolApprovalKey(slug: string) {
+  return `composio:${slug.trim().toUpperCase()}`;
+}
+
+export function loadSpaceApprovalTools(spaceId: string) {
+  return requestJson<{ toolKeys: string[]; native: NativeApprovableTool[] }>(
+    `/api/spaces/${spaceId}/approval-tools`,
+  );
+}
+
+export function setSpaceApprovalTool(spaceId: string, toolKey: string, required: boolean) {
+  return requestJson<{ toolKey: string; required: boolean }>(
+    `/api/spaces/${spaceId}/approval-tools`,
+    {
+      method: "PUT",
+      body: JSON.stringify({ toolKey, required }),
+    },
+  );
+}
+
+export function loadToolkitActions(spaceId: string, toolkitId: string) {
+  return requestJson<{ actions: ComposioAction[] }>(
+    `/api/spaces/${spaceId}/tools/${encodeURIComponent(toolkitId)}/actions`,
+  );
+}
+
 export async function loadApprovals(): Promise<Approval[]> {
   const payload = await requestJson<{ approvals: Approval[] }>("/api/approvals");
   return payload.approvals;

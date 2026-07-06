@@ -18,6 +18,7 @@
     "./artifacts": "./src/artifacts.ts",
     "./usage": "./src/usage.ts",
     "./policies": "./src/policies.ts",
+    "./tool-approvals": "./src/tool-approvals.ts",
     "./users": "./src/users.ts",
     "./schedules": "./src/schedules.ts",
     "./questions": "./src/questions.ts",

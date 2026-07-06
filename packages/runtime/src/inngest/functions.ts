@@ -5,8 +5,10 @@ import {
   completeToolInvocation,
   createRun,
   expireApprovalByRequestId,
+  setApprovalSlackRef,
   updateRunStatus,
 } from "@tags/core/runs";
+import { formatApprovalSummary } from "@tags/core/approval-display";
 import { loadActiveSpaceConfig } from "@tags/core/spaces";
 import { findOrCreateThread, getMessageByProviderMessageId, upsertMessage } from "@tags/core/threads";
 import type { TagsEvent } from "@tags/core/events";
@@ -14,6 +16,8 @@ import { createArtifact } from "@tags/core/artifacts";
 import { createDb, newId, runs, threads } from "@tags/db";
 import {
   addReaction,
+  buildApprovalCard,
+  buildApprovalResolutionCard,
   postThreadMessage,
   removeReaction,
   ensureSlackUserDisplayName,
@@ -136,6 +140,12 @@ export const tagsRunFunction: InngestFunction.Any = inngest.createFunction(
           if (segment.kind === "approval_required") {
             const pendingApproval = segment;
 
+            // Post a standalone approval card in the thread. Slack buttons and
+            // the dashboard both resolve the same row and update this card.
+            await step.run(`post-approval-${segmentIndex}`, () =>
+              postApprovalStep(input, setup, pendingApproval),
+            );
+
             const resolved = await step.waitForEvent(`await-approval-${segmentIndex}`, {
               event: APPROVAL_RESOLVED_EVENT,
               timeout: "1h",
@@ -154,9 +164,14 @@ export const tagsRunFunction: InngestFunction.Any = inngest.createFunction(
                 resumeAfterApprovalStep(input, setup, pendingApproval, toolResult),
               )) as AgentSegmentResult;
             } else {
+              const summary = formatApprovalSummary(
+                pendingApproval.toolName,
+                pendingApproval.toolInput,
+              );
               if (!resolved) {
+                // Timed out: no one acted, so mark expired and settle the card.
                 await step.run(`expire-approval-${segmentIndex}`, () =>
-                  expireApprovalStep(pendingApproval.requestId),
+                  expireApprovalStep(input, pendingApproval),
                 );
               }
               await step.run(`reject-tool-${segmentIndex}`, () =>
@@ -172,10 +187,10 @@ export const tagsRunFunction: InngestFunction.Any = inngest.createFunction(
                   workspaceId: input.workspaceId,
                   channelId: input.channelId,
                   slackMessageTs: setup.slackMessageTs,
-                  slackStream: setup.slackStream,
+                  slackStream: false,
                   summaryText: resolved
-                    ? `Rejected ${pendingApproval.toolName}.`
-                    : `Approval for ${pendingApproval.toolName} timed out.`,
+                    ? `Declined — ${summary}. Stopping here.`
+                    : `Approval timed out — ${summary}. Stopping here.`,
                   appUrl: input.appUrl,
                 }),
               );
@@ -729,18 +744,51 @@ async function agentSegmentStep(input: TagsRunInput, setup: RunSetup) {
   });
 }
 
+async function postApprovalStep(
+  input: TagsRunInput,
+  setup: RunSetup,
+  segment: {
+    approvalId: string;
+    requestId: string;
+    toolName: string;
+    toolInput: unknown;
+    riskLevel?: string;
+    requestedBySlackUserId?: string;
+    expiresAt?: string;
+  },
+): Promise<void> {
+  const { db, slack } = await loadWorkspaceRuntime(input.workspaceId);
+  const card = buildApprovalCard({
+    approvalId: segment.approvalId,
+    requestId: segment.requestId,
+    toolName: segment.toolName,
+    toolInput: segment.toolInput,
+    riskLevel: segment.riskLevel,
+    requestedBySlackUserId: segment.requestedBySlackUserId,
+    expiresAt: segment.expiresAt,
+    appUrl: input.appUrl,
+    runId: setup.runId,
+  });
+  const posted = await postThreadMessage(
+    slack,
+    input.channelId,
+    setup.threadTs,
+    card.text,
+    card.blocks,
+  );
+  await setApprovalSlackRef(db, segment.approvalId, posted.channelId, posted.messageTs);
+}
+
 async function executeApprovedToolStep(
   input: TagsRunInput,
   setup: RunSetup,
   segment: { invocationId: string; toolName: string; toolInput: unknown },
 ) {
-  const { secrets, db, slack, providerConfig } = await loadWorkspaceRuntime(input.workspaceId);
-  const stream = new SlackStreamAdapter(slack, input.channelId, setup.slackMessageTs, {
-    native: setup.slackStream,
-  });
+  const { secrets, db, providerConfig } = await loadWorkspaceRuntime(input.workspaceId);
+  // Tool output is recorded in the run timeline; the resumed segment streams the
+  // user-facing summary, so we don't push into the (already closed) run message.
   const emit = async (event: TagsEvent) => {
     await appendRunEvent(db, setup.runId, event);
-    await stream.pushEvent(event);
   };
 
   if (segment.toolName.startsWith("composio.")) {
@@ -838,7 +886,9 @@ async function resumeAfterApprovalStep(
     organizationId: input.organizationId,
     channelId: input.channelId,
     slackMessageTs: setup.slackMessageTs,
-    slackStream: setup.slackStream,
+    // The original run message was closed at the pause; resume with classic
+    // edits (the native stream can't be reopened).
+    slackStream: false,
     triggerText: input.triggerText,
     actorSlackUserId: input.actorSlackUserId,
     spaceName: input.spaceName,
@@ -939,10 +989,22 @@ async function rejectToolStep(args: { runId: string; invocationId: string; toolN
   await rejectPendingTool(db, args.invocationId, args.toolName, emit);
 }
 
-async function expireApprovalStep(requestId: string) {
-  const secrets = loadRuntimeSecrets();
-  const db = createDb(secrets.databaseUrl);
-  await expireApprovalByRequestId(db, requestId);
+async function expireApprovalStep(
+  input: TagsRunInput,
+  segment: { requestId: string; toolName: string; toolInput: unknown },
+) {
+  const { db, slack } = await loadWorkspaceRuntime(input.workspaceId);
+  const expired = await expireApprovalByRequestId(db, segment.requestId);
+  const channelId = expired?.slackChannelId;
+  const messageTs = expired?.slackMessageTs;
+  if (channelId && messageTs) {
+    const card = buildApprovalResolutionCard({
+      decision: "expired",
+      toolName: segment.toolName,
+      toolInput: segment.toolInput,
+    });
+    await updateMessage(slack, channelId, messageTs, card.text, card.blocks).catch(() => {});
+  }
 }
 
 async function releaseThreadStep(

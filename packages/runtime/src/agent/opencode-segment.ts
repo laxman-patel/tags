@@ -355,7 +355,11 @@ export async function runOpencodeSegment(
     // surface them to Slack + return the pause result to the Inngest workflow.
     const pendingApproval = await getPendingApprovalByRunId(args.db, args.runId);
     if (pendingApproval) {
-      const approvalEvent: TagsEvent = {
+      // The interactive approval card is posted as its own message by the
+      // Inngest workflow (postApprovalStep). Here we just close the streaming
+      // run message cleanly so it doesn't sit in a "thinking" state, and record
+      // the request in the run timeline.
+      await appendRunEvent(args.db, args.runId, {
         type: "approval.requested",
         approvalId: pendingApproval.id,
         requestId: pendingApproval.requestId,
@@ -365,8 +369,10 @@ export async function runOpencodeSegment(
         inputPreview: pendingApproval.toolInput,
         requestedBySlackUserId: pendingApproval.requestedBySlackUserId ?? undefined,
         expiresAt: pendingApproval.expiresAt.toISOString(),
-      };
-      await stream.pushEvent(approvalEvent);
+      });
+      await stream.finalize(
+        `:hourglass_flowing_sand: Waiting for approval to *${pendingApproval.requestText}* — see the card below.`,
+      );
       await updateRunStatus(args.db, args.runId, "waiting");
       return {
         kind: "approval_required",
@@ -375,6 +381,9 @@ export async function runOpencodeSegment(
         toolName: pendingApproval.toolName,
         toolInput: pendingApproval.toolInput,
         invocationId: pendingApproval.toolInvocationId,
+        riskLevel: pendingApproval.riskLevel,
+        requestedBySlackUserId: pendingApproval.requestedBySlackUserId ?? undefined,
+        expiresAt: pendingApproval.expiresAt.toISOString(),
       };
     }
 

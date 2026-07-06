@@ -26,6 +26,12 @@ export type {
   SlackThreadMessage,
 } from "./client";
 export { buildWorkingMessage, buildRunLinkBlock, renderSlackBlocks } from "./blocks/render";
+export {
+  buildApprovalCard,
+  buildApprovalResolutionCard,
+  type ApprovalCardArgs,
+  type ApprovalResolutionArgs,
+} from "./blocks/approval";
 export { SlackStreamAdapter } from "./stream-adapter";
 export { verifySlackSignature } from "./verify";
 export { syncSlackThreadToDb } from "./sync-thread";

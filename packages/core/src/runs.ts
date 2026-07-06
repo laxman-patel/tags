@@ -273,6 +273,18 @@ export async function createApprovalRequest(
   return row;
 }
 
+export async function setApprovalSlackRef(
+  db: Db,
+  approvalId: string,
+  channelId: string,
+  messageTs: string,
+): Promise<void> {
+  await db
+    .update(approvalRequests)
+    .set({ slackChannelId: channelId, slackMessageTs: messageTs })
+    .where(eq(approvalRequests.id, approvalId));
+}
+
 export async function getPendingApprovalByInvocationId(db: Db, toolInvocationId: string) {
   const rows = await db
     .select()

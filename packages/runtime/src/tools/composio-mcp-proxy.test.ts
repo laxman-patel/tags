@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   coerceInputForJsonSchema,
-  isAutoApprovedComposioTool,
+  isComposioInternalTool,
   isReadOnlyTool,
   jsonSchemaToZodRawShape,
 } from "./composio-mcp-proxy";
@@ -15,26 +15,21 @@ describe("composio-mcp-proxy classification", () => {
     expect(isReadOnlyTool({ annotations: { readOnlyHint: false } })).toBe(false);
   });
 
-  it("treats missing annotations as write (safe default)", () => {
+  it("treats missing annotations as not read-only", () => {
     expect(isReadOnlyTool({})).toBe(false);
     expect(isReadOnlyTool({ annotations: {} })).toBe(false);
     expect(isReadOnlyTool({ annotations: { destructiveHint: true } })).toBe(false);
   });
 
-  it("treats missing readOnlyHint as write (safe default)", () => {
-    expect(
-      isReadOnlyTool({ annotations: { idempotentHint: true, openWorldHint: false } }),
-    ).toBe(false);
+  it("flags Composio internal orchestration tools (always auto-run)", () => {
+    expect(isComposioInternalTool("multi_execute")).toBe(true);
+    expect(isComposioInternalTool("MULTI_EXECUTE")).toBe(true);
+    expect(isComposioInternalTool("composio_manage_connections")).toBe(true);
   });
 
-  it("auto-approves Composio internal orchestration tools", () => {
-    expect(isAutoApprovedComposioTool({ name: "multi_execute", annotations: {} })).toBe(true);
-    expect(isAutoApprovedComposioTool({ name: "MULTI_EXECUTE", annotations: {} })).toBe(true);
-    expect(isAutoApprovedComposioTool({ name: "COMPOSIO_MANAGE_CONNECTIONS", annotations: {} })).toBe(true);
-  });
-
-  it("does not auto-approve app write tools without readOnlyHint", () => {
-    expect(isAutoApprovedComposioTool({ name: "GMAIL_SEND_EMAIL", annotations: {} })).toBe(false);
+  it("does not flag app tools as internal", () => {
+    expect(isComposioInternalTool("GMAIL_SEND_EMAIL")).toBe(false);
+    expect(isComposioInternalTool("GITHUB_CREATE_AN_ISSUE")).toBe(false);
   });
 
   it("preserves basic JSON schema types for MCP tool inputs", () => {
