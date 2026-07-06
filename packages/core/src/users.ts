@@ -22,7 +22,17 @@ export async function resolveOrCreateUser(
     )
     .limit(1);
 
-  if (existing[0]) return existing[0];
+  if (existing[0]) {
+    if (!existing[0].displayName && args.displayName) {
+      const [updated] = await db
+        .update(users)
+        .set({ displayName: args.displayName })
+        .where(eq(users.id, existing[0].id))
+        .returning();
+      return updated ?? existing[0];
+    }
+    return existing[0];
+  }
 
   const id = newId();
   const [row] = await db

@@ -62,11 +62,11 @@ import {
   inArray,
   isNull,
   messages,
+  runEvents,
   runs,
   slackOauthStates,
   spaces,
   sql,
-  toolInvocations,
   users,
   type Db,
 } from "@tags/db";
@@ -733,10 +733,10 @@ async function buildRunsPayload(db: Db, organizationId: string, slackClient?: Sl
   const counts =
     runIds.length > 0
       ? await db
-          .select({ runId: toolInvocations.runId, count: count() })
-          .from(toolInvocations)
-          .where(inArray(toolInvocations.runId, runIds))
-          .groupBy(toolInvocations.runId)
+          .select({ runId: runEvents.runId, count: count() })
+          .from(runEvents)
+          .where(and(inArray(runEvents.runId, runIds), eq(runEvents.eventType, "tool.started")))
+          .groupBy(runEvents.runId)
       : [];
   const countByRun = new Map(counts.map((entry) => [entry.runId, Number(entry.count)]));
 
@@ -840,6 +840,25 @@ function formatTriggeredBy(
   return trigger === "approval_response" ? "approval response" : trigger;
 }
 
+function slackUserDisplayName(user: {
+  name?: string;
+  real_name?: string;
+  profile?: { display_name?: string; real_name?: string };
+} | undefined): string | null {
+  if (!user) return null;
+  const candidates = [
+    user.name,
+    user.profile?.display_name,
+    user.profile?.real_name,
+    user.real_name,
+  ];
+  for (const candidate of candidates) {
+    const trimmed = candidate?.trim();
+    if (trimmed) return trimmed;
+  }
+  return null;
+}
+
 async function resolveSlackUserNames(
   db: Db,
   organizationId: string,
@@ -847,11 +866,39 @@ async function resolveSlackUserNames(
   slackClient?: SlackClient,
 ): Promise<Map<string, string>> {
   const names = new Map<string, string>();
-  if (slackUserIds.size === 0 || !slackClient) return names;
+  if (slackUserIds.size === 0) return names;
+
+  const cachedUsers =
+    slackUserIds.size > 0
+      ? await db
+          .select({
+            externalUserId: users.externalUserId,
+            displayName: users.displayName,
+          })
+          .from(users)
+          .where(
+            and(
+              eq(users.organizationId, organizationId),
+              eq(users.externalProvider, "slack"),
+              inArray(users.externalUserId, [...slackUserIds]),
+            ),
+          )
+      : [];
+
+  for (const user of cachedUsers) {
+    const displayName = user.displayName?.trim();
+    if (displayName) {
+      names.set(user.externalUserId, displayName);
+    }
+  }
+
+  if (!slackClient) return names;
+
   for (const slackUserId of slackUserIds) {
+    if (names.has(slackUserId)) continue;
     try {
       const info = await slackClient.users.info({ user: slackUserId });
-      const name = info.user?.name ?? info.user?.profile?.display_name ?? null;
+      const name = slackUserDisplayName(info.user);
       if (name) {
         names.set(slackUserId, name);
         await resolveOrCreateUser(db, { organizationId, slackUserId, displayName: name }).catch(() => {});

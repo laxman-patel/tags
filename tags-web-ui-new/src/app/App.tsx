@@ -1964,7 +1964,10 @@ function RunDetailView({ run, events, eventsLoading, onBack }: { run: Run; event
     pending: "bg-kumo-warning",
   };
 
-  const toolCallCount = run.toolCalls;
+  const toolCallCount =
+    events.length > 0
+      ? events.filter((event) => event.type === "tool_call" && event.status === "pending").length
+      : run.toolCalls;
 
   return (
     <div>
@@ -2003,6 +2006,7 @@ function RunDetailView({ run, events, eventsLoading, onBack }: { run: Run; event
         <div className="flex flex-col">
           {events.map((event, i) => {
             const isLast = i === events.length - 1;
+            const hasBody = Boolean(event.detail || event.json);
             return (
               <div key={event.id} className="flex gap-3">
                 <div className="flex flex-col items-center">
@@ -2029,21 +2033,23 @@ function RunDetailView({ run, events, eventsLoading, onBack }: { run: Run; event
                         </div>
                       )}
                     </LayerCard.Secondary>
-                    <LayerCard.Primary>
-                      {event.detail && (
-                        <p className="text-xs text-kumo-subtle break-words">
-                          {event.detail}
-                        </p>
-                      )}
-                      {event.json && (
-                        <div className="mt-2 max-w-full overflow-x-auto rounded-md border border-kumo-fill bg-kumo-base [&_pre]:whitespace-pre-wrap [&_pre]:break-words [&_pre]:overflow-wrap-anywhere [&_pre]:p-2.5 [&_pre]:text-xs [&_pre]:max-h-80 [&_pre]:overflow-y-auto">
-                          <Code.Block code={event.json} lang="jsonc" />
-                        </div>
-                      )}
-                      {!event.detail && !event.json && (
-                        <p className="text-xs text-kumo-subtle">—</p>
-                      )}
-                    </LayerCard.Primary>
+                    {hasBody && (
+                      <LayerCard.Primary>
+                        {event.detail && (
+                          <p className="text-xs text-kumo-subtle break-words">
+                            {event.detail}
+                          </p>
+                        )}
+                        {event.json && (
+                          <div className={cn(
+                            "max-w-full overflow-x-auto rounded-md border border-kumo-fill bg-kumo-base [&_pre]:whitespace-pre-wrap [&_pre]:break-words [&_pre]:overflow-wrap-anywhere [&_pre]:p-2.5 [&_pre]:text-xs [&_pre]:max-h-80 [&_pre]:overflow-y-auto",
+                            event.detail && "mt-2",
+                          )}>
+                            <Code.Block code={event.json} lang="jsonc" />
+                          </div>
+                        )}
+                      </LayerCard.Primary>
+                    )}
                   </LayerCard>
                 </div>
               </div>
