@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { buildSlackAuthorizeUrl, exchangeSlackOAuthCode } from "./oauth";
+import { DEFAULT_SLACK_BOT_SCOPES, buildSlackAuthorizeUrl, exchangeSlackOAuthCode } from "./oauth";
 
 describe("Slack OAuth helpers", () => {
+  it("includes users:read in default bot scopes for trigger display names", () => {
+    expect(DEFAULT_SLACK_BOT_SCOPES).toContain("users:read");
+  });
+
   it("builds Slack OAuth v2 authorize URLs with redirect, state, scopes, and team hint", () => {
     const url = new URL(
       buildSlackAuthorizeUrl({

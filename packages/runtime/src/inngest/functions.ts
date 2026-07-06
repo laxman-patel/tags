@@ -16,6 +16,7 @@ import {
   addReaction,
   postThreadMessage,
   removeReaction,
+  ensureSlackUserDisplayName,
   SlackStreamAdapter,
   buildRunLinkBlock,
   stopStream,
@@ -350,6 +351,13 @@ async function ingestStep(input: TagsRunInput): Promise<RunSetup> {
       channelId: input.channelId,
       threadTs,
     });
+
+    if (input.actorSlackUserId && input.actorSlackUserId !== "unknown") {
+      await ensureSlackUserDisplayName(slack, db, {
+        organizationId: input.organizationId,
+        slackUserId: input.actorSlackUserId,
+      }).catch(() => {});
+    }
 
     await upsertMessage(db, {
       organizationId: input.organizationId,

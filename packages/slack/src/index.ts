@@ -37,7 +37,11 @@ export {
   type SlackOAuthAccessResponse,
 } from "./oauth";
 export {
-  authTest,
+  ensureSlackUserDisplayName,
+  resolveSlackUserDisplayNames,
+  slackUserDisplayName,
+} from "./resolve-user";
+export {
   joinSlackChannel,
   listSlackChannels,
   type SlackChannelSummary,

@@ -100,10 +100,12 @@ import {
   addReaction,
   buildSlackAuthorizeUrl,
   createSlackClient,
+  ensureSlackUserDisplayName,
   exchangeSlackOAuthCode,
   joinSlackChannel,
   listSlackChannels,
   postThreadMessage,
+  resolveSlackUserDisplayNames,
   startStream,
   updateMessage,
   verifySlackSignature,
@@ -704,6 +706,16 @@ async function buildSpacesPayload(db: Db, organizationId: string) {
 type SlackClient = ReturnType<typeof createSlackClient>;
 
 async function buildRunsPayload(db: Db, organizationId: string, slackClient?: SlackClient) {
+  let client = slackClient;
+  if (!client) {
+    try {
+      const slack = await getAccountSlackClient(db, organizationId);
+      client = slack?.client;
+    } catch {
+      // Best-effort; triggered-by falls back to Slack user IDs without a client.
+    }
+  }
+
   const rows = await db
     .select({
       run: runs,
@@ -800,7 +812,7 @@ async function buildRunsPayload(db: Db, organizationId: string, slackClient?: Sl
       unresolvedSlackUserIds.add(row.msgAuthorId);
     }
   }
-  const resolvedNames = await resolveSlackUserNames(db, organizationId, unresolvedSlackUserIds, slackClient);
+  const resolvedNames = await resolveSlackUserDisplayNames(client, db, organizationId, unresolvedSlackUserIds);
 
   return rows.map((row) => {
     const triggeredBy = formatTriggeredBy(
@@ -838,76 +850,6 @@ function formatTriggeredBy(
     return `@${authorId}`;
   }
   return trigger === "approval_response" ? "approval response" : trigger;
-}
-
-function slackUserDisplayName(user: {
-  name?: string;
-  real_name?: string;
-  profile?: { display_name?: string; real_name?: string };
-} | undefined): string | null {
-  if (!user) return null;
-  const candidates = [
-    user.name,
-    user.profile?.display_name,
-    user.profile?.real_name,
-    user.real_name,
-  ];
-  for (const candidate of candidates) {
-    const trimmed = candidate?.trim();
-    if (trimmed) return trimmed;
-  }
-  return null;
-}
-
-async function resolveSlackUserNames(
-  db: Db,
-  organizationId: string,
-  slackUserIds: Set<string>,
-  slackClient?: SlackClient,
-): Promise<Map<string, string>> {
-  const names = new Map<string, string>();
-  if (slackUserIds.size === 0) return names;
-
-  const cachedUsers =
-    slackUserIds.size > 0
-      ? await db
-          .select({
-            externalUserId: users.externalUserId,
-            displayName: users.displayName,
-          })
-          .from(users)
-          .where(
-            and(
-              eq(users.organizationId, organizationId),
-              eq(users.externalProvider, "slack"),
-              inArray(users.externalUserId, [...slackUserIds]),
-            ),
-          )
-      : [];
-
-  for (const user of cachedUsers) {
-    const displayName = user.displayName?.trim();
-    if (displayName) {
-      names.set(user.externalUserId, displayName);
-    }
-  }
-
-  if (!slackClient) return names;
-
-  for (const slackUserId of slackUserIds) {
-    if (names.has(slackUserId)) continue;
-    try {
-      const info = await slackClient.users.info({ user: slackUserId });
-      const name = slackUserDisplayName(info.user);
-      if (name) {
-        names.set(slackUserId, name);
-        await resolveOrCreateUser(db, { organizationId, slackUserId, displayName: name }).catch(() => {});
-      }
-    } catch {
-      // Best-effort; leave unresolved — the UI falls back to the Slack user ID.
-    }
-  }
-  return names;
 }
 
 async function buildActivityPayload(db: Db, organizationId: string) {
@@ -1910,6 +1852,11 @@ async function handleSlackEvents(req: IncomingMessage, res: ServerResponse) {
       }
 
       await addReaction(slack, event.channel, event.ts, "eyes").catch(() => {});
+
+      await ensureSlackUserDisplayName(slack, db, {
+        organizationId: resolved.space.organizationId,
+        slackUserId: event.user,
+      }).catch(() => {});
 
       const data: TagsRunInput = {
         organizationId: resolved.space.organizationId,

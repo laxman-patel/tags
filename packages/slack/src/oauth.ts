@@ -9,6 +9,7 @@ export const DEFAULT_SLACK_BOT_SCOPES = [
   "groups:read",
   "reactions:read",
   "reactions:write",
+  "users:read",
 ] as const;
 
 export type SlackOAuthAccessResponse = {
