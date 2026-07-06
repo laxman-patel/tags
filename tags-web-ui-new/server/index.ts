@@ -83,14 +83,13 @@ import {
   authorizeComposioToolkit,
   listComposioConnectedAccountStatuses,
   listComposioToolkits,
-  loadComposioTools,
   resolveToolkitConnectionStatus,
   type ComposioToolkitDirectoryItem,
 } from "@tags/runtime/tools/composio";
 import {
-  listGitHubReposWithComposio,
+  listGitHubReposForEntity,
   parseGitHubRepoUrl,
-  testGitHubRepoAccessWithComposio,
+  testGitHubRepoAccessForEntity,
 } from "@tags/runtime/integrations/composio-github";
 import {
   DEFAULT_SLACK_BOT_SCOPES,
@@ -570,28 +569,18 @@ async function loadGitHubReposForSpace(db: Db, spaceId: string) {
     return { ok: false as const, error: "composio_not_configured" as const };
   }
 
-  const composio = await loadComposioTools({
+  const result = await listGitHubReposForEntity({
     apiKey: context.apiKey,
     entityId: spaceId,
-    toolkits: ["github"],
   });
-  if (!composio) {
-    return { ok: false as const, error: "github_tools_unavailable" as const };
+  if (!result.ok) {
+    return {
+      ok: false as const,
+      error: "github_list_failed" as const,
+      message: result.message,
+    };
   }
-
-  try {
-    const result = await listGitHubReposWithComposio({ tools: composio.tools });
-    if (!result.ok) {
-      return {
-        ok: false as const,
-        error: "github_list_failed" as const,
-        message: result.message,
-      };
-    }
-    return { ok: true as const, repos: result.repos };
-  } finally {
-    await composio.close();
-  }
+  return { ok: true as const, repos: result.repos };
 }
 
 async function validateRepoUrlsForSpace(db: Db, spaceId: string, repoUrls: string[]) {
@@ -608,39 +597,27 @@ async function validateRepoUrlsForSpace(db: Db, spaceId: string, repoUrls: strin
     return { ok: false as const, error: "composio_not_configured" as const };
   }
 
-  const composio = await loadComposioTools({
-    apiKey: context.apiKey,
-    entityId: spaceId,
-    toolkits: ["github"],
-  });
-  if (!composio) {
-    return { ok: false as const, error: "github_tools_unavailable" as const };
-  }
-
-  try {
-    for (const url of repoUrls) {
-      const ref = parseGitHubRepoUrl(url);
-      if (!ref) {
-        return { ok: false as const, error: "invalid_repo_url" as const, url };
-      }
-      const access = await testGitHubRepoAccessWithComposio({
-        tools: composio.tools,
-        owner: ref.owner,
-        repo: ref.repo,
-      });
-      if (!access.ok) {
-        return {
-          ok: false as const,
-          error: "repo_inaccessible" as const,
-          url,
-          message: access.message,
-        };
-      }
+  for (const url of repoUrls) {
+    const ref = parseGitHubRepoUrl(url);
+    if (!ref) {
+      return { ok: false as const, error: "invalid_repo_url" as const, url };
     }
-    return { ok: true as const };
-  } finally {
-    await composio.close();
+    const access = await testGitHubRepoAccessForEntity({
+      apiKey: context.apiKey,
+      entityId: spaceId,
+      owner: ref.owner,
+      repo: ref.repo,
+    });
+    if (!access.ok) {
+      return {
+        ok: false as const,
+        error: "repo_inaccessible" as const,
+        url,
+        message: access.message,
+      };
+    }
   }
+  return { ok: true as const };
 }
 
 async function buildSpacesPayload(db: Db, organizationId: string) {

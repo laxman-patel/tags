@@ -153,7 +153,13 @@ async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
   });
   if (!response.ok) {
     const body = await response.json().catch(() => ({}));
-    throw new Error(typeof body.error === "string" ? body.error : `Request failed: ${response.status}`);
+    const message =
+      typeof body.message === "string"
+        ? body.message
+        : typeof body.error === "string"
+          ? body.error
+          : `Request failed: ${response.status}`;
+    throw new Error(message);
   }
   return response.json() as Promise<T>;
 }

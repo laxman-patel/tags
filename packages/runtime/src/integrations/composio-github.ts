@@ -1,4 +1,14 @@
+import { Composio } from "@composio/core";
+
 const MARKER_PREFIX = "<!-- tags-demo-recording:";
+
+const GITHUB_LIST_REPO_TOOL_SLUGS = [
+  "GITHUB_LIST_REPOSITORIES_FOR_THE_AUTHENTICATED_USER",
+  "GITHUB_LIST_REPOS",
+  "GITHUB_GET_REPOS",
+] as const;
+
+const GITHUB_GET_REPO_TOOL_SLUGS = ["GITHUB_GET_A_REPOSITORY", "GITHUB_GET_REPOSITORY"] as const;
 
 export type GitHubPrRef = {
   owner: string;
@@ -112,8 +122,26 @@ function asArray(value: unknown): unknown[] {
     if (Array.isArray(record.items)) return record.items;
     if (Array.isArray(record.comments)) return record.comments;
     if (Array.isArray(record.data)) return record.data;
+    if (Array.isArray(record.repositories)) return record.repositories;
+    if (Array.isArray(record.repos)) return record.repos;
   }
   return [];
+}
+
+function composioExecuteError(result: { error?: unknown }): string {
+  if (typeof result.error === "string") return result.error;
+  if (typeof result.error === "object" && result.error !== null && "message" in result.error) {
+    const message = (result.error as { message?: unknown }).message;
+    if (typeof message === "string") return message;
+  }
+  return "Composio tool execution failed";
+}
+
+function normalizeGitHubRepoList(value: unknown): GitHubRepoSummary[] {
+  return asArray(value)
+    .map((item) => normalizeGitHubRepo(item))
+    .filter((item): item is GitHubRepoSummary => item !== null)
+    .sort((left, right) => left.fullName.localeCompare(right.fullName));
 }
 
 function commentId(value: unknown): number | string | undefined {
@@ -191,6 +219,37 @@ function normalizeGitHubRepo(value: unknown): GitHubRepoSummary | null {
   };
 }
 
+export async function listGitHubReposForEntity(args: {
+  apiKey: string;
+  entityId: string;
+}): Promise<GitHubRepoListResult> {
+  const composio = new Composio({ apiKey: args.apiKey });
+  let lastMessage = "Composio GitHub repository list tool is unavailable.";
+
+  for (const slug of GITHUB_LIST_REPO_TOOL_SLUGS) {
+    try {
+      const result = await composio.tools.execute(slug, {
+        userId: args.entityId,
+        arguments: {},
+        dangerouslySkipVersionCheck: true,
+      });
+      if (!result.successful) {
+        lastMessage = composioExecuteError(result);
+        continue;
+      }
+      return { ok: true, repos: normalizeGitHubRepoList(result.data) };
+    } catch (error) {
+      lastMessage = `Composio GitHub repo list failed: ${resultMessage(error)}`;
+    }
+  }
+
+  return {
+    ok: false,
+    status: "request_failed",
+    message: lastMessage,
+  };
+}
+
 export async function listGitHubReposWithComposio(args: {
   tools: ComposioToolMap;
 }): Promise<GitHubRepoListResult> {
@@ -212,10 +271,7 @@ export async function listGitHubReposWithComposio(args: {
   try {
     const [, tool] = listTool;
     const result = await tool.execute!({}, {});
-    const repos = asArray(result)
-      .map((item) => normalizeGitHubRepo(item))
-      .filter((item): item is GitHubRepoSummary => item !== null)
-      .sort((left, right) => left.fullName.localeCompare(right.fullName));
+    const repos = normalizeGitHubRepoList(result);
     return { ok: true, repos };
   } catch (error) {
     return {
@@ -224,6 +280,51 @@ export async function listGitHubReposWithComposio(args: {
       message: `Composio GitHub repo list failed: ${resultMessage(error)}`,
     };
   }
+}
+
+export async function testGitHubRepoAccessForEntity(args: {
+  apiKey: string;
+  entityId: string;
+  owner: string;
+  repo: string;
+}): Promise<GitHubRepoAccessResult> {
+  const composio = new Composio({ apiKey: args.apiKey });
+  let lastMessage = "Composio GitHub repository metadata tool is unavailable.";
+
+  for (const slug of GITHUB_GET_REPO_TOOL_SLUGS) {
+    try {
+      const result = await composio.tools.execute(slug, {
+        userId: args.entityId,
+        arguments: { owner: args.owner, repo: args.repo },
+        dangerouslySkipVersionCheck: true,
+      });
+      if (!result.successful) {
+        lastMessage = composioExecuteError(result);
+        continue;
+      }
+      const record = resultRecord(result.data);
+      return {
+        ok: true,
+        status: "reachable",
+        private: Boolean(record.private),
+        defaultBranch:
+          typeof record.default_branch === "string"
+            ? record.default_branch
+            : typeof record.defaultBranch === "string"
+              ? record.defaultBranch
+              : null,
+        message: "Repository metadata is reachable through the Space's Composio GitHub connection.",
+      };
+    } catch (error) {
+      lastMessage = `Composio GitHub repo check failed: ${resultMessage(error)}`;
+    }
+  }
+
+  return {
+    ok: false,
+    status: "github_tool_unavailable",
+    message: lastMessage,
+  };
 }
 
 export async function testGitHubRepoAccessWithComposio(args: {
