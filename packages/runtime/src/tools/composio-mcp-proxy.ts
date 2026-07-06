@@ -45,7 +45,7 @@ export function buildComposioMcpRunToken(
 type ComposioToolDef = {
   name: string;
   description?: string;
-  inputSchema?: { properties?: Record<string, unknown> };
+  inputSchema?: JsonSchema;
   annotations?: {
     readOnlyHint?: boolean;
     destructiveHint?: boolean;
@@ -63,19 +63,113 @@ type McpCallToolResult = Record<string, any> & {
 
 const AUTO_APPROVED_COMPOSIO_INTERNAL_TOOLS = new Set([
   "multi_execute",
+  "composio_manage_connections",
 ]);
 
-function jsonSchemaToZodRawShape(
-  schema: { properties?: Record<string, unknown> } | undefined,
-): Record<string, z.ZodTypeAny> {
+type JsonSchema = {
+  type?: string | string[];
+  properties?: Record<string, unknown>;
+  items?: unknown;
+  required?: string[];
+};
+
+function asJsonSchema(value: unknown): JsonSchema | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
+  return value as JsonSchema;
+}
+
+function jsonSchemaType(schema: JsonSchema | undefined): string | undefined {
+  const type = schema?.type;
+  if (Array.isArray(type)) return type.find((item) => item !== "null");
+  return type;
+}
+
+function jsonSchemaToZod(schema: unknown): z.ZodTypeAny {
+  const jsonSchema = asJsonSchema(schema);
+  switch (jsonSchemaType(jsonSchema)) {
+    case "boolean":
+      return z.boolean();
+    case "integer":
+      return z.number().int();
+    case "number":
+      return z.number();
+    case "string":
+      return z.string();
+    case "array":
+      return z.array(jsonSchemaToZod(jsonSchema?.items));
+    case "object":
+      return jsonSchema?.properties
+        ? z.object(jsonSchemaToZodRawShape(jsonSchema)).passthrough()
+        : z.record(z.string(), z.any());
+    default:
+      return z.any();
+  }
+}
+
+export function jsonSchemaToZodRawShape(schema: JsonSchema | undefined): Record<string, z.ZodTypeAny> {
   const shape: Record<string, z.ZodTypeAny> = {};
   const props = schema?.properties;
+  const required = new Set(schema?.required ?? []);
   if (props && typeof props === "object") {
     for (const key of Object.keys(props)) {
-      shape[key] = z.any();
+      const zodSchema = jsonSchemaToZod(props[key]);
+      shape[key] = required.has(key) ? zodSchema : zodSchema.optional();
     }
   }
   return shape;
+}
+
+function coerceValueForJsonSchema(value: unknown, schema: unknown): unknown {
+  const jsonSchema = asJsonSchema(schema);
+  switch (jsonSchemaType(jsonSchema)) {
+    case "boolean":
+      if (value === "true") return true;
+      if (value === "false") return false;
+      return value;
+    case "integer":
+    case "number":
+      return typeof value === "string" && value.trim() !== "" ? Number(value) : value;
+    case "array": {
+      if (typeof value === "string") {
+        try {
+          const parsed = JSON.parse(value);
+          if (Array.isArray(parsed)) {
+            return parsed.map((item) => coerceValueForJsonSchema(item, jsonSchema?.items));
+          }
+        } catch {
+          return [coerceValueForJsonSchema(value, jsonSchema?.items)];
+        }
+      }
+      return Array.isArray(value)
+        ? value.map((item) => coerceValueForJsonSchema(item, jsonSchema?.items))
+        : value;
+    }
+    case "object": {
+      if (!value || typeof value !== "object" || Array.isArray(value)) return value;
+      const props = jsonSchema?.properties ?? {};
+      return Object.fromEntries(
+        Object.entries(value).map(([key, item]) => [
+          key,
+          coerceValueForJsonSchema(item, props[key]),
+        ]),
+      );
+    }
+    default:
+      return value;
+  }
+}
+
+export function coerceInputForJsonSchema(
+  input: Record<string, unknown>,
+  schema: JsonSchema | undefined,
+): Record<string, unknown> {
+  const props = schema?.properties ?? {};
+  return Object.fromEntries(
+    Object.entries(input).map(([key, value]) => [
+      key,
+      coerceValueForJsonSchema(value, props[key]),
+    ]),
+  );
 }
 
 export function isReadOnlyTool(tool: Pick<ComposioToolDef, "annotations">): boolean {
@@ -157,17 +251,18 @@ export async function handleComposioMcpRequest(
         annotations: tool.annotations,
       },
       (async (input: Record<string, unknown>): Promise<McpCallToolResult> => {
+        const coercedInput = coerceInputForJsonSchema(input, tool.inputSchema);
         await emit({
           type: "tool.started",
           toolName: gatedName,
-          inputPreview: input,
+          inputPreview: coercedInput,
         });
 
         if (autoApproved) {
           try {
             const result = await mcpClient.callTool({
               name: tool.name,
-              arguments: input,
+              arguments: coercedInput,
             });
             await emit({
               type: "tool.finished",
@@ -197,7 +292,7 @@ export async function handleComposioMcpRequest(
             spaceId: claims.spaceId,
             threadId: claims.threadId,
             toolName: gatedName,
-            toolInput: input,
+            toolInput: coercedInput,
             actorUserId: claims.actorSlackUserId,
             slackChannelId: claims.channelId,
             slackMessageTs: claims.slackMessageTs,
@@ -206,7 +301,7 @@ export async function handleComposioMcpRequest(
 
           const result = await mcpClient.callTool({
             name: tool.name,
-            arguments: input,
+            arguments: coercedInput,
           });
           await emit({
             type: "tool.finished",

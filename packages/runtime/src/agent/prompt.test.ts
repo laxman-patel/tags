@@ -20,7 +20,7 @@ describe("opencode prompts", () => {
     expect(prompt).toContain("do not require approval");
     expect(prompt).toContain("search_channel");
     expect(prompt).toContain("github");
-    expect(prompt).toContain("Composio-internal orchestration tools (e.g. multi_execute) execute automatically without approval");
+    expect(prompt).toContain("Composio connection-management helpers execute automatically without approval");
     expect(prompt).toContain("Slack and the Tags dashboard with Approve/Decline buttons");
   });
 

@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { isAutoApprovedComposioTool, isReadOnlyTool } from "./composio-mcp-proxy";
+import {
+  coerceInputForJsonSchema,
+  isAutoApprovedComposioTool,
+  isReadOnlyTool,
+  jsonSchemaToZodRawShape,
+} from "./composio-mcp-proxy";
 
 describe("composio-mcp-proxy classification", () => {
   it("treats readOnlyHint:true as read-only", () => {
@@ -25,9 +30,45 @@ describe("composio-mcp-proxy classification", () => {
   it("auto-approves Composio internal orchestration tools", () => {
     expect(isAutoApprovedComposioTool({ name: "multi_execute", annotations: {} })).toBe(true);
     expect(isAutoApprovedComposioTool({ name: "MULTI_EXECUTE", annotations: {} })).toBe(true);
+    expect(isAutoApprovedComposioTool({ name: "COMPOSIO_MANAGE_CONNECTIONS", annotations: {} })).toBe(true);
   });
 
   it("does not auto-approve app write tools without readOnlyHint", () => {
     expect(isAutoApprovedComposioTool({ name: "GMAIL_SEND_EMAIL", annotations: {} })).toBe(false);
+  });
+
+  it("preserves basic JSON schema types for MCP tool inputs", () => {
+    const shape = jsonSchemaToZodRawShape({
+      type: "object",
+      required: ["toolkits"],
+      properties: {
+        toolkits: { type: "array", items: { type: "string" } },
+        reinitiate_all: { type: "boolean" },
+      },
+    });
+
+    const toolkits = shape.toolkits;
+    const reinitiateAll = shape.reinitiate_all;
+    expect(toolkits).toBeDefined();
+    expect(reinitiateAll).toBeDefined();
+    expect(toolkits?.safeParse(["gmail"]).success).toBe(true);
+    expect(toolkits?.safeParse("gmail").success).toBe(false);
+    expect(reinitiateAll?.safeParse(false).success).toBe(true);
+    expect(reinitiateAll?.safeParse("false").success).toBe(false);
+  });
+
+  it("coerces stringified Composio connection arguments from schema", () => {
+    expect(
+      coerceInputForJsonSchema(
+        { toolkits: "gmail", reinitiate_all: "false" },
+        {
+          type: "object",
+          properties: {
+            toolkits: { type: "array", items: { type: "string" } },
+            reinitiate_all: { type: "boolean" },
+          },
+        },
+      ),
+    ).toEqual({ toolkits: ["gmail"], reinitiate_all: false });
   });
 });
