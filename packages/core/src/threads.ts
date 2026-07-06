@@ -176,3 +176,21 @@ export async function listThreadMessages(
 
   return runQuery(db);
 }
+
+export async function getMessageByProviderMessageId(
+  db: Db,
+  threadId: string,
+  providerMessageId: string,
+): Promise<typeof messages.$inferSelect | null> {
+  const rows = await db
+    .select()
+    .from(messages)
+    .where(
+      and(
+        eq(messages.threadId, threadId),
+        eq(messages.providerMessageId, providerMessageId),
+      ),
+    )
+    .limit(1);
+  return rows[0] ?? null;
+}

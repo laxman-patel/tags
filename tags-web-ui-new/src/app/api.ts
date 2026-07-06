@@ -108,6 +108,7 @@ export interface RunEvent {
   label: string;
   detail: string;
   status?: "success" | "failed" | "pending";
+  json?: string;
 }
 
 export interface Schedule {
@@ -246,29 +247,99 @@ export function respondToApproval(approvalId: string, decision: "approved" | "re
   });
 }
 
+function eventType(value: string): RunEventType {
+  if (value.includes("approval")) return "approval";
+  if (value.includes("error") || value === "run.failed") return "error";
+  if (value.includes("artifact")) return "artifact";
+  if (value.includes("tool")) return "tool_call";
+  if (value === "run.finished" || value.includes("end") || value.includes("complete")) return "end";
+  return "start";
+}
+
+function prettyJson(value: unknown): string | undefined {
+  if (value == null || typeof value === "string" || typeof value === "number" || typeof value === "boolean") return undefined;
+  try {
+    const out = JSON.stringify(value, null, 2);
+    return out === "{}" ? undefined : out;
+  } catch {
+    return undefined;
+  }
+}
+
 export async function loadRunEvents(runId: string): Promise<RunEvent[]> {
   const payload = await requestJson<{
     events: Array<{ seq: number; eventType: string; payload: Record<string, unknown>; createdAt: string }>;
   }>(`/api/runs/${runId}/events`);
-  return payload.events.map((event) => {
-    const createdAt = new Date(event.createdAt);
-    const status = event.payload.status === "failed" ? "failed" : event.payload.status === "pending" ? "pending" : "success";
-    return {
-      id: String(event.seq),
-      type: eventType(event.eventType),
-      time: createdAt.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", second: "2-digit" }),
-      label: String(event.payload.label ?? event.eventType),
-      detail: String(event.payload.detail ?? event.payload.message ?? JSON.stringify(event.payload)),
-      status,
-    };
-  });
-}
+  return payload.events
+    .filter((event) => event.eventType !== "text.delta")
+    .map((event) => {
+      const createdAt = new Date(event.createdAt);
+      const p = event.payload;
+      const type = eventType(event.eventType);
+      let label = String(p.label ?? event.eventType);
+      let detail = String(p.detail ?? p.message ?? "");
+      let json: string | undefined;
+      let status: "success" | "failed" | "pending" = "success";
 
-function eventType(value: string): RunEventType {
-  if (value.includes("approval")) return "approval";
-  if (value.includes("error")) return "error";
-  if (value.includes("artifact")) return "artifact";
-  if (value.includes("tool")) return "tool_call";
-  if (value.includes("end") || value.includes("complete")) return "end";
-  return "start";
+      if (event.eventType === "tool.started") {
+        label = String(p.toolName ?? "tool");
+        detail = "Tool call started";
+        json = prettyJson(p.inputPreview);
+        status = "pending";
+      } else if (event.eventType === "tool.finished") {
+        label = String(p.toolName ?? "tool");
+        detail = "Tool call completed";
+        json = prettyJson(p.outputPreview);
+        status = "success";
+      } else if (event.eventType === "approval.requested") {
+        label = "Approval requested";
+        detail = String(p.requestText ?? p.toolName ?? "");
+        json = prettyJson(p.inputPreview);
+        status = "pending";
+      } else if (event.eventType === "question.requested") {
+        label = "Question asked";
+        detail = String(p.questionText ?? "");
+        status = "pending";
+      } else if (event.eventType === "artifact.created") {
+        label = "Artifact created";
+        detail = String(p.artifactTitle ?? "");
+        status = "success";
+      } else if (event.eventType === "run.finished") {
+        label = "Run completed";
+        status = "success";
+      } else if (event.eventType === "run.failed") {
+        label = "Run failed";
+        detail = String(p.error ?? "");
+        status = "failed";
+      } else if (event.eventType === "recording.started") {
+        label = "Recording started";
+        status = "pending";
+      } else if (event.eventType === "recording.finished") {
+        label = "Recording finished";
+        detail = String(p.prUrl ?? "");
+        status = "success";
+      } else if (event.eventType === "recording.failed") {
+        label = "Recording failed";
+        detail = String(p.error ?? "");
+        status = "failed";
+      } else if (event.eventType === "status") {
+        label = String(p.label ?? "Status");
+        detail = String(p.detail ?? "");
+        status = "success";
+      } else if (p.status === "failed") {
+        status = "failed";
+      } else if (p.status === "pending") {
+        status = "pending";
+      }
+
+      return {
+        id: String(event.seq),
+        type,
+        time: createdAt.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", second: "2-digit" }),
+        label,
+        detail,
+        json,
+        status,
+      };
+    });
 }

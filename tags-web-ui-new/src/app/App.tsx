@@ -25,6 +25,7 @@ import {
   Dialog,
   DropdownMenu,
   Collapsible,
+  Code,
   cn,
 } from "@cloudflare/kumo";
 import {
@@ -568,6 +569,18 @@ function formatShortDate(value: string | null) {
   if (!value) return "Never";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "Never";
+  return date.toLocaleString("en-US", {
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function formatRunStartedAt(value: string) {
+  if (!value) return "—";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
   return date.toLocaleString("en-US", {
     month: "short",
     day: "numeric",
@@ -1664,11 +1677,11 @@ function SpaceDetailView({
                   >
                     <Table.Cell><RunStatusBadge status={run.status} /></Table.Cell>
                     <Table.Cell><Text variant="secondary" size="xs">{run.id}</Text></Table.Cell>
-                    <Table.Cell><Text variant="secondary" size="xs">{run.triggeredBy}</Text></Table.Cell>
-                    <Table.Cell><Text variant="secondary" size="xs">{run.startedAt}</Text></Table.Cell>
-                    <Table.Cell><Text variant="secondary" size="xs">{run.duration}</Text></Table.Cell>
-                    <Table.Cell><Text size="xs">{run.toolCalls}</Text></Table.Cell>
-                    <Table.Cell><CaretRightIcon size={14} className="text-kumo-subtle" /></Table.Cell>
+                <Table.Cell><Text variant="secondary" size="xs">{run.triggeredBy}</Text></Table.Cell>
+                <Table.Cell><Text variant="secondary" size="xs">{formatRunStartedAt(run.startedAt)}</Text></Table.Cell>
+                <Table.Cell><Text variant="secondary" size="xs">{run.duration}</Text></Table.Cell>
+                <Table.Cell><Text size="xs">{run.toolCalls}</Text></Table.Cell>
+                <Table.Cell><CaretRightIcon size={14} className="text-kumo-subtle" /></Table.Cell>
                   </Table.Row>
                 ))}
               </Table.Body>
@@ -1922,7 +1935,7 @@ function RunsView({
                   </span>
                 </Table.Cell>
                 <Table.Cell><Text variant="secondary" size="xs">{run.triggeredBy}</Text></Table.Cell>
-                <Table.Cell><Text variant="secondary" size="xs">{run.startedAt}</Text></Table.Cell>
+                <Table.Cell><Text variant="secondary" size="xs">{formatRunStartedAt(run.startedAt)}</Text></Table.Cell>
                 <Table.Cell><Text variant="secondary" size="xs">{run.duration}</Text></Table.Cell>
                 <Table.Cell><Text size="xs">{run.toolCalls}</Text></Table.Cell>
                 <Table.Cell><CaretRightIcon size={14} className="text-kumo-subtle" /></Table.Cell>
@@ -1935,7 +1948,7 @@ function RunsView({
   );
 }
 
-function RunDetailView({ run, events, onBack }: { run: Run; events: RunEvent[]; onBack: () => void }) {
+function RunDetailView({ run, events, eventsLoading, onBack }: { run: Run; events: RunEvent[]; eventsLoading: boolean; onBack: () => void }) {
   const eventIconMap: Record<RunEventType, ReactNode> = {
     start: <PlayIcon size={14} className="text-kumo-subtle" />,
     tool_call: <LightningIcon size={14} className="text-kumo-info" />,
@@ -1944,6 +1957,15 @@ function RunDetailView({ run, events, onBack }: { run: Run; events: RunEvent[]; 
     artifact: <FileTextIcon size={14} className="text-kumo-info" />,
     end: <CheckIcon size={14} className="text-kumo-success" />,
   };
+
+  const statusDotColor: Record<string, string> = {
+    success: "bg-kumo-success",
+    failed: "bg-kumo-danger",
+    pending: "bg-kumo-warning",
+  };
+
+  const toolCallCount = events.filter((e) => e.type === "tool_call").length;
+  const triggeredByDisplay = run.triggeredBy.startsWith("@") ? run.triggeredBy : run.triggeredBy === "scheduled" ? "scheduled" : `@${run.triggeredBy}`;
 
   return (
     <div>
@@ -1956,15 +1978,19 @@ function RunDetailView({ run, events, onBack }: { run: Run; events: RunEvent[]; 
 
       <MetricGrid
         metrics={[
-          { label: "Started", value: run.startedAt, icon: <ClockIcon size={14} /> },
+          { label: "Started", value: formatRunStartedAt(run.startedAt), icon: <ClockIcon size={14} /> },
           { label: "Duration", value: run.duration, icon: <ActivityIcon size={14} /> },
-          { label: "Tool calls", value: run.toolCalls, icon: <LightningIcon size={14} /> },
-          { label: "Triggered by", value: run.triggeredBy, icon: <BrainIcon size={14} /> },
+          { label: "Tool calls", value: toolCallCount, icon: <LightningIcon size={14} /> },
+          { label: "Triggered by", value: triggeredByDisplay, icon: <BrainIcon size={14} /> },
         ]}
       />
 
       <SectionHeader title="Timeline" />
-      {events.length === 0 ? (
+      {eventsLoading ? (
+        <div className="flex min-h-[240px] items-center justify-center">
+          <Loader size="lg" />
+        </div>
+      ) : events.length === 0 ? (
         <LayerCard>
           <LayerCard.Primary>
             <Empty
@@ -1999,26 +2025,22 @@ function RunDetailView({ run, events, onBack }: { run: Run; events: RunEvent[]; 
                       </Text>
                       <Text bold>{event.label}</Text>
                       {event.status && (
-                        <div className="ml-auto">
-                          <Badge
-                            variant={
-                              event.status === "success"
-                                ? "success"
-                                : event.status === "failed"
-                                ? "error"
-                                : "warning"
-                            }
-                            appearance="dot"
-                          >
-                            {event.status}
-                          </Badge>
+                        <div className="ml-auto flex items-center gap-1.5">
+                          <span className={cn("h-2 w-2 rounded-full shrink-0", statusDotColor[event.status])} />
                         </div>
                       )}
                     </LayerCard.Secondary>
                     <LayerCard.Primary>
-                      <Text variant="secondary" size="xs" as="p">
-                        {event.detail}
-                      </Text>
+                      {event.detail && (
+                        <Text variant="secondary" size="xs" as="p">
+                          {event.detail}
+                        </Text>
+                      )}
+                      {event.json && (
+                        <div className="mt-2">
+                          <Code.Block code={event.json} lang="jsonc" />
+                        </div>
+                      )}
                     </LayerCard.Primary>
                   </LayerCard>
                 </div>
@@ -2458,7 +2480,7 @@ function DashboardApp({ clerkEnabled = false }: { clerkEnabled?: boolean }) {
   }, []);
 
   useEffect(() => {
-    if (view.page !== "run-detail" || eventsByRun[view.id]) return;
+    if (view.page !== "run-detail" || view.id in eventsByRun) return;
     loadRunEvents(view.id)
       .then((events) => setEventsByRun((prev) => ({ ...prev, [view.id]: events })))
       .catch((err) => setError(err instanceof Error ? err.message : "Failed to load run events"));
@@ -2918,6 +2940,7 @@ function DashboardApp({ clerkEnabled = false }: { clerkEnabled?: boolean }) {
                       <RunDetailView
                         run={currentRun}
                         events={eventsByRun[currentRun.id] ?? []}
+                        eventsLoading={!(currentRun.id in eventsByRun)}
                         onBack={() => setView({ page: "runs" })}
                       />
                     )}

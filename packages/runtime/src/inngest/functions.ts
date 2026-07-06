@@ -8,7 +8,7 @@ import {
   updateRunStatus,
 } from "@tags/core/runs";
 import { loadActiveSpaceConfig } from "@tags/core/spaces";
-import { findOrCreateThread, upsertMessage } from "@tags/core/threads";
+import { findOrCreateThread, getMessageByProviderMessageId, upsertMessage } from "@tags/core/threads";
 import type { TagsEvent } from "@tags/core/events";
 import { createArtifact } from "@tags/core/artifacts";
 import { createDb, newId, runs, threads } from "@tags/db";
@@ -338,6 +338,8 @@ async function ingestStep(input: TagsRunInput): Promise<RunSetup> {
     thread.id,
   );
 
+  let triggerMessageId: string | undefined;
+
   if (!input.isScheduled) {
     // Sync first so the trigger message is stored with any file attachments
     // inlined; the explicit upsert below is a fallback (no-op if synced).
@@ -373,6 +375,8 @@ async function ingestStep(input: TagsRunInput): Promise<RunSetup> {
     });
   }
 
+  triggerMessageId = (await getMessageByProviderMessageId(db, thread.id, triggerMessageTs))?.id;
+
   if (memoryCommandResult) {
     await upsertMessage(db, {
       organizationId: input.organizationId,
@@ -394,6 +398,7 @@ async function ingestStep(input: TagsRunInput): Promise<RunSetup> {
       modelId: config.modelId,
       trigger: input.trigger,
       idempotencyKey: input.idempotencyKey,
+      inputMessageId: triggerMessageId,
     })) ??
     (
       await db.select().from(runs).where(eq(runs.idempotencyKey, input.idempotencyKey)).limit(1)

@@ -60,11 +60,13 @@ import {
   gte,
   inArray,
   isNull,
+  messages,
   runs,
   slackOauthStates,
   spaces,
   sql,
   toolInvocations,
+  users,
   type Db,
 } from "@tags/db";
 import {
@@ -698,16 +700,30 @@ async function buildSpacesPayload(db: Db, organizationId: string) {
   );
 }
 
-async function buildRunsPayload(db: Db, organizationId: string) {
+type SlackClient = ReturnType<typeof createSlackClient>;
+
+async function buildRunsPayload(db: Db, organizationId: string, slackClient?: SlackClient) {
   const rows = await db
     .select({
       run: runs,
       spaceName: spaces.name,
       spaceSlug: spaces.slug,
       externalSpaceId: spaces.externalSpaceId,
+      msgAuthorType: messages.authorType,
+      msgAuthorId: messages.authorId,
+      userDisplayName: users.displayName,
     })
     .from(runs)
     .innerJoin(spaces, eq(runs.spaceId, spaces.id))
+    .leftJoin(messages, eq(runs.inputMessageId, messages.id))
+    .leftJoin(
+      users,
+      and(
+        eq(messages.authorId, users.externalUserId),
+        eq(users.externalProvider, "slack"),
+        eq(users.organizationId, organizationId),
+      ),
+    )
     .where(eq(runs.organizationId, organizationId))
     .orderBy(desc(runs.startedAt))
     .limit(100);
@@ -723,17 +739,73 @@ async function buildRunsPayload(db: Db, organizationId: string) {
       : [];
   const countByRun = new Map(counts.map((entry) => [entry.runId, Number(entry.count)]));
 
-  return rows.map((row) => ({
-    id: row.run.id,
-    spaceId: row.run.spaceId,
-    spaceName: row.spaceName,
-    channel: row.spaceSlug || row.externalSpaceId,
-    status: runStatus(row.run.status),
-    startedAt: formatDate(row.run.startedAt),
-    duration: duration(row.run.startedAt, row.run.finishedAt),
-    toolCalls: countByRun.get(row.run.id) ?? 0,
-    triggeredBy: row.run.trigger,
-  }));
+  const unresolvedSlackUserIds = new Set<string>();
+  for (const row of rows) {
+    if (row.msgAuthorType === "human" && row.msgAuthorId && row.msgAuthorId !== "unknown" && !row.userDisplayName) {
+      unresolvedSlackUserIds.add(row.msgAuthorId);
+    }
+  }
+  const resolvedNames = await resolveSlackUserNames(db, organizationId, unresolvedSlackUserIds, slackClient);
+
+  return rows.map((row) => {
+    const triggeredBy = formatTriggeredBy(
+      row.run.trigger,
+      row.msgAuthorType,
+      row.msgAuthorId,
+      row.userDisplayName,
+      resolvedNames,
+    );
+    return {
+      id: row.run.id,
+      spaceId: row.run.spaceId,
+      spaceName: row.spaceName,
+      channel: row.spaceSlug || row.externalSpaceId,
+      status: runStatus(row.run.status),
+      startedAt: row.run.startedAt.toISOString(),
+      duration: duration(row.run.startedAt, row.run.finishedAt),
+      toolCalls: countByRun.get(row.run.id) ?? 0,
+      triggeredBy,
+    };
+  });
+}
+
+function formatTriggeredBy(
+  trigger: string,
+  authorType: string | null,
+  authorId: string | null,
+  displayName: string | null,
+  resolvedNames: Map<string, string>,
+): string {
+  if (trigger === "schedule") return "scheduled";
+  if (authorType === "human" && authorId && authorId !== "unknown") {
+    const name = displayName ?? resolvedNames.get(authorId);
+    if (name) return name.startsWith("@") ? name : `@${name}`;
+    return `@${authorId}`;
+  }
+  return trigger;
+}
+
+async function resolveSlackUserNames(
+  db: Db,
+  organizationId: string,
+  slackUserIds: Set<string>,
+  slackClient?: SlackClient,
+): Promise<Map<string, string>> {
+  const names = new Map<string, string>();
+  if (slackUserIds.size === 0 || !slackClient) return names;
+  for (const slackUserId of slackUserIds) {
+    try {
+      const info = await slackClient.users.info({ user: slackUserId });
+      const name = info.user?.name ?? info.user?.profile?.display_name ?? null;
+      if (name) {
+        names.set(slackUserId, name);
+        await resolveOrCreateUser(db, { organizationId, slackUserId, displayName: name }).catch(() => {});
+      }
+    } catch {
+      // Best-effort; leave unresolved — the UI falls back to the Slack user ID.
+    }
+  }
+  return names;
 }
 
 async function buildActivityPayload(db: Db, organizationId: string) {
@@ -800,12 +872,22 @@ async function loadControlPlane(db: Db, organizationId: string) {
   if (!organizationId) {
     return { organizationId: "", spaces: [], runs: [], activity24h: [], approvals: [], slackWorkspace: null };
   }
-  const [spaceItems, runItems, activity24h, approvalItems, slackInstallation] = await Promise.all([
+  let slackClient: SlackClient | undefined;
+  let slackInstallation = null;
+  try {
+    const slack = await getAccountSlackClient(db, organizationId);
+    if (slack) {
+      slackClient = slack.client;
+      slackInstallation = slack.installation;
+    }
+  } catch {
+    slackInstallation = await getSlackInstallationForOrg(db, organizationId).catch(() => null);
+  }
+  const [spaceItems, runItems, activity24h, approvalItems] = await Promise.all([
     buildSpacesPayload(db, organizationId),
-    buildRunsPayload(db, organizationId),
+    buildRunsPayload(db, organizationId, slackClient),
     buildActivityPayload(db, organizationId),
     buildApprovalsPayload(db, organizationId),
-    getSlackInstallationForOrg(db, organizationId),
   ]);
   return {
     organizationId,
