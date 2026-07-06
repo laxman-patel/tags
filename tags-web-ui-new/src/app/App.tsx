@@ -464,15 +464,6 @@ function ChartTooltipStyle() {
 
 // ===== Helpers =====
 
-const spaceStatusToBadge: Record<
-  SpaceStatus,
-  { variant: "success" | "warning" | "error"; label: string }
-> = {
-  active: { variant: "success", label: "Active" },
-  paused: { variant: "warning", label: "Paused" },
-  error: { variant: "error", label: "Error" },
-};
-
 const runStatusToBadge: Record<
   RunStatus,
   { variant: "success" | "info" | "error" | "warning"; label: string }
@@ -482,15 +473,6 @@ const runStatusToBadge: Record<
   failed: { variant: "error", label: "Failed" },
   pending: { variant: "warning", label: "Pending" },
 };
-
-function SpaceStatusBadge({ status }: { status: SpaceStatus }) {
-  const b = spaceStatusToBadge[status];
-  return (
-    <Badge variant={b.variant} appearance="dot">
-      {b.label}
-    </Badge>
-  );
-}
 
 function RunStatusBadge({ status }: { status: RunStatus }) {
   const b = runStatusToBadge[status];
@@ -1141,13 +1123,6 @@ function SpaceDetailView({
           </Button>
         }
       />
-
-      <div className="flex items-center gap-3 mb-6">
-        <SpaceStatusBadge status={space.status} />
-        <Text variant="secondary" size="sm">
-          {space.recentActivity}
-        </Text>
-      </div>
 
       <MetricGrid
         metrics={[
