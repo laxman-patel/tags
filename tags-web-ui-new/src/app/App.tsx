@@ -1075,6 +1075,7 @@ function SpaceDetailView({
       tool.categories.some((category) => category.toLowerCase().includes(query))
     );
   });
+  const addToolAuthPending = Boolean(authLoadingToolId?.startsWith(`${space.id}:`));
 
   useEffect(() => {
     if (!addToolOpen || composioDirectory.length > 0 || directoryLoading) return;
@@ -1595,7 +1596,13 @@ function SpaceDetailView({
       </Dialog.Root>
 
       {/* Add tool from Composio directory */}
-      <Dialog.Root open={addToolOpen} onOpenChange={setAddToolOpen}>
+      <Dialog.Root
+        open={addToolOpen}
+        onOpenChange={(nextOpen) => {
+          if (!nextOpen && addToolAuthPending) return;
+          setAddToolOpen(nextOpen);
+        }}
+      >
         <Dialog className="p-0 max-w-4xl" size="xl">
           <div className="flex flex-col gap-4 border-b border-kumo-hairline px-6 py-4">
             <div className="flex items-start justify-between gap-4">
