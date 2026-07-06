@@ -61,6 +61,10 @@ type McpCallToolResult = Record<string, any> & {
   isError?: boolean;
 };
 
+const AUTO_APPROVED_COMPOSIO_INTERNAL_TOOLS = new Set([
+  "multi_execute",
+]);
+
 function jsonSchemaToZodRawShape(
   schema: { properties?: Record<string, unknown> } | undefined,
 ): Record<string, z.ZodTypeAny> {
@@ -76,6 +80,12 @@ function jsonSchemaToZodRawShape(
 
 export function isReadOnlyTool(tool: Pick<ComposioToolDef, "annotations">): boolean {
   return tool.annotations?.readOnlyHint === true;
+}
+
+export function isAutoApprovedComposioTool(
+  tool: Pick<ComposioToolDef, "name" | "annotations">,
+): boolean {
+  return isReadOnlyTool(tool) || AUTO_APPROVED_COMPOSIO_INTERNAL_TOOLS.has(tool.name.toLowerCase());
 }
 
 export async function handleComposioMcpRequest(
@@ -131,12 +141,12 @@ export async function handleComposioMcpRequest(
     { name: "composio", version: "1.0.0" },
     {
       instructions:
-        "Composio-connected tools for this Space. Read-only tools execute automatically; write/delete/edit tools require human approval.",
+        "Composio-connected tools for this Space. Read-only and Composio-internal orchestration tools execute automatically; write/delete/edit app tools require human approval.",
     },
   );
 
   for (const tool of tools) {
-    const readOnly = isReadOnlyTool(tool);
+    const autoApproved = isAutoApprovedComposioTool(tool);
     const gatedName = `composio.${tool.name}`;
 
     server.registerTool(
@@ -153,7 +163,7 @@ export async function handleComposioMcpRequest(
           inputPreview: input,
         });
 
-        if (readOnly) {
+        if (autoApproved) {
           try {
             const result = await mcpClient.callTool({
               name: tool.name,

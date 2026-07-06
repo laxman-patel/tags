@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isReadOnlyTool } from "./composio-mcp-proxy";
+import { isAutoApprovedComposioTool, isReadOnlyTool } from "./composio-mcp-proxy";
 
 describe("composio-mcp-proxy classification", () => {
   it("treats readOnlyHint:true as read-only", () => {
@@ -20,5 +20,14 @@ describe("composio-mcp-proxy classification", () => {
     expect(
       isReadOnlyTool({ annotations: { idempotentHint: true, openWorldHint: false } }),
     ).toBe(false);
+  });
+
+  it("auto-approves Composio internal orchestration tools", () => {
+    expect(isAutoApprovedComposioTool({ name: "multi_execute", annotations: {} })).toBe(true);
+    expect(isAutoApprovedComposioTool({ name: "MULTI_EXECUTE", annotations: {} })).toBe(true);
+  });
+
+  it("does not auto-approve app write tools without readOnlyHint", () => {
+    expect(isAutoApprovedComposioTool({ name: "GMAIL_SEND_EMAIL", annotations: {} })).toBe(false);
   });
 });
