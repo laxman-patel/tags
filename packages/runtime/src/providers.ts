@@ -45,6 +45,10 @@ export async function createRuntimeProviders(
 
   const credentials = createCredentialProvider({ directSecrets });
 
+  if (!config.fireworksApiKey?.trim()) {
+    throw new Error("FIREWORKS_API_KEY is required to create the runtime sandbox provider");
+  }
+
   const sandbox = createSandboxProvider({
     apiKey: config.e2bApiKey,
     template: config.e2bOpencodeTemplate,

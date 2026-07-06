@@ -108,9 +108,16 @@ export function buildFireworksProviderConfig(
   };
 }
 
-function sandboxFireworksEnvs(modelApiKey?: string): Record<string, string> | undefined {
-  if (!modelApiKey) return undefined;
+function sandboxFireworksEnvs(modelApiKey: string): Record<string, string> {
   return { FIREWORKS_API_KEY: modelApiKey };
+}
+
+function requireFireworksApiKey(modelApiKey?: string): string {
+  const trimmed = modelApiKey?.trim();
+  if (!trimmed) {
+    throw new Error("FIREWORKS_API_KEY is required for opencode sandbox runs");
+  }
+  return trimmed;
 }
 
 type CommandLike = { stdout?: string; stderr?: string; exitCode?: number };
@@ -314,6 +321,35 @@ async function writeOpencodeConfig(
   return OPENCODE_CONFIG_PATH;
 }
 
+type PreparedOpencodeRun = {
+  opencodeConfigPath?: string;
+  command: string;
+};
+
+/** Apply Fireworks credentials to any sandbox before every opencode invocation. */
+export async function prepareOpencodeFireworksRun(
+  sandbox: SandboxInstance,
+  args: {
+    modelApiKey: string;
+    request: CodingAgentRequest;
+    model: string;
+  },
+): Promise<PreparedOpencodeRun> {
+  const modelApiKey = requireFireworksApiKey(args.modelApiKey);
+  await ensureOpencodeFireworksAuth(sandbox, modelApiKey);
+  const opencodeConfigPath = await writeOpencodeConfig(
+    sandbox,
+    args.request,
+    args.model,
+    modelApiKey,
+  );
+  const agentFlag = args.request.systemPrompt?.trim()
+    ? ` --agent ${shellQuote(TAGS_AGENT_NAME)}`
+    : "";
+  const command = `FIREWORKS_API_KEY=${shellQuote(modelApiKey)} ${opencodeConfigPath ? `OPENCODE_CONFIG=${shellQuote(opencodeConfigPath)} ` : ""}opencode run${agentFlag} --model ${shellQuote(args.model)} ${shellQuote(args.request.prompt)}`;
+  return { opencodeConfigPath, command };
+}
+
 async function readRunOutput(
   sandbox: SandboxInstance,
   repoPaths: Record<string, string>,
@@ -332,18 +368,14 @@ async function readRunOutput(
 
 export function createSandboxProvider(config: SandboxProviderConfig = {}): SandboxProvider {
   const template = config.template ?? DEFAULT_OPENCODE_TEMPLATE;
+  const fireworksApiKey = requireFireworksApiKey(config.modelApiKey);
 
   return {
     async runCodingAgent(request: CodingAgentRequest): Promise<CodingAgentResult> {
-      if (!config.modelApiKey) {
-        throw new Error("FIREWORKS_API_KEY is required for opencode sandbox runs");
-      }
-
-      const sandboxEnvs = sandboxFireworksEnvs(config.modelApiKey);
       const sandboxOptions = {
         apiKey: config.apiKey,
         timeoutMs: config.timeoutMs ?? 10 * 60_000,
-        ...(sandboxEnvs ? { envs: sandboxEnvs } : {}),
+        envs: sandboxFireworksEnvs(fireworksApiKey),
       };
 
       let createdSandbox = false;
@@ -372,17 +404,11 @@ export function createSandboxProvider(config: SandboxProviderConfig = {}): Sandb
         const model = toOpencodeModelId(
           request.model ?? config.model ?? "accounts/fireworks/routers/glm-5p2-fast",
         );
-        await ensureOpencodeFireworksAuth(sandbox, config.modelApiKey);
-        const opencodeConfigPath = await writeOpencodeConfig(
-          sandbox,
+        const { command } = await prepareOpencodeFireworksRun(sandbox, {
+          modelApiKey: fireworksApiKey,
           request,
           model,
-          config.modelApiKey,
-        );
-        const agentFlag = request.systemPrompt?.trim()
-          ? ` --agent ${shellQuote(TAGS_AGENT_NAME)}`
-          : "";
-        const command = `FIREWORKS_API_KEY=${shellQuote(config.modelApiKey)} ${opencodeConfigPath ? `OPENCODE_CONFIG=${shellQuote(opencodeConfigPath)} ` : ""}opencode run${agentFlag} --model ${shellQuote(model)} ${shellQuote(request.prompt)}`;
+        });
 
         const appendStream = async (chunk: string) => {
           const clean = stripAnsi(chunk);

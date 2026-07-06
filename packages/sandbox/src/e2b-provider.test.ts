@@ -126,8 +126,16 @@ describe("createSandboxProvider", () => {
 
     expect(mocks.connect).toHaveBeenCalledWith(
       "existing-sandbox",
-      expect.objectContaining({ timeoutMs: expect.any(Number) }),
+      expect.objectContaining({
+        timeoutMs: expect.any(Number),
+        envs: { FIREWORKS_API_KEY: "fw_test_key" },
+      }),
     );
+    const commands = sandbox.commands.run.mock.calls.map((call) => String(call[0]));
+    expect(commands.some((command) => command.includes("FIREWORKS_API_KEY='fw_test_key'"))).toBe(
+      true,
+    );
+    expect(commands.some((command) => command.includes('"apiKey": "fw_test_key"'))).toBe(true);
     expect(mocks.create).not.toHaveBeenCalled();
     expect(sandbox.kill).not.toHaveBeenCalled();
     expect(sandbox.git.clone).not.toHaveBeenCalled();
@@ -135,6 +143,41 @@ describe("createSandboxProvider", () => {
       sandboxId: "existing-sandbox",
       createdSandbox: false,
       reusedSandbox: true,
+      exitCode: 0,
+    });
+  });
+
+  it("bootstraps Fireworks credentials when reconnecting fails and a new sandbox is created", async () => {
+    const sandbox = createMockSandbox("replacement-sandbox");
+    mocks.connect.mockRejectedValue(new Error("sandbox expired"));
+    mocks.create.mockResolvedValue(sandbox);
+
+    const provider = createSandboxProvider({ modelApiKey: "fw_test_key" });
+    const result = await provider.runCodingAgent({
+      prompt: "summarize the repo",
+      session: { sandboxId: "stale-sandbox", keepAlive: true },
+    });
+
+    expect(mocks.connect).toHaveBeenCalledWith(
+      "stale-sandbox",
+      expect.objectContaining({
+        envs: { FIREWORKS_API_KEY: "fw_test_key" },
+      }),
+    );
+    expect(mocks.create).toHaveBeenCalledWith(
+      "opencode",
+      expect.objectContaining({
+        envs: { FIREWORKS_API_KEY: "fw_test_key" },
+      }),
+    );
+    const commands = sandbox.commands.run.mock.calls.map((call) => String(call[0]));
+    expect(commands.some((command) => command.includes("FIREWORKS_API_KEY='fw_test_key'"))).toBe(
+      true,
+    );
+    expect(result).toMatchObject({
+      sandboxId: "replacement-sandbox",
+      createdSandbox: true,
+      reusedSandbox: false,
       exitCode: 0,
     });
   });
@@ -148,7 +191,12 @@ describe("createSandboxProvider", () => {
       prompt: "summarize the workspace",
     });
 
-    expect(mocks.create).toHaveBeenCalled();
+    expect(mocks.create).toHaveBeenCalledWith(
+      "opencode",
+      expect.objectContaining({
+        envs: { FIREWORKS_API_KEY: "fw_test_key" },
+      }),
+    );
     expect(sandbox.kill).toHaveBeenCalled();
     expect(result).toMatchObject({
       sandboxId: "new-sandbox",
@@ -244,11 +292,8 @@ describe("createSandboxProvider", () => {
     );
   });
 
-  it("requires a Fireworks API key before starting opencode", async () => {
-    const provider = createSandboxProvider();
-    await expect(provider.runCodingAgent({ prompt: "hello" })).rejects.toThrow(
-      "FIREWORKS_API_KEY is required",
-    );
+  it("requires a Fireworks API key when creating the sandbox provider", () => {
+    expect(() => createSandboxProvider()).toThrow("FIREWORKS_API_KEY is required");
   });
 
   it("reads structured run output from the repo", async () => {
