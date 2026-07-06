@@ -7,7 +7,7 @@ export type RuntimeProviderConfig = {
   slackBotToken?: string;
   composioApiKey?: string;
   e2bApiKey?: string;
-  /** Fireworks key — passed to opencode as `FIREWORKS_API_KEY` inside the E2B `opencode` template. */
+  /** Fireworks key — registered with opencode auth before sandbox runs. */
   fireworksApiKey?: string;
   /** opencode `--model` string for the sandbox coding agent. */
   opencodeModel?: string;

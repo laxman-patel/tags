@@ -1,5 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { createSandboxProvider } from "./e2b-provider";
+import {
+  bareFireworksModelId,
+  buildFireworksProviderConfig,
+  buildOpencodeFireworksAuthJson,
+  createSandboxProvider,
+  OPENCODE_FIREWORKS_PROVIDER_ID,
+  toOpencodeModelId,
+} from "./e2b-provider";
 
 type MockSandbox = {
   sandboxId: string;
@@ -44,6 +51,43 @@ function createMockSandbox(sandboxId: string): MockSandbox {
     kill: vi.fn(async () => undefined),
   };
 }
+
+describe("fireworks model helpers", () => {
+  it("prefixes bare Fireworks ids for opencode", () => {
+    expect(toOpencodeModelId("accounts/fireworks/routers/glm-5p2-fast")).toBe(
+      "fireworks-ai/accounts/fireworks/routers/glm-5p2-fast",
+    );
+  });
+
+  it("strips the opencode provider prefix", () => {
+    expect(bareFireworksModelId("fireworks-ai/accounts/fireworks/models/kimi-k2-instruct")).toBe(
+      "accounts/fireworks/models/kimi-k2-instruct",
+    );
+  });
+
+  it("builds a provider block for Fireworks model paths", () => {
+    expect(
+      buildFireworksProviderConfig("accounts/fireworks/routers/glm-5p2-fast"),
+    ).toEqual({
+      "fireworks-ai": {
+        models: {
+          "accounts/fireworks/routers/glm-5p2-fast": {
+            name: "GLM 5.2 Fast",
+          },
+        },
+      },
+    });
+  });
+
+  it("builds opencode auth credentials for Fireworks", () => {
+    expect(buildOpencodeFireworksAuthJson("fw_test_key")).toEqual({
+      [OPENCODE_FIREWORKS_PROVIDER_ID]: {
+        type: "api",
+        key: "fw_test_key",
+      },
+    });
+  });
+});
 
 describe("createSandboxProvider", () => {
   beforeEach(() => {
@@ -138,6 +182,44 @@ describe("createSandboxProvider", () => {
     expect(commands.some((command) => command.includes("opencode run --agent 'tags'"))).toBe(
       true,
     );
+  });
+
+  it("registers Fireworks router models in opencode config", async () => {
+    const sandbox = createMockSandbox("new-sandbox");
+    mocks.create.mockResolvedValue(sandbox);
+
+    const provider = createSandboxProvider();
+    await provider.runCodingAgent({
+      prompt: "hello",
+      model: "accounts/fireworks/routers/glm-5p2-fast",
+    });
+
+    const commands = sandbox.commands.run.mock.calls.map((call) => String(call[0]));
+    expect(
+      commands.some(
+        (command) =>
+          command.includes('"fireworks-ai"') &&
+          command.includes('"accounts/fireworks/routers/glm-5p2-fast"'),
+      ),
+    ).toBe(true);
+  });
+
+  it("writes Fireworks credentials to opencode auth.json when a key is configured", async () => {
+    const sandbox = createMockSandbox("new-sandbox");
+    mocks.create.mockResolvedValue(sandbox);
+
+    const provider = createSandboxProvider({ modelApiKey: "fw_test_key" });
+    await provider.runCodingAgent({ prompt: "hello" });
+
+    const commands = sandbox.commands.run.mock.calls.map((call) => String(call[0]));
+    expect(
+      commands.some(
+        (command) =>
+          command.includes("/home/user/.local/share/opencode/auth.json") &&
+          command.includes('"type": "api"') &&
+          command.includes("fw_test_key"),
+      ),
+    ).toBe(true);
   });
 
   it("reads structured run output from the repo", async () => {

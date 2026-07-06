@@ -1,5 +1,8 @@
+/** Tags uses GLM 5.2 Fast (Fireworks router) for all inference paths. */
+export const TAGS_DEFAULT_MODEL_ID = "accounts/fireworks/routers/glm-5p2-fast";
+
 const KNOWN_MODEL_LABELS: Record<string, string> = {
-  "accounts/fireworks/routers/glm-5p2-fast": "GLM 5.2 Fast",
+  [TAGS_DEFAULT_MODEL_ID]: "GLM 5.2 Fast",
   "accounts/fireworks/models/kimi-k2-instruct": "Kimi K2 Instruct",
 };
 
