@@ -48,18 +48,18 @@ export const Hero = ({ clerkEnabled = false }: HeroProps) => {
   return (
     <section className="pb-16 pt-28 lg:pb-24 lg:pt-36">
       <div className="container">
-        <div className="flex flex-col gap-8 md:gap-14 lg:flex-row lg:items-center lg:gap-16 xl:gap-20">
-          <div className="min-w-0 flex-1">
-            <h1 className="text-balance text-[2rem] font-semibold leading-[1.08] tracking-tight text-foreground md:text-[2.5rem] lg:text-[2.75rem]">
+        <div className="flex flex-col gap-8 md:gap-14 lg:flex-row lg:gap-20">
+          <div className="min-w-0 flex-1 lg:flex-[3]">
+            <h1 className="max-w-2xl text-balance text-3xl font-semibold tracking-tight text-foreground md:text-4xl lg:text-5xl">
               The open-source AI teammate for Slack
             </h1>
 
-            <p className="mt-4 max-w-md text-base leading-relaxed text-muted-foreground md:text-lg">
+            <p className="mt-5 max-w-xl text-lg leading-relaxed text-muted-foreground md:text-2xl">
               Mention @tags in any channel. It reads the whole thread, does the
               work, and asks before doing anything it shouldn&apos;t.
             </p>
 
-            <div className="mt-7 flex flex-wrap items-center gap-3">
+            <div className="mt-8 flex flex-wrap items-center gap-4 lg:flex-nowrap">
               <GetStartedButton clerkEnabled={clerkEnabled} />
               <LinkButton
                 href="https://github.com/laxman-patel/tags"
@@ -72,7 +72,7 @@ export const Hero = ({ clerkEnabled = false }: HeroProps) => {
             </div>
           </div>
 
-          <div className="relative flex min-w-0 flex-1 flex-col justify-center gap-4 max-lg:pt-10 lg:pl-10">
+          <div className="relative flex min-w-0 flex-1 flex-col justify-center space-y-5 max-lg:pt-10 lg:flex-[2] lg:pl-10">
             <DashedLine
               orientation="vertical"
               className="absolute top-0 left-0 max-lg:hidden"
@@ -84,13 +84,13 @@ export const Hero = ({ clerkEnabled = false }: HeroProps) => {
             {features.map((feature) => {
               const Icon = feature.icon;
               return (
-                <div key={feature.title} className="flex gap-3">
-                  <Icon className="mt-0.5 size-[18px] shrink-0 text-primary" />
+                <div key={feature.title} className="flex gap-2.5 lg:gap-5">
+                  <Icon className="mt-1 size-4 shrink-0 text-foreground lg:size-5" />
                   <div className="min-w-0">
-                    <h2 className="font-text text-sm font-semibold text-foreground">
+                    <h2 className="font-text font-semibold text-foreground">
                       {feature.title}
                     </h2>
-                    <p className="mt-0.5 text-sm leading-snug text-muted-foreground">
+                    <p className="max-w-76 text-sm text-muted-foreground">
                       {feature.description}
                     </p>
                   </div>
