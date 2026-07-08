@@ -221,29 +221,6 @@ function ClerkAccountFooter() {
   );
 }
 
-function SignInScreen() {
-  return (
-    <div data-mode="dark" className="flex min-h-screen items-center justify-center bg-kumo-canvas p-4">
-      <LayerCard className="w-full max-w-sm">
-        <LayerCard.Primary>
-          <div className="flex flex-col items-center gap-4 text-center">
-            <img src={tagsLogo} alt="Tags" className="h-10 w-10 rounded-md object-contain" />
-            <div>
-              <Text variant="heading3" as="h1">Tags</Text>
-              <Text variant="secondary" size="sm" as="p">
-                Sign in to manage your Slack Spaces.
-              </Text>
-            </div>
-            <SignInButton mode="modal">
-              <Button variant="primary">Sign in</Button>
-            </SignInButton>
-          </div>
-        </LayerCard.Primary>
-      </LayerCard>
-    </div>
-  );
-}
-
 function SlackConnectEmpty() {
   return (
     <div className="flex min-h-[320px] items-center justify-center p-4">
@@ -3270,9 +3247,21 @@ function ClerkGate() {
     );
   }
 
-  if (!isSignedIn) return <SignInScreen />;
+  if (!isSignedIn) return <RedirectToLanding />;
 
   return <DashboardApp clerkEnabled />;
+}
+
+function RedirectToLanding() {
+  useEffect(() => {
+    window.location.replace("/home");
+  }, []);
+
+  return (
+    <div data-mode="dark" className="flex min-h-screen items-center justify-center bg-kumo-canvas">
+      <Loader size="lg" />
+    </div>
+  );
 }
 
 export default function App({ clerkEnabled = false }: { clerkEnabled?: boolean }) {
