@@ -47,59 +47,60 @@ type HeroProps = {
 export const Hero = ({ clerkEnabled = false }: HeroProps) => {
   return (
     <section className="pb-16 pt-28 lg:pb-24 lg:pt-36">
-      <div className="container flex flex-col justify-between gap-8 md:gap-12 lg:flex-row lg:gap-16">
-        <div className="flex-1">
-          <h1 className="max-w-[13ch] text-[2rem] font-semibold leading-[1.08] tracking-tight text-foreground md:text-[2.5rem] lg:text-[2.75rem]">
-            The open-source AI teammate for Slack
-          </h1>
+      <div className="container">
+        <div className="flex flex-col justify-between gap-8 md:gap-12 lg:flex-row lg:gap-16">
+          <div className="flex-1">
+            <h1 className="max-w-[13ch] text-[2rem] font-semibold leading-[1.08] tracking-tight text-foreground md:text-[2.5rem] lg:text-[2.75rem]">
+              The open-source AI teammate for Slack
+            </h1>
 
-          <p className="mt-4 max-w-md text-base leading-relaxed text-muted-foreground md:text-lg">
-            Mention @tags in any channel. It reads the whole thread, does the
-            work, and asks before doing anything it shouldn&apos;t.
-          </p>
+            <p className="mt-4 max-w-md text-base leading-relaxed text-muted-foreground md:text-lg">
+              Mention @tags in any channel. It reads the whole thread, does the
+              work, and asks before doing anything it shouldn&apos;t.
+            </p>
 
-          <div className="mt-7 flex flex-wrap items-center gap-3">
-            <GetStartedButton clerkEnabled={clerkEnabled} />
-            <LinkButton
-              href="https://github.com/laxman-patel/tags"
-              external
-              variant="secondary"
-              icon={GithubLogoIcon}
-            >
-              GitHub
-            </LinkButton>
+            <div className="mt-7 flex flex-wrap items-center gap-3">
+              <GetStartedButton clerkEnabled={clerkEnabled} />
+              <LinkButton
+                href="https://github.com/laxman-patel/tags"
+                external
+                variant="secondary"
+                icon={GithubLogoIcon}
+              >
+                GitHub
+              </LinkButton>
+            </div>
+          </div>
+
+          <div className="relative flex flex-1 flex-col justify-center gap-4 max-lg:pt-8 lg:pl-12">
+            <DashedLine
+              orientation="vertical"
+              className="absolute top-0 left-0 max-lg:hidden"
+            />
+            <DashedLine
+              orientation="horizontal"
+              className="absolute top-0 lg:hidden"
+            />
+            {features.map((feature) => {
+              const Icon = feature.icon;
+              return (
+                <div key={feature.title} className="flex gap-3">
+                  <Icon className="mt-0.5 size-[18px] shrink-0 text-primary" />
+                  <div>
+                    <h2 className="font-text text-sm font-semibold text-foreground">
+                      {feature.title}
+                    </h2>
+                    <p className="mt-0.5 max-w-72 text-sm leading-snug text-muted-foreground">
+                      {feature.description}
+                    </p>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
 
-        <div className="relative flex flex-1 flex-col justify-center gap-4 max-lg:pt-8 lg:pl-12">
-          <DashedLine
-            orientation="vertical"
-            className="absolute top-0 left-0 max-lg:hidden"
-          />
-          <DashedLine
-            orientation="horizontal"
-            className="absolute top-0 lg:hidden"
-          />
-          {features.map((feature) => {
-            const Icon = feature.icon;
-            return (
-              <div key={feature.title} className="flex gap-3">
-                <Icon className="mt-0.5 size-[18px] shrink-0 text-primary" />
-                <div>
-                  <h2 className="font-text text-sm font-semibold text-foreground">
-                    {feature.title}
-                  </h2>
-                  <p className="mt-0.5 max-w-72 text-sm leading-snug text-muted-foreground">
-                    {feature.description}
-                  </p>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      <div className="mt-12 max-lg:mx-6 md:mt-16 lg:container lg:mt-20">
+        <div className="mt-12 md:mt-16 lg:mt-20">
         <Dialog.Root>
           <Dialog.Trigger asChild>
             <button
@@ -151,6 +152,7 @@ export const Hero = ({ clerkEnabled = false }: HeroProps) => {
             </Dialog.Content>
           </Dialog.Portal>
         </Dialog.Root>
+        </div>
       </div>
     </section>
   );

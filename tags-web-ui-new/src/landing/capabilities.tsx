@@ -226,11 +226,11 @@ const LogoGrid = ({ logos }: { logos: LogoImage[] }) => {
       </div>
       <div
         aria-hidden
-        className="pointer-events-none absolute inset-y-0 left-0 z-10 w-20 bg-linear-to-r from-background to-transparent lg:w-24"
+        className="pointer-events-none absolute inset-y-0 left-0 z-10 w-20 bg-linear-to-r from-muted/80 to-transparent lg:w-24"
       />
       <div
         aria-hidden
-        className="pointer-events-none absolute inset-y-0 right-0 z-10 w-20 bg-linear-to-l from-background to-transparent lg:w-24"
+        className="pointer-events-none absolute inset-y-0 right-0 z-10 w-20 bg-linear-to-l from-muted/80 to-transparent lg:w-24"
       />
     </div>
   );
