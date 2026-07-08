@@ -9,7 +9,7 @@ type FooterProps = {
 
 export function Footer({ clerkEnabled = false }: FooterProps) {
   return (
-    <footer className="flex flex-col items-center gap-10 overflow-x-hidden pb-0 pt-24 lg:pt-28">
+    <footer className="flex flex-col items-center gap-10 overflow-x-clip pb-0 pt-24 lg:pt-28">
       <div className="container space-y-3 text-center">
         <h2 className="text-2xl tracking-tight md:text-3xl lg:text-4xl">
           Put an AI teammate in every channel
@@ -31,8 +31,8 @@ export function Footer({ clerkEnabled = false }: FooterProps) {
         </div>
       </div>
 
-      <div className="mt-6 w-full overflow-x-hidden pb-[5vw] leading-none select-none md:mt-10 md:pb-12 lg:pb-16">
-        <span className="font-display block w-full translate-y-[4%] bg-linear-to-b from-primary to-primary/40 bg-clip-text text-center text-[24vw] leading-[0.9] font-semibold tracking-[-0.015em] text-transparent lg:text-[15rem]">
+      <div className="mt-6 w-full leading-none select-none md:mt-10">
+        <span className="font-display block w-full bg-linear-to-b from-primary to-primary/40 bg-clip-text pb-[0.175em] text-center text-[24vw] leading-[0.95] font-semibold tracking-[-0.015em] text-transparent lg:text-[15rem]">
           @tags
         </span>
       </div>

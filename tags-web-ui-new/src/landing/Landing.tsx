@@ -46,18 +46,20 @@ function ClerkLanding() {
 
 function LandingContent({ clerkEnabled }: { clerkEnabled: boolean }) {
   return (
-    <div className="landing min-h-screen bg-background text-foreground">
+    <>
       <Navbar clerkEnabled={clerkEnabled} />
-      <main>
-        <Background className="via-muted to-muted/80">
-          <Hero clerkEnabled={clerkEnabled} />
-          <Features />
-          <Capabilities />
-        </Background>
-        <Background variant="bottom" className="mb-0 pb-0">
-          <Footer clerkEnabled={clerkEnabled} />
-        </Background>
-      </main>
-    </div>
+      <div className="landing min-h-screen bg-background text-foreground">
+        <main>
+          <Background className="via-muted to-muted/80">
+            <Hero clerkEnabled={clerkEnabled} />
+            <Features />
+            <Capabilities />
+          </Background>
+          <Background variant="bottom" className="mb-0 overflow-visible pb-0">
+            <Footer clerkEnabled={clerkEnabled} />
+          </Background>
+        </main>
+      </div>
+    </>
   );
 }
