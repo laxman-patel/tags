@@ -224,6 +224,14 @@ const LogoGrid = ({ logos }: { logos: LogoImage[] }) => {
           ))}
         </div>
       </div>
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-y-0 left-0 z-10 w-20 bg-linear-to-r from-background to-transparent lg:w-24"
+      />
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-y-0 right-0 z-10 w-20 bg-linear-to-l from-background to-transparent lg:w-24"
+      />
     </div>
   );
 };
@@ -232,7 +240,7 @@ const Placeholder = ({ label, className }: PlaceholderImage) => {
   return (
     <div
       className={cn(
-        "grid place-items-center rounded-xl border border-dashed border-black/10 bg-muted/50",
+        "grid place-items-center rounded-lg border border-dashed border-border bg-muted/60",
         className,
       )}
     >

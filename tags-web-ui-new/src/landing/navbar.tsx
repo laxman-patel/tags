@@ -1,8 +1,8 @@
-import { Github } from "lucide-react";
+import { LinkButton } from "@cloudflare/kumo";
+import { GithubLogoIcon } from "@phosphor-icons/react";
 
 import tagsIcon from "../imports/tags-icon.png";
 import { GetStartedButton } from "./get-started-button";
-import { Button } from "./ui";
 
 type NavbarProps = {
   clerkEnabled?: boolean;
@@ -14,27 +14,30 @@ export const Navbar = ({ clerkEnabled = false }: NavbarProps) => {
       <nav className="flex w-full max-w-[620px] items-center justify-between gap-3 rounded-full bg-background/75 py-2 pl-4 pr-2 shadow-[var(--shadow-nav)] ring-1 ring-black/[0.05] backdrop-blur-xl">
         <a
           href="/home"
-          className="flex shrink-0 items-center gap-2 rounded-full pr-2 transition-opacity hover:opacity-80"
+          className="flex shrink-0 items-center gap-2.5 rounded-full pr-2 transition-opacity hover:opacity-80"
         >
           <img
             src={tagsIcon}
             alt=""
-            width={26}
-            height={26}
-            className="size-[26px] rounded-lg object-contain"
+            width={28}
+            height={28}
+            className="size-7 rounded-[22%] object-cover shadow-[0_1px_2px_rgba(42,111,215,0.35)]"
           />
           <span className="font-display text-[17px] font-semibold tracking-tight">
-            @tags
+            tags
           </span>
         </a>
 
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" asChild>
-            <a href="https://github.com/laxman-patel/tags">
-              <Github className="size-4" />
-              <span className="max-sm:sr-only">GitHub</span>
-            </a>
-          </Button>
+          <LinkButton
+            href="https://github.com/laxman-patel/tags"
+            external
+            variant="secondary"
+            size="sm"
+            icon={GithubLogoIcon}
+          >
+            <span className="max-sm:sr-only">GitHub</span>
+          </LinkButton>
           <GetStartedButton clerkEnabled={clerkEnabled} size="sm" />
         </div>
       </nav>

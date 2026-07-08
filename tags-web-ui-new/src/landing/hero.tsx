@@ -1,6 +1,6 @@
 import * as Dialog from "@radix-ui/react-dialog";
+import { LinkButton } from "@cloudflare/kumo";
 import {
-  Github,
   LayoutGrid,
   MessagesSquare,
   Play,
@@ -8,10 +8,10 @@ import {
   ShieldCheck,
   X,
 } from "lucide-react";
+import { GithubLogoIcon } from "@phosphor-icons/react";
 
 import { DashedLine } from "./dashed-line";
 import { GetStartedButton } from "./get-started-button";
-import { Button } from "./ui";
 
 // Replace with the real Slack screenshot + demo video when available.
 const DEMO_SCREENSHOT_SRC: string | null = null;
@@ -60,15 +60,14 @@ export const Hero = ({ clerkEnabled = false }: HeroProps) => {
 
           <div className="mt-7 flex flex-wrap items-center gap-3">
             <GetStartedButton clerkEnabled={clerkEnabled} />
-            <Button variant="outline" asChild>
-              <a
-                href="https://github.com/laxman-patel/tags"
-                className="max-w-56 truncate text-start md:max-w-none"
-              >
-                <Github className="size-4" />
-                GitHub
-              </a>
-            </Button>
+            <LinkButton
+              href="https://github.com/laxman-patel/tags"
+              external
+              variant="secondary"
+              icon={GithubLogoIcon}
+            >
+              GitHub
+            </LinkButton>
           </div>
         </div>
 

@@ -75,6 +75,20 @@
   -webkit-font-smoothing: antialiased;
 }
 
+@layer base {
+  .landing *,
+  .landing ::after,
+  .landing ::before,
+  .landing ::backdrop,
+  .landing ::file-selector-button {
+    @apply border-border;
+  }
+
+  .landing {
+    @apply bg-background text-foreground;
+  }
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);

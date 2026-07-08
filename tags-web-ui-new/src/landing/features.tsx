@@ -47,9 +47,9 @@ export const Features = () => {
           <CardContent className="flex p-0 max-md:flex-col">
             {items.map((item, i) => (
               <div key={item.title} className="flex flex-1 max-md:flex-col">
-                <div className="flex-1 p-5 md:p-7">
-                  <div className="relative aspect-[1.4/1] overflow-hidden">
-                    <div className="grid h-full w-full place-items-center rounded-xl border border-dashed border-black/10 bg-muted/50">
+                <div className="flex-1 p-4 pe-0! md:p-6">
+                  <div className="relative aspect-[1.28/1] overflow-hidden">
+                    <div className="grid h-full w-full place-items-center rounded-lg border border-dashed border-border bg-muted/60">
                       <span className="text-center font-mono text-[11px] uppercase tracking-wide text-muted-foreground">
                         {item.label}
                       </span>
