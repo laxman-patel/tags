@@ -48,8 +48,8 @@ export const Hero = ({ clerkEnabled = false }: HeroProps) => {
   return (
     <section className="pb-16 pt-28 lg:pb-24 lg:pt-36">
       <div className="container">
-        <div className="grid grid-cols-1 gap-x-16 gap-y-12 md:gap-y-16 lg:grid-cols-2 lg:gap-y-20">
-          <div className="min-w-0">
+        <div className="grid grid-cols-1 gap-x-16 gap-y-12 md:gap-y-16 lg:grid-cols-2 lg:grid-rows-[auto_5rem] lg:gap-y-0">
+          <div className="min-w-0 lg:row-start-1 lg:col-start-1">
             <h1 className="text-balance text-[2rem] font-semibold leading-[1.08] tracking-tight text-foreground md:text-[2.5rem] lg:text-[2.75rem]">
               The open-source AI teammate for Slack
             </h1>
@@ -72,7 +72,7 @@ export const Hero = ({ clerkEnabled = false }: HeroProps) => {
             </div>
           </div>
 
-          <div className="relative flex min-w-0 flex-col justify-center gap-4 max-lg:pt-10 lg:pl-10">
+          <div className="relative flex min-w-0 flex-col justify-center gap-4 max-lg:pt-10 lg:col-start-2 lg:row-span-2 lg:row-start-1 lg:pl-10">
             <DashedLine
               orientation="vertical"
               className="absolute top-0 left-0 max-lg:hidden"
