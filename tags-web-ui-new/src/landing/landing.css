@@ -149,3 +149,14 @@ html:has(.landing) body {
   font-weight: 600;
   font-feature-settings: "ss02" on, "ss03" on, "ss04" on;
 }
+
+.landing-footer-watermark {
+  overflow: hidden;
+  max-height: calc(24vw * 0.95 * 0.76);
+}
+
+@media (min-width: 1024px) {
+  .landing-footer-watermark {
+    max-height: calc(15rem * 0.95 * 0.76);
+  }
+}

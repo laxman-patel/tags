@@ -55,7 +55,7 @@ function LandingContent({ clerkEnabled }: { clerkEnabled: boolean }) {
             <Features />
             <Capabilities />
           </Background>
-          <Background variant="bottom" className="mb-0 overflow-visible pb-0">
+          <Background variant="bottom" className="mb-0 overflow-hidden pb-0">
             <Footer clerkEnabled={clerkEnabled} />
           </Background>
         </main>
