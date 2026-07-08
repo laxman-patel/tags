@@ -54,7 +54,7 @@ export const Hero = ({ clerkEnabled = false }: HeroProps) => {
               The open-source AI teammate for Slack
             </h1>
 
-            <p className="mt-5 max-w-xl text-lg leading-relaxed text-muted-foreground md:text-2xl">
+            <p className="mt-5 max-w-xl text-base leading-relaxed text-muted-foreground md:text-lg">
               Mention @tags in any channel. It reads the whole thread, does the
               work, and asks before doing anything it shouldn&apos;t.
             </p>
