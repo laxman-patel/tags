@@ -2,7 +2,6 @@
 import { createRoot } from "react-dom/client";
 import { ClerkProvider } from "@clerk/react";
 import App from "./app/App.tsx";
-import { clerkAppearance } from "./app/clerkAppearance.ts";
 import Landing from "./landing/Landing.tsx";
 import "./styles/index.css";
 
@@ -20,7 +19,7 @@ const clerkPublishableKey =
 
 createRoot(document.getElementById("root")!).render(
   clerkPublishableKey ? (
-    <ClerkProvider publishableKey={clerkPublishableKey} appearance={clerkAppearance}>
+    <ClerkProvider publishableKey={clerkPublishableKey}>
       {isLandingRoute ? <Landing clerkEnabled /> : <App clerkEnabled />}
     </ClerkProvider>
   ) : (

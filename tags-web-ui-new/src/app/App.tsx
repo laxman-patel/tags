@@ -118,8 +118,6 @@ import {
   type Tool,
   type ToolAuthState,
 } from "./api";
-import { clerkAppearance } from "./clerkAppearance";
-
 // ===== Types =====
 
 type View =
@@ -185,11 +183,7 @@ function ClerkAccountFooter() {
             ref={triggerRef}
             className="absolute left-0 top-1/2 -translate-y-1/2 group-data-[state=collapsed]/sidebar:left-1/2 group-data-[state=collapsed]/sidebar:-translate-x-1/2"
           >
-            <UserButton
-              appearance={clerkAppearance}
-              userProfileMode="modal"
-              userProfileProps={{ appearance: clerkAppearance }}
-            />
+            <UserButton userProfileMode="modal" />
           </div>
           <div className="w-7 h-7 shrink-0" aria-hidden="true" />
           <div className="min-w-0 group-data-[state=collapsed]/sidebar:hidden">
