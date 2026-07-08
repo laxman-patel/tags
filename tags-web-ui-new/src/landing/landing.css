@@ -152,12 +152,12 @@ html:has(.landing) body {
 
 .landing-footer-watermark {
   overflow: hidden;
-  max-height: calc(24vw * 0.95 * var(--watermark-clip-ratio, 0.76));
-  transform: translateY(var(--watermark-offset-y, 0px));
+  max-height: calc(24vw * 0.95 * 0.88);
+  transform: translateY(-13px);
 }
 
 @media (min-width: 1024px) {
   .landing-footer-watermark {
-    max-height: calc(15rem * 0.95 * var(--watermark-clip-ratio, 0.76));
+    max-height: calc(15rem * 0.95 * 0.88);
   }
 }
