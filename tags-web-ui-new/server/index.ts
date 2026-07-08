@@ -49,7 +49,7 @@ import {
 import { spaceHasGitHubConnection } from "@tags/core/composio-toolkits";
 import { TAGS_MODEL_ID } from "@tags/core/model-labels";
 import { resolveOrCreateUser } from "@tags/core/users";
-import { getSpaceDailyUsage, getUsageBySpace } from "@tags/core/usage";
+import { getSpaceDailyUsage, getSpaceUsageInWindow } from "@tags/core/usage";
 import {
   appendRunEvent,
   expireApprovalByRequestId,
@@ -642,15 +642,15 @@ async function buildSpacesPayload(db: Db, organizationId: string) {
   return Promise.all(
     rows.map(async (row) => {
       const config = await loadActiveSpaceConfig(db, row.space.id);
-      const usage = await getUsageBySpace(db, row.space.id);
+      const usage = await getSpaceUsageInWindow(db, row.space.id, 30);
       const dailyUsage = await getSpaceDailyUsage(db, {
         organizationId,
         spaceId: row.space.id,
         days: 7,
       });
-      const runCount = Number(usage.summary?.runCount ?? 0);
-      const totalTokens = Number(usage.summary?.totalTokens ?? 0);
-      const costMicroUsd = Number(usage.summary?.costMicroUsd ?? 0);
+      const runCount = usage.runCount;
+      const totalTokens = usage.totalTokens;
+      const costMicroUsd = usage.costMicroUsd;
       const repos = (config?.repoUrls ?? []).map((url, index) => ({
         id: url,
         name: repoName(url),

@@ -16,7 +16,7 @@ import {
 import { loadActiveSpaceConfig } from "@tags/core/spaces";
 import { recordUsage } from "@tags/core/usage";
 import type { Db } from "@tags/db";
-import { DEFAULT_OPENCODE_TEMPLATE, REPO_PATH, REPOS_ROOT, WORKDIR } from "@tags/sandbox";
+import { DEFAULT_OPENCODE_TEMPLATE, REPO_PATH, REPOS_ROOT, WORKDIR, estimateTokenUsageFromText } from "@tags/sandbox";
 import { buildChannelContextBlock, buildRunLinkBlock, isChannelContextRequest, SlackStreamAdapter } from "@tags/slack";
 import type { AgentSegmentResult } from "./types";
 import { buildCapabilitiesReply, isCapabilityInventoryQuestion } from "./capabilities";
@@ -436,12 +436,13 @@ export async function runOpencodeSegment(
     await stream.finalize(replyText, buildRunLinkBlock(args.appUrl, args.runId));
     await emit({ type: "run.finished" });
 
-    const promptTokens = Math.ceil(prompt.length / 4);
-    const completionTokens = Math.ceil(result.output.length / 4);
+    const usageCounts =
+      result.tokenUsage ??
+      estimateTokenUsageFromText(prompt, result.output);
     const tokenUsage = {
-      prompt: promptTokens,
-      completion: completionTokens,
-      total: promptTokens + completionTokens,
+      prompt: usageCounts.promptTokens,
+      completion: usageCounts.completionTokens,
+      total: usageCounts.promptTokens + usageCounts.completionTokens,
     };
 
     await updateRunStatus(args.db, args.runId, "done", {
@@ -454,8 +455,13 @@ export async function runOpencodeSegment(
       spaceId: args.spaceId,
       runId: args.runId,
       modelId: TAGS_MODEL_ID,
-      promptTokens,
-      completionTokens,
+      provider: "fireworks",
+      promptTokens: usageCounts.promptTokens,
+      completionTokens: usageCounts.completionTokens,
+      freshInputTokens: usageCounts.freshInputTokens,
+      cacheWriteTokens: usageCounts.cacheWriteTokens,
+      cachedReadTokens: usageCounts.cachedReadTokens,
+      costMicroUsd: usageCounts.costMicroUsd,
     });
 
     await maybeSummarizeThread(args.db, {

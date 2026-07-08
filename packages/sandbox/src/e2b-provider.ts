@@ -1,5 +1,10 @@
 import { Sandbox } from "e2b";
-import type { CodingAgentRequest, CodingAgentResult, SandboxProvider } from "./types";
+import type {
+  CodingAgentRequest,
+  CodingAgentResult,
+  OpencodeRunTokenUsage,
+  SandboxProvider,
+} from "./types";
 import {
   extractGitHubPrUrl,
   parseTagsRunOutputJson,
@@ -151,6 +156,17 @@ type OpencodeJsonEvent = {
     type?: string;
     text?: string;
     tool?: string;
+    reason?: string;
+    cost?: number;
+    tokens?: {
+      input?: number;
+      output?: number;
+      reasoning?: number;
+      cache?: {
+        read?: number;
+        write?: number;
+      };
+    };
     state?: {
       status?: string;
       error?: string;
@@ -162,6 +178,78 @@ type OpencodeJsonEvent = {
     data?: { message?: string };
   };
 };
+
+export type { OpencodeRunTokenUsage };
+
+/**
+ * Parse token usage from opencode `run --format json` output.
+ * Sums every `step_finish` event (including intermediate tool-call steps).
+ * Prefers provider-reported `part.cost` when present.
+ */
+export function extractOpencodeTokenUsage(raw: string): OpencodeRunTokenUsage | null {
+  const lines = raw.split("\n");
+  let freshInputTokens = 0;
+  let cacheWriteTokens = 0;
+  let cachedReadTokens = 0;
+  let completionTokens = 0;
+  let costMicroUsd = 0;
+  let hasCost = false;
+  let found = false;
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    try {
+      const event: OpencodeJsonEvent = JSON.parse(trimmed);
+      if (event.type !== "step_finish" || !event.part?.tokens) continue;
+
+      found = true;
+      const tokens = event.part.tokens;
+      freshInputTokens += tokens.input ?? 0;
+      cacheWriteTokens += tokens.cache?.write ?? 0;
+      cachedReadTokens += tokens.cache?.read ?? 0;
+      completionTokens += tokens.output ?? 0;
+      completionTokens += tokens.reasoning ?? 0;
+
+      if (typeof event.part.cost === "number" && event.part.cost > 0) {
+        costMicroUsd += Math.round(event.part.cost * 1_000_000);
+        hasCost = true;
+      }
+    } catch {
+      // Not JSON — skip.
+    }
+  }
+
+  if (!found) return null;
+
+  const promptTokens = freshInputTokens + cacheWriteTokens + cachedReadTokens;
+  return {
+    promptTokens,
+    completionTokens,
+    freshInputTokens,
+    cacheWriteTokens,
+    cachedReadTokens,
+    costMicroUsd: hasCost ? costMicroUsd : undefined,
+    source: "opencode",
+  };
+}
+
+/** Rough token estimate when opencode JSON usage is unavailable (~4 chars/token). */
+export function estimateTokenUsageFromText(
+  prompt: string,
+  completion: string,
+): OpencodeRunTokenUsage {
+  const promptTokens = Math.max(0, Math.ceil(prompt.length / 4));
+  const completionTokens = Math.max(0, Math.ceil(completion.length / 4));
+  return {
+    promptTokens,
+    completionTokens,
+    freshInputTokens: promptTokens,
+    cacheWriteTokens: 0,
+    cachedReadTokens: 0,
+    source: "estimated",
+  };
+}
 
 /**
  * Parse opencode --format json output and extract only the assistant's final
@@ -574,6 +662,7 @@ export function createSandboxProvider(config: SandboxProviderConfig = {}): Sandb
 
         // Parse --format json output: extract reply text and convert to readable
         // format for the DB timeline / UI cards. Falls back to raw output if not JSON.
+        const tokenUsage = extractOpencodeTokenUsage(output);
         const replyText = extractOpencodeReply(output);
         const readable = formatOpencodeJsonAsReadable(output);
         if (readable) {
@@ -621,6 +710,7 @@ export function createSandboxProvider(config: SandboxProviderConfig = {}): Sandb
           repoPaths: Object.keys(repoPaths).length > 0 ? repoPaths : undefined,
           runOutput,
           ...(replyText ? { replyText } : {}),
+          ...(tokenUsage ? { tokenUsage } : {}),
         };
       } finally {
         if (!request.session?.keepAlive || (createdSandbox && !completed)) {

@@ -5,6 +5,8 @@ import {
   buildOpencodeFireworksAuthJson,
   createSandboxProvider,
   extractOpencodeReply,
+  extractOpencodeTokenUsage,
+  estimateTokenUsageFromText,
   formatOpencodeJsonAsReadable,
   OPENCODE_FIREWORKS_PROVIDER_ID,
   toOpencodeModelId,
@@ -394,6 +396,77 @@ describe("createSandboxProvider", () => {
     expect(result.replyText).toBe("The repo is about X.");
     expect(result.output).toContain("The repo is about X.");
     expect(result.output).toContain("✓ bash");
+  });
+});
+
+describe("extractOpencodeTokenUsage", () => {
+  it("sums tokens and provider cost across step_finish events", () => {
+    const raw = [
+      JSON.stringify({
+        type: "step_finish",
+        part: {
+          reason: "tool-calls",
+          tokens: { input: 1000, output: 50 },
+          cost: 0.002,
+        },
+      }),
+      JSON.stringify({
+        type: "step_finish",
+        part: {
+          reason: "stop",
+          tokens: { input: 500, output: 200, reasoning: 10 },
+          cost: 0.005,
+        },
+      }),
+    ].join("\n");
+
+    expect(extractOpencodeTokenUsage(raw)).toEqual({
+      promptTokens: 1500,
+      completionTokens: 260,
+      freshInputTokens: 1500,
+      cacheWriteTokens: 0,
+      cachedReadTokens: 0,
+      costMicroUsd: 7000,
+      source: "opencode",
+    });
+  });
+
+  it("tracks cache read and write separately", () => {
+    const raw = JSON.stringify({
+      type: "step_finish",
+      part: {
+        reason: "stop",
+        tokens: { input: 2, output: 34, cache: { write: 11132, read: 256 } },
+        cost: 0.014087,
+      },
+    });
+
+    expect(extractOpencodeTokenUsage(raw)).toEqual({
+      promptTokens: 11390,
+      completionTokens: 34,
+      freshInputTokens: 2,
+      cacheWriteTokens: 11132,
+      cachedReadTokens: 256,
+      costMicroUsd: 14087,
+      source: "opencode",
+    });
+  });
+
+  it("returns null when no step_finish events are present", () => {
+    expect(extractOpencodeTokenUsage("plain text output")).toBeNull();
+  });
+});
+
+describe("estimateTokenUsageFromText", () => {
+  it("estimates tokens from character counts", () => {
+    expect(estimateTokenUsageFromText("abcd", "abcdefgh")).toEqual({
+      promptTokens: 1,
+      completionTokens: 2,
+      freshInputTokens: 1,
+      cacheWriteTokens: 0,
+      cachedReadTokens: 0,
+      source: "estimated",
+    });
   });
 });
 

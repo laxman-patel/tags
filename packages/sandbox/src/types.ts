@@ -57,6 +57,17 @@ export type DemoRecipe =
     }
   | { kind: "none"; reason: string };
 
+export type OpencodeRunTokenUsage = {
+  promptTokens: number;
+  completionTokens: number;
+  freshInputTokens: number;
+  cacheWriteTokens: number;
+  cachedReadTokens: number;
+  /** Sum of opencode step_finish part.cost converted to micro-USD. */
+  costMicroUsd?: number;
+  source: "opencode" | "estimated";
+};
+
 export type TagsRunOutput = {
   prUrl?: string;
   repoUrl?: string;
@@ -100,6 +111,8 @@ export interface CodingAgentResult {
   repoPaths?: Record<string, string>;
   /** Structured run metadata written by opencode to `.tags/run-output.json`. */
   runOutput?: TagsRunOutput;
+  /** Token usage parsed from opencode `--format json` step_finish events. */
+  tokenUsage?: OpencodeRunTokenUsage;
 }
 
 export interface SandboxProvider {

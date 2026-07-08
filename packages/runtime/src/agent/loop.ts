@@ -263,6 +263,7 @@ export async function runAgentSegment(args: AgentLoopArgs): Promise<AgentSegment
       spaceId: args.spaceId,
       runId: args.runId,
       modelId: TAGS_MODEL_ID,
+      provider: "fireworks",
       promptTokens: usage?.inputTokens ?? 0,
       completionTokens: usage?.outputTokens ?? 0,
     });

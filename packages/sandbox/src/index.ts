@@ -4,6 +4,8 @@ export {
   REPO_PATH,
   WORKDIR,
   REPOS_ROOT,
+  extractOpencodeTokenUsage,
+  estimateTokenUsageFromText,
   type SandboxProviderConfig,
 } from "./e2b-provider";
 export {
@@ -19,6 +21,7 @@ export type {
   DemoRecordingRequest,
   DemoRecordingResult,
   DemoStep,
+  OpencodeRunTokenUsage,
   SandboxProvider,
   TagsRunOutput,
 } from "./types";
