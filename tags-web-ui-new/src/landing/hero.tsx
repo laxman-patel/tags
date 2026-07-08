@@ -47,10 +47,10 @@ type HeroProps = {
 export const Hero = ({ clerkEnabled = false }: HeroProps) => {
   return (
     <section className="pb-16 pt-28 lg:pb-24 lg:pt-36">
-      <div className="container grid w-full gap-12 md:gap-16 lg:gap-20">
-        <div className="flex w-full min-w-0 flex-col justify-between gap-8 md:gap-12 lg:flex-row lg:gap-16">
-          <div className="min-w-0 flex-1">
-            <h1 className="max-w-xl text-balance text-[2rem] font-semibold leading-[1.08] tracking-tight text-foreground md:text-[2.5rem] lg:max-w-2xl lg:text-[2.75rem]">
+      <div className="container">
+        <div className="grid grid-cols-1 gap-x-16 gap-y-12 md:gap-y-16 lg:grid-cols-[minmax(0,1fr)_minmax(16rem,22rem)] lg:gap-y-20">
+          <div className="min-w-0">
+            <h1 className="text-balance text-[2rem] font-semibold leading-[1.08] tracking-tight text-foreground md:text-[2.5rem] lg:text-[2.75rem]">
               The open-source AI teammate for Slack
             </h1>
 
@@ -72,7 +72,7 @@ export const Hero = ({ clerkEnabled = false }: HeroProps) => {
             </div>
           </div>
 
-          <div className="relative flex min-w-0 flex-1 flex-col justify-center gap-4 max-lg:pt-8 lg:pl-12">
+          <div className="relative flex min-w-0 flex-col justify-center gap-4 max-lg:pt-8">
             <DashedLine
               orientation="vertical"
               className="absolute top-0 left-0 max-lg:hidden"
@@ -90,7 +90,7 @@ export const Hero = ({ clerkEnabled = false }: HeroProps) => {
                     <h2 className="font-text text-sm font-semibold text-foreground">
                       {feature.title}
                     </h2>
-                    <p className="mt-0.5 max-w-72 text-sm leading-snug text-muted-foreground">
+                    <p className="mt-0.5 text-sm leading-snug text-muted-foreground">
                       {feature.description}
                     </p>
                   </div>
@@ -98,60 +98,62 @@ export const Hero = ({ clerkEnabled = false }: HeroProps) => {
               );
             })}
           </div>
-        </div>
 
-        <div className="w-full min-w-0">
-        <Dialog.Root>
-          <Dialog.Trigger asChild>
-            <button
-              type="button"
-              className="group relative aspect-[16/9] w-full cursor-pointer overflow-hidden rounded-2xl bg-muted text-left shadow-[var(--shadow-card)] ring-1 ring-black/[0.05] transition-[transform,box-shadow] duration-200 ease-[cubic-bezier(0.23,1,0.32,1)] hover:-translate-y-0.5 hover:shadow-[0_1px_2px_rgba(16,24,40,0.06),0_28px_60px_-24px_rgba(16,24,40,0.4)]"
-            >
-              {DEMO_SCREENSHOT_SRC ? (
-                <img
-                  src={DEMO_SCREENSHOT_SRC}
-                  alt="Tags Slack demo"
-                  className="h-full w-full object-cover object-left-top"
-                />
-              ) : (
-                <div className="grid h-full w-full place-items-center">
-                  <div className="flex flex-col items-center gap-4">
-                    <div className="flex size-16 items-center justify-center rounded-full bg-primary text-primary-foreground transition-transform group-hover:scale-105">
-                      <Play className="size-7 fill-current" />
+          <div className="col-span-1 min-w-0 lg:col-span-2">
+            <Dialog.Root>
+              <Dialog.Trigger asChild>
+                <button
+                  type="button"
+                  className="group relative aspect-[16/9] w-full cursor-pointer overflow-hidden rounded-2xl bg-muted text-left shadow-[var(--shadow-card)] ring-1 ring-black/[0.05] transition-[transform,box-shadow] duration-200 ease-[cubic-bezier(0.23,1,0.32,1)] hover:-translate-y-0.5 hover:shadow-[0_1px_2px_rgba(16,24,40,0.06),0_28px_60px_-24px_rgba(16,24,40,0.4)]"
+                >
+                  {DEMO_SCREENSHOT_SRC ? (
+                    <img
+                      src={DEMO_SCREENSHOT_SRC}
+                      alt="Tags Slack demo"
+                      className="h-full w-full object-cover object-left-top"
+                    />
+                  ) : (
+                    <div className="grid h-full w-full place-items-center">
+                      <div className="flex flex-col items-center gap-4">
+                        <div className="flex size-16 items-center justify-center rounded-full bg-primary text-primary-foreground transition-transform group-hover:scale-105">
+                          <Play className="size-7 fill-current" />
+                        </div>
+                        <span className="text-sm text-muted-foreground">
+                          Watch Tags work a Slack thread
+                        </span>
+                      </div>
                     </div>
-                    <span className="text-sm text-muted-foreground">
-                      Watch Tags work a Slack thread
-                    </span>
+                  )}
+                </button>
+              </Dialog.Trigger>
+              <Dialog.Portal>
+                <Dialog.Overlay className="fixed inset-0 z-50 bg-black/80" />
+                <Dialog.Content className="fixed inset-0 z-50 flex items-center justify-center p-4">
+                  <Dialog.Title className="sr-only">
+                    Tags demo video
+                  </Dialog.Title>
+                  <div className="relative aspect-video w-full max-w-4xl overflow-hidden rounded-xl bg-black">
+                    {DEMO_VIDEO_SRC ? (
+                      <video
+                        src={DEMO_VIDEO_SRC}
+                        controls
+                        autoPlay
+                        className="h-full w-full"
+                      />
+                    ) : (
+                      <div className="grid h-full w-full place-items-center text-sm text-white/70">
+                        Demo video coming soon
+                      </div>
+                    )}
+                    <Dialog.Close className="absolute right-3 top-3 rounded-full bg-white/10 p-2 text-white transition-colors hover:bg-white/20">
+                      <X className="size-4" />
+                      <span className="sr-only">Close demo video</span>
+                    </Dialog.Close>
                   </div>
-                </div>
-              )}
-            </button>
-          </Dialog.Trigger>
-          <Dialog.Portal>
-            <Dialog.Overlay className="fixed inset-0 z-50 bg-black/80" />
-            <Dialog.Content className="fixed inset-0 z-50 flex items-center justify-center p-4">
-              <Dialog.Title className="sr-only">Tags demo video</Dialog.Title>
-              <div className="relative aspect-video w-full max-w-4xl overflow-hidden rounded-xl bg-black">
-                {DEMO_VIDEO_SRC ? (
-                  <video
-                    src={DEMO_VIDEO_SRC}
-                    controls
-                    autoPlay
-                    className="h-full w-full"
-                  />
-                ) : (
-                  <div className="grid h-full w-full place-items-center text-sm text-white/70">
-                    Demo video coming soon
-                  </div>
-                )}
-                <Dialog.Close className="absolute right-3 top-3 rounded-full bg-white/10 p-2 text-white transition-colors hover:bg-white/20">
-                  <X className="size-4" />
-                  <span className="sr-only">Close demo video</span>
-                </Dialog.Close>
-              </div>
-            </Dialog.Content>
-          </Dialog.Portal>
-        </Dialog.Root>
+                </Dialog.Content>
+              </Dialog.Portal>
+            </Dialog.Root>
+          </div>
         </div>
       </div>
     </section>

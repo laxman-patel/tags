@@ -21,7 +21,7 @@ export const Navbar = ({ clerkEnabled = false }: NavbarProps) => {
             alt=""
             width={28}
             height={28}
-            className="size-7 rounded-[22%] object-cover shadow-[0_1px_2px_rgba(42,111,215,0.35)]"
+            className="size-7 shrink-0 object-contain"
           />
           <span className="font-display text-[17px] font-semibold tracking-tight">
             tags
