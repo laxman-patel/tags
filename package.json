@@ -10,7 +10,8 @@
     "db:migrate": "pnpm --filter @tags/db migrate",
     "db:seed": "pnpm --filter @tags/db seed",
     "lint": "pnpm -r lint",
-    "typecheck": "pnpm -r typecheck"
+    "typecheck": "pnpm -r typecheck",
+    "demo-recording:sanity": "tsx scripts/demo-recording-sanity.ts"
   },
   "devDependencies": {
     "@types/node": "^26.1.0",

@@ -1,0 +1,15 @@
+{
+  "name": "@tags/e2b-tags-demo-desktop",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsx build.prod.ts",
+    "verify": "tsx verify.ts"
+  },
+  "dependencies": {
+    "@e2b/desktop": "^2.3.1",
+    "dotenv": "^16.4.7",
+    "e2b": "^2.32.0",
+    "tsx": "^4.19.2"
+  }
+}

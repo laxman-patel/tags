@@ -11,3 +11,4 @@ coverage
 .vercel
 .firecrawl/
 *.tsbuildinfo
+mainline-nextjs-template/

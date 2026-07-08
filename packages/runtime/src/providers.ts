@@ -17,7 +17,6 @@ export type RuntimeProviderConfig = {
   /** Signs short-lived run tokens for the Tags MCP bridge used by opencode. */
   mcpSigningKey?: string;
   demoRecording?: {
-    enabled: boolean;
     maxSeconds: number;
     width: number;
     height: number;

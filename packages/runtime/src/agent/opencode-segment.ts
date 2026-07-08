@@ -20,6 +20,7 @@ import { DEFAULT_OPENCODE_TEMPLATE, REPO_PATH, REPOS_ROOT, WORKDIR, estimateToke
 import { buildChannelContextBlock, buildRunLinkBlock, isChannelContextRequest, SlackStreamAdapter } from "@tags/slack";
 import type { AgentSegmentResult } from "./types";
 import { buildCapabilitiesReply, isCapabilityInventoryQuestion } from "./capabilities";
+import { wantsDemoRecording } from "./demo-recording-intent";
 import { buildOpencodeSystemPrompt, buildOpencodeUserPrompt } from "./prompt";
 import { buildThreadContext } from "../context/builder";
 import { maybeExtractMemories, maybeSummarizeThread } from "../context/post-run";
@@ -211,6 +212,7 @@ export async function runOpencodeSegment(
     connectedToolkits: config.enabledConnections,
     hasComposioApiKey: Boolean(args.providerConfig.composioApiKey),
     spaceMemorySnapshot,
+    demoRecordingRequested: wantsDemoRecording(args.triggerText),
   });
   let prompt = buildOpencodeUserPrompt(messages);
 

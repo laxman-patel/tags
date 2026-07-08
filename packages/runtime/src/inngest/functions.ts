@@ -50,6 +50,7 @@ import {
   rejectPendingTool,
 } from "../agent/loop";
 import type { AgentSegmentResult } from "../agent/types";
+import { wantsDemoRecording } from "../agent/demo-recording-intent";
 import { runOpencodeSegment, type OpencodeContinuation } from "../agent/opencode-segment";
 import { createRuntimeProviders } from "../providers";
 import { loadRuntimeSecrets } from "../secrets";
@@ -514,6 +515,8 @@ async function recordDemoStep(
   setup: RunSetup,
   runOutput: TagsRunOutput | undefined,
 ): Promise<void> {
+  if (!wantsDemoRecording(input.triggerText)) return;
+
   return await withSpan(
     "demo.record",
     async (span) => {
@@ -525,138 +528,175 @@ async function recordDemoStep(
         "run.id": setup.runId,
       });
 
-  const { secrets, db, slack } = await loadWorkspaceRuntime(input.workspaceId);
-  if (!secrets.demoRecording.enabled) return;
-  const emit = async (event: TagsEvent) => {
-    await appendRunEvent(db, setup.runId, event);
-  };
+      const { secrets, db, slack } = await loadWorkspaceRuntime(input.workspaceId);
+      const emit = async (event: TagsEvent) => {
+        await appendRunEvent(db, setup.runId, event);
+      };
+      const fail = async (message: string, prUrl?: string) => {
+        await emit({ type: "recording.failed", prUrl, error: message });
+        await postThreadMessage(
+          slack,
+          input.channelId,
+          setup.threadTs,
+          `Demo recording failed: ${message}`,
+        );
+      };
 
-  const config = await loadActiveSpaceConfig(db, input.spaceId);
-  const repoUrl = runOutput?.repoUrl ?? config?.repoUrls?.[0] ?? config?.repoUrl ?? undefined;
-  const prUrl = runOutput?.prUrl;
-  const demo = runOutput?.demo;
+      const config = await loadActiveSpaceConfig(db, input.spaceId);
+      const repoUrl = runOutput?.repoUrl ?? config?.repoUrls?.[0] ?? config?.repoUrl ?? undefined;
+      const prUrl = runOutput?.prUrl;
+      const demo = runOutput?.demo;
 
-  if (!prUrl || !repoUrl || !demo || demo.kind === "none") {
-    return;
-  }
+      if (!secrets.e2bApiKey || !secrets.r2?.publicBaseUrl) {
+        await fail(
+          "Recording was requested but E2B_API_KEY or R2_PUBLIC_BASE_URL is not configured.",
+          prUrl,
+        );
+        return;
+      }
 
-  if (!secrets.e2bApiKey || !secrets.composioApiKey || !secrets.r2?.publicBaseUrl) {
-    const message =
-      "Demo recording is enabled but E2B_API_KEY, COMPOSIO_API_KEY, or R2_PUBLIC_BASE_URL is missing.";
-    await emit({ type: "recording.failed", prUrl, error: message });
-    await postThreadMessage(slack, input.channelId, setup.threadTs, `Demo recording skipped: ${message}`);
-    return;
-  }
+      if (!prUrl || !repoUrl) {
+        await fail(
+          "Recording was requested but the agent did not produce PR/repo metadata in .tags/run-output.json.",
+          prUrl,
+        );
+        return;
+      }
 
-  if (!config?.enabledConnections.includes("github")) {
-    const message = "Demo recording PR comments require the Space GitHub connection to be enabled.";
-    await emit({ type: "recording.failed", prUrl, error: message });
-    await postThreadMessage(slack, input.channelId, setup.threadTs, `Demo recording skipped: ${message}`);
-    return;
-  }
+      if (!demo) {
+        await fail(
+          "Recording was requested but the agent did not write a demo recipe in .tags/run-output.json.",
+          prUrl,
+        );
+        return;
+      }
 
-  await emit({ type: "recording.started", prUrl, demoKind: demo.kind });
+      if (demo.kind === "none") {
+        await fail(
+          demo.reason.trim()
+            ? `Agent could not record a demo: ${demo.reason}`
+            : "Agent reported that no demo could be recorded.",
+          prUrl,
+        );
+        return;
+      }
 
-  try {
-    const recording = await recordDemo({
-      apiKey: secrets.e2bApiKey,
-      template: secrets.e2bDemoTemplate,
-      repoUrl,
-      branch: runOutput?.branch,
-      demo,
-      maxSeconds: secrets.demoRecording.maxSeconds,
-      width: secrets.demoRecording.width,
-      height: secrets.demoRecording.height,
-      fps: secrets.demoRecording.fps,
-    });
+      await emit({ type: "recording.started", prUrl, demoKind: demo.kind });
 
-    const r2Client = createR2Client(secrets.r2);
-    const artifactId = newId();
-    const key = artifactBinaryObjectKey(input.organizationId, artifactId, recording.filename);
-    await uploadArtifactBytes(r2Client, secrets.r2, key, recording.video, recording.contentType);
-    const artifactUrl = publicArtifactUrl(secrets.r2, key);
-    if (!artifactUrl) throw new Error("R2_PUBLIC_BASE_URL is not configured");
+      try {
+        const recording = await recordDemo({
+          apiKey: secrets.e2bApiKey,
+          template: secrets.e2bDemoTemplate,
+          repoUrl,
+          branch: runOutput?.branch,
+          demo,
+          maxSeconds: secrets.demoRecording.maxSeconds,
+          width: secrets.demoRecording.width,
+          height: secrets.demoRecording.height,
+          fps: secrets.demoRecording.fps,
+        });
 
-    const slackFile = await uploadThreadFile(slack, {
-      channelId: input.channelId,
-      threadTs: setup.threadTs,
-      file: recording.video,
-      filename: recording.filename,
-      title: "Tags demo recording",
-      initialComment: `Demo recording for ${prUrl}\n${artifactUrl}`,
-    });
+        const r2Client = createR2Client(secrets.r2);
+        const artifactId = newId();
+        const key = artifactBinaryObjectKey(input.organizationId, artifactId, recording.filename);
+        await uploadArtifactBytes(r2Client, secrets.r2, key, recording.video, recording.contentType);
+        const artifactUrl = publicArtifactUrl(secrets.r2, key);
+        if (!artifactUrl) throw new Error("R2_PUBLIC_BASE_URL is not configured");
 
-    let prComment: { htmlUrl?: string } = {};
-    const composio = await loadComposioTools({
-      apiKey: secrets.composioApiKey,
-      entityId: input.spaceId,
-      toolkits: ["github"],
-    });
-    if (!composio) {
-      throw new Error("Composio GitHub tools are unavailable");
-    }
-    try {
-      prComment = await upsertDemoRecordingCommentWithComposio({
-        tools: composio.tools,
-        prUrl,
-        runId: setup.runId,
-        artifactUrl,
-        appUrl: input.appUrl,
-        slackPermalink: slackFile.permalink,
-      });
-    } finally {
-      await composio.close();
-    }
+        const slackFile = await uploadThreadFile(slack, {
+          channelId: input.channelId,
+          threadTs: setup.threadTs,
+          file: recording.video,
+          filename: recording.filename,
+          title: "Tags demo recording",
+          initialComment: `Demo recording for ${prUrl}\n${artifactUrl}`,
+        });
 
-    const artifact = await createArtifact(db, {
-      id: artifactId,
-      organizationId: input.organizationId,
-      spaceId: input.spaceId,
-      threadId: setup.threadId,
-      runId: setup.runId,
-      kind: "video",
-      title: "Demo recording",
-      url: artifactUrl,
-      contentRef: key,
-      contentType: recording.contentType,
-      sizeBytes: recording.video.byteLength,
-      metadata: {
-        prUrl,
-        repoUrl,
-        branch: runOutput?.branch,
-        durationMs: recording.durationMs,
-        slackFileId: slackFile.fileId,
-        slackPermalink: slackFile.permalink,
-        prCommentUrl: prComment.htmlUrl,
-      },
-    });
-    if (!artifact) throw new Error("Failed to create demo recording artifact");
+        let prComment: { htmlUrl?: string } = {};
+        const githubEnabled = config?.enabledConnections.includes("github") ?? false;
+        if (githubEnabled && secrets.composioApiKey) {
+          const composio = await loadComposioTools({
+            apiKey: secrets.composioApiKey,
+            entityId: input.spaceId,
+            toolkits: ["github"],
+          });
+          if (composio) {
+            try {
+              prComment = await upsertDemoRecordingCommentWithComposio({
+                tools: composio.tools,
+                prUrl,
+                runId: setup.runId,
+                artifactUrl,
+                appUrl: input.appUrl,
+                slackPermalink: slackFile.permalink,
+              });
+            } catch (error) {
+              emitWarn("demo recording PR comment failed", {
+                "space.id": input.spaceId,
+                "run.id": setup.runId,
+                outcome: "error",
+                "error.type": error instanceof Error ? error.name : typeof error,
+              });
+            } finally {
+              await composio.close();
+            }
+          }
+        }
 
-    await emit({
-      type: "artifact.created",
-      artifactId,
-      artifactUrl,
-      artifactTitle: "Demo recording",
-    });
-    await emit({
-      type: "recording.finished",
-      artifactId,
-      artifactUrl,
-      prUrl,
-      slackFileId: slackFile.fileId,
-      prCommentUrl: prComment.htmlUrl,
-    });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Demo recording failed";
-    await emit({ type: "recording.failed", prUrl, error: message });
-    emitWarn("demo recording failed", {
-      "space.id": input.spaceId,
-      "run.id": setup.runId,
-      outcome: "error",
-      "error.type": error instanceof Error ? error.name : typeof error,
-    });
-    await postThreadMessage(slack, input.channelId, setup.threadTs, `Demo recording failed for ${prUrl}: ${message}`);
-  }
+        const artifact = await createArtifact(db, {
+          id: artifactId,
+          organizationId: input.organizationId,
+          spaceId: input.spaceId,
+          threadId: setup.threadId,
+          runId: setup.runId,
+          kind: "video",
+          title: "Demo recording",
+          url: artifactUrl,
+          contentRef: key,
+          contentType: recording.contentType,
+          sizeBytes: recording.video.byteLength,
+          metadata: {
+            prUrl,
+            repoUrl,
+            branch: runOutput?.branch,
+            durationMs: recording.durationMs,
+            slackFileId: slackFile.fileId,
+            slackPermalink: slackFile.permalink,
+            prCommentUrl: prComment.htmlUrl,
+          },
+        });
+        if (!artifact) throw new Error("Failed to create demo recording artifact");
+
+        await emit({
+          type: "artifact.created",
+          artifactId,
+          artifactUrl,
+          artifactTitle: "Demo recording",
+        });
+        await emit({
+          type: "recording.finished",
+          artifactId,
+          artifactUrl,
+          prUrl,
+          slackFileId: slackFile.fileId,
+          prCommentUrl: prComment.htmlUrl,
+        });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Demo recording failed";
+        await emit({ type: "recording.failed", prUrl, error: message });
+        emitWarn("demo recording failed", {
+          "space.id": input.spaceId,
+          "run.id": setup.runId,
+          outcome: "error",
+          "error.type": error instanceof Error ? error.name : typeof error,
+        });
+        await postThreadMessage(
+          slack,
+          input.channelId,
+          setup.threadTs,
+          `Demo recording failed for ${prUrl}: ${message}`,
+        );
+      }
     },
     { tracer: tagsTracer },
   );

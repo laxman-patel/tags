@@ -50,10 +50,12 @@ function validateDemo(demo: DemoRecipe): void {
   if (demo.steps.length === 0) throw new Error("Web demo steps are empty");
 }
 
+const PLAYWRIGHT_MODULE = "/opt/tags-playwright/node_modules/playwright";
+
 function playwrightScript(steps: DemoStep[]): string {
   const serialized = JSON.stringify(steps);
   return `
-import { chromium } from "playwright";
+import { chromium } from "${PLAYWRIGHT_MODULE}";
 
 const steps = ${serialized};
 const browser = await chromium.launch({
@@ -91,6 +93,7 @@ async function createDesktopSandbox(args: DemoRecordingRequest): Promise<Desktop
   return (await create.call(SandboxCtor, args.template, {
     apiKey: args.apiKey,
     timeoutMs: Math.max(args.maxSeconds + 120, 180) * 1000,
+    resolution: [args.width, args.height],
   })) as DesktopSandbox;
 }
 
@@ -159,11 +162,11 @@ async function readRecording(sandbox: DesktopSandbox): Promise<Buffer> {
   return Buffer.from(encoded, "base64");
 }
 
-async function runWebDemo(
+async function prepareWebDemo(
   sandbox: DesktopSandbox,
   cwd: string,
   demo: Extract<DemoRecipe, { kind: "web" }>,
-): Promise<string> {
+): Promise<string[]> {
   const logs: string[] = [];
   const installCommand = demo.installCommand ?? await inferInstallCommand(sandbox, cwd);
   if (installCommand) {
@@ -179,18 +182,27 @@ async function runWebDemo(
     { timeoutMs: timeoutMs + 5_000 },
   );
   logs.push(combineOutput(ready));
+  return logs;
+}
+
+async function runWebDemoSteps(
+  sandbox: DesktopSandbox,
+  cwd: string,
+  demo: Extract<DemoRecipe, { kind: "web" }>,
+): Promise<string> {
   const script = playwrightScript(demo.steps);
   await sandbox.commands.run(`cat > /tmp/tags-demo-playwright.mjs <<'EOF'\n${script}\nEOF`);
-  logs.push(
-    combineOutput(
-      await sandbox.commands.run("node /tmp/tags-demo-playwright.mjs", {
-        cwd,
-        timeoutMs: 120_000,
-        envs: { DISPLAY: ":0" },
-      }),
-    ),
+  return combineOutput(
+    await sandbox.commands.run("node /tmp/tags-demo-playwright.mjs", {
+      cwd,
+      timeoutMs: 120_000,
+      envs: {
+        DISPLAY: ":0",
+        NODE_PATH: "/opt/tags-playwright/node_modules",
+        PLAYWRIGHT_BROWSERS_PATH: "/ms-playwright",
+      },
+    }),
   );
-  return logs.filter(Boolean).join("\n");
 }
 
 async function runTerminalDemo(
@@ -207,17 +219,38 @@ async function runTerminalDemo(
 
 export async function recordDemo(args: DemoRecordingRequest): Promise<DemoRecordingResult> {
   validateDemo(args.demo);
+  if (args.demo.kind === "none") {
+    throw new Error(`No recordable demo: ${args.demo.reason}`);
+  }
+  const demo = args.demo;
   const started = Date.now();
   const sandbox = await createDesktopSandbox(args);
   let logs = "";
   try {
-    const cwd = await setupRepo(sandbox, args);
+    const cwd = await setupRepo(sandbox, { ...args, demo });
+    const prepLogs: string[] = [];
+
+    if (demo.kind === "web") {
+      prepLogs.push(...(await prepareWebDemo(sandbox, cwd, demo)));
+    }
+
+    // Start ffmpeg only after clone/install/app-ready so maxSeconds covers the demo.
     await startRecording(sandbox, args);
     try {
-      if (args.demo.kind === "web") {
-        logs = await runWebDemo(sandbox, cwd, args.demo);
-      } else if (args.demo.kind === "terminal") {
-        logs = await runTerminalDemo(sandbox, cwd, args.demo);
+      switch (demo.kind) {
+        case "web": {
+          const stepLogs = await runWebDemoSteps(sandbox, cwd, demo);
+          logs = [...prepLogs, stepLogs].filter(Boolean).join("\n");
+          break;
+        }
+        case "terminal": {
+          logs = await runTerminalDemo(sandbox, cwd, demo);
+          break;
+        }
+        default: {
+          const _exhaustive: never = demo;
+          throw new Error(`Unsupported demo kind: ${JSON.stringify(_exhaustive)}`);
+        }
       }
     } finally {
       await stopRecording(sandbox);

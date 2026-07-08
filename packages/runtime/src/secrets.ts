@@ -14,10 +14,6 @@ const runtimeSecretsSchema = z.object({
   E2B_DEMO_TEMPLATE: z.string().default("tags-demo-desktop"),
   COMPOSIO_API_KEY: z.string().optional(),
   INNGEST_SIGNING_KEY: z.string().optional(),
-  DEMO_RECORDING_ENABLED: z
-    .string()
-    .optional()
-    .transform((value) => value === "true" || value === "1"),
   DEMO_RECORDING_MAX_SECONDS: z.coerce.number().int().positive().default(90),
   DEMO_RECORDING_WIDTH: z.coerce.number().int().positive().default(1280),
   DEMO_RECORDING_HEIGHT: z.coerce.number().int().positive().default(800),
@@ -37,7 +33,6 @@ export type RuntimeSecrets = {
   mcpSigningKey?: string;
   r2?: R2Config;
   demoRecording: {
-    enabled: boolean;
     maxSeconds: number;
     width: number;
     height: number;
@@ -69,7 +64,6 @@ export function loadRuntimeSecrets(): RuntimeSecrets {
     composioApiKey: env.COMPOSIO_API_KEY,
     mcpSigningKey: env.INNGEST_SIGNING_KEY,
     demoRecording: {
-      enabled: env.DEMO_RECORDING_ENABLED,
       maxSeconds: env.DEMO_RECORDING_MAX_SECONDS,
       width: env.DEMO_RECORDING_WIDTH,
       height: env.DEMO_RECORDING_HEIGHT,

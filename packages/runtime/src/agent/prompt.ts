@@ -32,6 +32,8 @@ type OpencodePromptOptions = {
   enabledTools?: string[];
   hasComposioApiKey?: boolean;
   spaceMemorySnapshot?: string | null;
+  /** When true, the user asked for a video/proof; agent must write a concrete demo recipe. */
+  demoRecordingRequested?: boolean;
 };
 
 function formatInventory(label: string, items: string[]): string {
@@ -60,7 +62,11 @@ export function buildOpencodeSystemPrompt(
 
   const codingOutputContext = `\n# Coding run output\nWhen you perform repo-changing coding work, create or update .tags/run-output.json in the changed repo. Use this JSON shape when known: {"prUrl":"https://github.com/owner/repo/pull/123","repoUrl":"https://github.com/owner/repo","branch":"branch-name","commitSha":"sha","demo":{"kind":"web","repoSubdir":"optional/path","installCommand":"optional command","startCommand":"command to run the app","readyUrl":"http://127.0.0.1:3000/path","steps":[{"type":"navigate","url":"http://127.0.0.1:3000/path"},{"type":"waitForText","text":"visible fixed UI text"}],"successText":"optional short description"}}. For non-UI work use demo.kind \"terminal\" with a command, or \"none\" with a reason. Do not include secrets.`;
 
-  return `${system}${nativeToolContext}${toolContext}${codingOutputContext}`;
+  const demoRecordingContext = options?.demoRecordingRequested
+    ? `\n# Demo recording required\nThe user asked for a video, screencast, or visual proof of this change. Before you finish, you MUST create or update .tags/run-output.json in the changed repo with prUrl, repoUrl, branch, and a concrete demo recipe invented from the codebase and the files you changed.\n- Prefer demo.kind \"web\" when the change is UI-visible: inspect package scripts and routes, then set startCommand, readyUrl, and Playwright steps (navigate/click/fill/waitForText/assertText) that exercise the change. Do not invent fake URLs or selectors.\n- Use demo.kind \"terminal\" only when there is no UI to show; the command must prove the change (e.g. run a test or CLI that demonstrates the fix).\n- Use demo.kind \"none\" only if recording is impossible, with a clear reason Tags will post to Slack.\n- Do not include secrets.`
+    : "";
+
+  return `${system}${nativeToolContext}${toolContext}${codingOutputContext}${demoRecordingContext}`;
 }
 
 export function buildOpencodeUserPrompt(messages: ModelMessage[]): string {

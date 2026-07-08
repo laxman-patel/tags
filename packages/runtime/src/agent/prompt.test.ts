@@ -61,4 +61,18 @@ describe("opencode prompts", () => {
     expect(prompt).toContain("opencode is only the sandbox coding harness");
     expect(prompt).toContain("# Task thread");
   });
+
+  it("adds mandatory demo recipe instructions when recording was requested", () => {
+    const withRequest = buildOpencodeSystemPrompt("# Identity\nYou are Tags.", "dev", {
+      demoRecordingRequested: true,
+    });
+    const withoutRequest = buildOpencodeSystemPrompt("# Identity\nYou are Tags.", "dev", {
+      demoRecordingRequested: false,
+    });
+
+    expect(withRequest).toContain("# Demo recording required");
+    expect(withRequest).toContain("MUST create or update .tags/run-output.json");
+    expect(withRequest).toContain('Prefer demo.kind "web"');
+    expect(withoutRequest).not.toContain("# Demo recording required");
+  });
 });
