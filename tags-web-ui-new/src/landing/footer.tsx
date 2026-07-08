@@ -1,5 +1,6 @@
 import { LinkButton } from "@cloudflare/kumo";
 
+import { FooterWatermarkTuner } from "./footer-watermark-tuner";
 import { GitHubIcon } from "./github-icon";
 import { GetStartedButton } from "./get-started-button";
 
@@ -31,11 +32,7 @@ export function Footer({ clerkEnabled = false }: FooterProps) {
         </div>
       </div>
 
-      <div className="landing-footer-watermark mt-10 w-full leading-none select-none md:mt-16">
-        <span className="font-display block w-full bg-linear-to-b from-primary from-20% via-primary/60 via-55% to-transparent bg-clip-text text-center text-[24vw] leading-[0.95] font-semibold tracking-[-0.015em] text-transparent lg:text-[15rem]">
-          @tags
-        </span>
-      </div>
+      <FooterWatermarkTuner />
     </footer>
   );
 }
