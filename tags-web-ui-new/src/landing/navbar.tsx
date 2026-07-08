@@ -1,7 +1,7 @@
 import { LinkButton } from "@cloudflare/kumo";
 import { GithubLogoIcon } from "@phosphor-icons/react";
 
-import tagsIcon from "../imports/tags-icon.png";
+import tagsIcon from "../imports/tags-icon-transparent.svg";
 import { GetStartedButton } from "./get-started-button";
 
 type NavbarProps = {
@@ -14,18 +14,15 @@ export const Navbar = ({ clerkEnabled = false }: NavbarProps) => {
       <nav className="flex w-full max-w-[620px] items-center justify-between gap-3 rounded-xl bg-background/75 py-2 pl-4 pr-2 shadow-[var(--shadow-nav)] ring-1 ring-black/[0.05] backdrop-blur-xl">
         <a
           href="/home"
-          className="flex shrink-0 items-center gap-2.5 rounded-full pr-2 transition-opacity hover:opacity-80"
+          className="flex shrink-0 items-center rounded-full transition-opacity hover:opacity-80"
         >
           <img
             src={tagsIcon}
-            alt=""
-            width={28}
-            height={28}
-            className="size-7 shrink-0 object-contain"
+            alt="tags"
+            width={18}
+            height={20}
+            className="h-5 w-auto shrink-0"
           />
-          <span className="font-display text-[17px] font-semibold tracking-tight">
-            tags
-          </span>
         </a>
 
         <div className="flex items-center gap-2">

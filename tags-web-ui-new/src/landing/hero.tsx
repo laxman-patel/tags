@@ -48,7 +48,7 @@ export const Hero = ({ clerkEnabled = false }: HeroProps) => {
   return (
     <section className="pb-16 pt-28 lg:pb-24 lg:pt-36">
       <div className="container">
-        <div className="grid grid-cols-1 gap-x-16 gap-y-12 md:gap-y-16 lg:grid-cols-[minmax(0,1fr)_minmax(16rem,22rem)] lg:gap-y-20">
+        <div className="grid grid-cols-1 gap-x-16 gap-y-12 md:gap-y-16 lg:grid-cols-2 lg:gap-y-20">
           <div className="min-w-0">
             <h1 className="text-balance text-[2rem] font-semibold leading-[1.08] tracking-tight text-foreground md:text-[2.5rem] lg:text-[2.75rem]">
               The open-source AI teammate for Slack
@@ -72,7 +72,7 @@ export const Hero = ({ clerkEnabled = false }: HeroProps) => {
             </div>
           </div>
 
-          <div className="relative flex min-w-0 flex-col justify-center gap-4 max-lg:pt-8">
+          <div className="relative flex min-w-0 flex-col justify-center gap-4 max-lg:pt-10 lg:pl-10">
             <DashedLine
               orientation="vertical"
               className="absolute top-0 left-0 max-lg:hidden"
@@ -86,7 +86,7 @@ export const Hero = ({ clerkEnabled = false }: HeroProps) => {
               return (
                 <div key={feature.title} className="flex gap-3">
                   <Icon className="mt-0.5 size-[18px] shrink-0 text-primary" />
-                  <div>
+                  <div className="min-w-0">
                     <h2 className="font-text text-sm font-semibold text-foreground">
                       {feature.title}
                     </h2>
@@ -115,7 +115,7 @@ export const Hero = ({ clerkEnabled = false }: HeroProps) => {
                   ) : (
                     <div className="grid h-full w-full place-items-center">
                       <div className="flex flex-col items-center gap-4">
-                        <div className="flex size-16 items-center justify-center rounded-full bg-primary text-primary-foreground transition-transform group-hover:scale-105">
+                        <div className="flex size-16 items-center justify-center rounded-full bg-transparent text-primary ring-1 ring-primary/25 transition-transform group-hover:scale-105">
                           <Play className="size-7 fill-current" />
                         </div>
                         <span className="text-sm text-muted-foreground">
