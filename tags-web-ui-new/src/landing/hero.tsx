@@ -46,25 +46,21 @@ type HeroProps = {
 
 export const Hero = ({ clerkEnabled = false }: HeroProps) => {
   return (
-    <section className="py-28 lg:py-32 lg:pt-44">
-      <div className="container flex flex-col justify-between gap-8 md:gap-14 lg:flex-row lg:gap-20">
+    <section className="pb-16 pt-28 lg:pb-24 lg:pt-36">
+      <div className="container flex flex-col justify-between gap-8 md:gap-12 lg:flex-row lg:gap-16">
         <div className="flex-1">
-          <h1 className="max-w-160 text-3xl tracking-tight text-foreground md:text-4xl lg:text-5xl xl:whitespace-nowrap">
+          <h1 className="max-w-[13ch] text-[2rem] font-semibold leading-[1.08] tracking-tight text-foreground md:text-[2.5rem] lg:text-[2.75rem]">
             The open-source AI teammate for Slack
           </h1>
 
-          <p className="text-1xl mt-5 text-muted-foreground md:text-3xl">
+          <p className="mt-4 max-w-md text-base leading-relaxed text-muted-foreground md:text-lg">
             Mention @tags in any channel. It reads the whole thread, does the
-            work, and asks before doing anything it shouldn't.
+            work, and asks before doing anything it shouldn&apos;t.
           </p>
 
-          <div className="mt-8 flex flex-wrap items-center gap-4 lg:flex-nowrap">
+          <div className="mt-7 flex flex-wrap items-center gap-3">
             <GetStartedButton clerkEnabled={clerkEnabled} />
-            <Button
-              variant="outline"
-              className="h-auto gap-2 bg-linear-to-r from-background to-transparent shadow-md"
-              asChild
-            >
+            <Button variant="outline" asChild>
               <a
                 href="https://github.com/laxman-patel/tags"
                 className="max-w-56 truncate text-start md:max-w-none"
@@ -76,7 +72,7 @@ export const Hero = ({ clerkEnabled = false }: HeroProps) => {
           </div>
         </div>
 
-        <div className="relative flex flex-1 flex-col justify-center space-y-5 max-lg:pt-10 lg:pl-10">
+        <div className="relative flex flex-1 flex-col justify-center gap-4 max-lg:pt-8 lg:pl-12">
           <DashedLine
             orientation="vertical"
             className="absolute top-0 left-0 max-lg:hidden"
@@ -88,13 +84,13 @@ export const Hero = ({ clerkEnabled = false }: HeroProps) => {
           {features.map((feature) => {
             const Icon = feature.icon;
             return (
-              <div key={feature.title} className="flex gap-2.5 lg:gap-5">
-                <Icon className="mt-1 size-4 shrink-0 text-foreground lg:size-5" />
+              <div key={feature.title} className="flex gap-3">
+                <Icon className="mt-0.5 size-[18px] shrink-0 text-primary" />
                 <div>
-                  <h2 className="font-text font-semibold text-foreground">
+                  <h2 className="font-text text-sm font-semibold text-foreground">
                     {feature.title}
                   </h2>
-                  <p className="max-w-76 text-sm text-muted-foreground">
+                  <p className="mt-0.5 max-w-72 text-sm leading-snug text-muted-foreground">
                     {feature.description}
                   </p>
                 </div>
@@ -104,12 +100,12 @@ export const Hero = ({ clerkEnabled = false }: HeroProps) => {
         </div>
       </div>
 
-      <div className="mt-12 max-lg:mx-6 md:mt-20 lg:container lg:mt-24">
+      <div className="mt-12 max-lg:mx-6 md:mt-16 lg:container lg:mt-20">
         <Dialog.Root>
           <Dialog.Trigger asChild>
             <button
               type="button"
-              className="group relative aspect-[16/9] w-full cursor-pointer overflow-hidden rounded-2xl border bg-muted text-left shadow-lg transition-shadow hover:shadow-xl"
+              className="group relative aspect-[16/9] w-full cursor-pointer overflow-hidden rounded-2xl bg-muted text-left shadow-[var(--shadow-card)] ring-1 ring-black/[0.05] transition-[transform,box-shadow] duration-200 ease-[cubic-bezier(0.23,1,0.32,1)] hover:-translate-y-0.5 hover:shadow-[0_1px_2px_rgba(16,24,40,0.06),0_28px_60px_-24px_rgba(16,24,40,0.4)]"
             >
               {DEMO_SCREENSHOT_SRC ? (
                 <img

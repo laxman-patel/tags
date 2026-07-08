@@ -97,13 +97,13 @@ const bottomItems: CapabilityItem[] = [
 
 export const Capabilities = () => {
   return (
-    <section id="resource-allocation" className="overflow-hidden pb-28 lg:pb-32">
+    <section id="capabilities" className="overflow-hidden pb-20 lg:pb-28">
       <div>
-        <h2 className="container text-center text-3xl tracking-tight text-balance sm:text-4xl md:text-5xl lg:text-6xl">
+        <h2 className="container text-center text-3xl tracking-tight text-balance sm:text-4xl md:text-4xl lg:text-5xl">
           Everything an agent needs to do real work
         </h2>
 
-        <div className="mt-8 md:mt-12 lg:mt-20">
+        <div className="mt-8 md:mt-12 lg:mt-16">
           <DashedLine
             orientation="horizontal"
             className="container scale-x-105"
@@ -195,7 +195,7 @@ const LogoGrid = ({ logos }: { logos: LogoImage[] }) => {
           {logos.slice(0, 4).map((logo) => (
             <div
               key={logo.alt}
-              className="grid aspect-square size-16 place-items-center rounded-2xl bg-background p-2 lg:size-20"
+              className="grid aspect-square size-16 place-items-center rounded-2xl bg-background p-2 shadow-[var(--shadow-button)] lg:size-20"
             >
               <img
                 src={logo.src}
@@ -211,7 +211,7 @@ const LogoGrid = ({ logos }: { logos: LogoImage[] }) => {
           {logos.slice(4).map((logo) => (
             <div
               key={logo.alt}
-              className="grid aspect-square size-16 place-items-center rounded-2xl bg-background lg:size-20"
+              className="grid aspect-square size-16 place-items-center rounded-2xl bg-background shadow-[var(--shadow-button)] lg:size-20"
             >
               <img
                 src={logo.src}
@@ -232,7 +232,7 @@ const Placeholder = ({ label, className }: PlaceholderImage) => {
   return (
     <div
       className={cn(
-        "grid place-items-center rounded-lg border border-dashed bg-muted/60",
+        "grid place-items-center rounded-xl border border-dashed border-black/10 bg-muted/50",
         className,
       )}
     >

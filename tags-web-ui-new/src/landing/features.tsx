@@ -1,69 +1,70 @@
-import { ChevronRight } from "lucide-react";
-
 import { DashedLine } from "./dashed-line";
 import { Card, CardContent } from "./ui";
 
 const items = [
   {
-    title: "A Space for every channel",
+    title: "One Space per channel",
+    description:
+      "Each Slack channel gets its own agent — scoped tools, memory, and spend limits.",
     label: "spaces dashboard",
   },
   {
     title: "Approvals before actions",
+    description:
+      "External writes and sensitive tools pause in-thread until someone approves.",
     label: "slack approval card",
   },
   {
     title: "Every run, replayable",
+    description:
+      "Tool calls, artifacts, and token usage persisted — browse or export any run.",
     label: "run timeline",
   },
 ];
 
 export const Features = () => {
   return (
-    <section id="feature-modern-teams" className="pb-28 lg:pb-32">
+    <section id="features" className="pb-20 lg:pb-28">
       <div className="container">
         <div className="relative flex items-center justify-center">
           <DashedLine className="text-muted-foreground" />
-          <span className="absolute bg-muted px-3 font-mono text-sm font-medium tracking-wide text-muted-foreground max-md:hidden">
+          <span className="absolute bg-muted px-3 font-mono text-xs font-medium tracking-wide text-muted-foreground max-md:hidden">
             ONE AGENT PER CHANNEL
           </span>
         </div>
 
-        <div className="mx-auto mt-10 grid max-w-4xl items-center gap-3 md:gap-0 lg:mt-24 lg:grid-cols-2">
-          <h2 className="text-2xl tracking-tight md:text-4xl lg:text-5xl">
-            Made for teams that live in Slack
+        <div className="mx-auto mt-10 grid max-w-4xl items-center gap-3 md:gap-0 lg:mt-20 lg:grid-cols-2">
+          <h2 className="text-2xl tracking-tight md:text-3xl lg:text-4xl">
+            Built for teams that live in Slack
           </h2>
           <p className="leading-snug text-muted-foreground">
-            Every channel gets its own Space — an agent with its own tools,
-            memory, and rules. #support and #eng never blur together.
+            Mention @tags in any thread. It reads the full conversation, does
+            the work, and stays scoped to that channel&apos;s Space.
           </p>
         </div>
 
-        <Card className="mt-8 rounded-3xl md:mt-12 lg:mt-20">
+        <Card className="mt-8 rounded-3xl md:mt-12 lg:mt-16">
           <CardContent className="flex p-0 max-md:flex-col">
             {items.map((item, i) => (
               <div key={item.title} className="flex flex-1 max-md:flex-col">
-                <div className="flex-1 p-4 pe-0! md:p-6">
-                  <div className="relative aspect-[1.28/1] overflow-hidden">
-                    <div className="grid h-full w-full place-items-center rounded-lg border border-dashed bg-muted/60">
-                      <span className="text-center font-mono text-xs uppercase tracking-wide text-muted-foreground">
+                <div className="flex-1 p-5 md:p-7">
+                  <div className="relative aspect-[1.4/1] overflow-hidden">
+                    <div className="grid h-full w-full place-items-center rounded-xl border border-dashed border-black/10 bg-muted/50">
+                      <span className="text-center font-mono text-[11px] uppercase tracking-wide text-muted-foreground">
                         {item.label}
                       </span>
                     </div>
                     <div className="absolute inset-0 z-10 bg-linear-to-t from-background via-transparent to-transparent" />
                   </div>
 
-                  <a
-                    href="#"
-                    className="group flex items-center justify-between gap-4 pe-4 pt-4 md:pe-6 md:pt-6"
-                  >
-                    <h3 className="font-display max-w-60 text-2xl leading-tight font-bold tracking-tight">
+                  <div className="pt-5">
+                    <h3 className="font-display text-lg leading-tight font-semibold tracking-tight">
                       {item.title}
                     </h3>
-                    <div className="rounded-full border p-2">
-                      <ChevronRight className="size-6 transition-transform group-hover:translate-x-1 lg:size-9" />
-                    </div>
-                  </a>
+                    <p className="mt-1.5 text-sm leading-snug text-muted-foreground">
+                      {item.description}
+                    </p>
+                  </div>
                 </div>
                 {i < items.length - 1 && (
                   <div className="relative hidden md:block">
