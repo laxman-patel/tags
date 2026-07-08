@@ -4,6 +4,12 @@
 @import "tailwindcss";
 @source "../../node_modules/@cloudflare/kumo/dist/**/*.{js,jsx,ts,tsx}";
 
+:root {
+  /* landing.css maps Tailwind radius tokens to var(--radius), but only sets
+     --radius on .landing — define it here so the app shell keeps rounded UI. */
+  --radius: 0.5rem;
+}
+
 html,
 body,
 #root {
