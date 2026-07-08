@@ -31,8 +31,8 @@ export function Footer({ clerkEnabled = false }: FooterProps) {
         </div>
       </div>
 
-      <div className="mt-6 w-full leading-none select-none md:mt-10">
-        <span className="font-display block w-full bg-linear-to-b from-primary to-primary/40 bg-clip-text pb-[0.175em] text-center text-[24vw] leading-[0.95] font-semibold tracking-[-0.015em] text-transparent lg:text-[15rem]">
+      <div className="mt-10 w-full leading-none select-none md:mt-16">
+        <span className="font-display block w-full bg-linear-to-b from-primary from-20% via-primary/60 via-55% to-transparent bg-clip-text pb-[0.175em] text-center text-[24vw] leading-[0.95] font-semibold tracking-[-0.015em] text-transparent lg:text-[15rem]">
           @tags
         </span>
       </div>
