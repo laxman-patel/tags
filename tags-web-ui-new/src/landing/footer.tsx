@@ -1,6 +1,6 @@
 import { LinkButton } from "@cloudflare/kumo";
-import { GithubLogoIcon } from "@phosphor-icons/react";
 
+import { GitHubIcon } from "./github-icon";
 import { GetStartedButton } from "./get-started-button";
 
 type FooterProps = {
@@ -24,7 +24,7 @@ export function Footer({ clerkEnabled = false }: FooterProps) {
             external
             variant="secondary"
             size="lg"
-            icon={GithubLogoIcon}
+            icon={<GitHubIcon />}
           >
             GitHub
           </LinkButton>

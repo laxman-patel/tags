@@ -8,9 +8,9 @@ import {
   ShieldCheck,
   X,
 } from "lucide-react";
-import { GithubLogoIcon } from "@phosphor-icons/react";
 
 import { DashedLine } from "./dashed-line";
+import { GitHubIcon } from "./github-icon";
 import { GetStartedButton } from "./get-started-button";
 
 // Replace with the real Slack screenshot + demo video when available.
@@ -65,7 +65,7 @@ export const Hero = ({ clerkEnabled = false }: HeroProps) => {
                 href="https://github.com/laxman-patel/tags"
                 external
                 variant="secondary"
-                icon={GithubLogoIcon}
+                icon={<GitHubIcon />}
               >
                 GitHub
               </LinkButton>
