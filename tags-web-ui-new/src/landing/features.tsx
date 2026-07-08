@@ -34,8 +34,8 @@ export const Features = () => {
         </div>
 
         <div className="mx-auto mt-10 grid max-w-4xl items-center gap-3 md:gap-0 lg:mt-20 lg:grid-cols-2">
-          <h2 className="text-2xl tracking-tight md:text-3xl lg:text-4xl">
-            Built for teams that live in Slack
+          <h2 className="text-pretty text-2xl tracking-tight md:text-3xl lg:text-4xl">
+            Built for teams that live in{"\u00A0"}Slack
           </h2>
           <p className="leading-snug text-muted-foreground">
             Mention @tags in any thread. It reads the full conversation, does

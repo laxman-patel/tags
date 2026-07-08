@@ -11,7 +11,7 @@ type NavbarProps = {
 export const Navbar = ({ clerkEnabled = false }: NavbarProps) => {
   return (
     <header className="fixed inset-x-0 top-3 z-50 flex justify-center px-4 lg:top-5">
-      <nav className="flex w-full max-w-[620px] items-center justify-between gap-3 rounded-md bg-background/75 py-2 pl-4 pr-2 shadow-[var(--shadow-nav)] ring-1 ring-black/[0.05] backdrop-blur-xl">
+      <nav className="flex w-full max-w-[620px] items-center justify-between gap-3 rounded-xl bg-background/75 py-2 pl-4 pr-2 shadow-[var(--shadow-nav)] ring-1 ring-black/[0.05] backdrop-blur-xl">
         <a
           href="/home"
           className="flex shrink-0 items-center gap-2.5 rounded-full pr-2 transition-opacity hover:opacity-80"

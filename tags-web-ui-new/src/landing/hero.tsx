@@ -47,10 +47,10 @@ type HeroProps = {
 export const Hero = ({ clerkEnabled = false }: HeroProps) => {
   return (
     <section className="pb-16 pt-28 lg:pb-24 lg:pt-36">
-      <div className="container">
-        <div className="flex flex-col justify-between gap-8 md:gap-12 lg:flex-row lg:gap-16">
-          <div className="flex-1">
-            <h1 className="max-w-[13ch] text-[2rem] font-semibold leading-[1.08] tracking-tight text-foreground md:text-[2.5rem] lg:text-[2.75rem]">
+      <div className="container grid w-full gap-12 md:gap-16 lg:gap-20">
+        <div className="flex w-full min-w-0 flex-col justify-between gap-8 md:gap-12 lg:flex-row lg:gap-16">
+          <div className="min-w-0 flex-1">
+            <h1 className="max-w-xl text-balance text-[2rem] font-semibold leading-[1.08] tracking-tight text-foreground md:text-[2.5rem] lg:max-w-2xl lg:text-[2.75rem]">
               The open-source AI teammate for Slack
             </h1>
 
@@ -72,7 +72,7 @@ export const Hero = ({ clerkEnabled = false }: HeroProps) => {
             </div>
           </div>
 
-          <div className="relative flex flex-1 flex-col justify-center gap-4 max-lg:pt-8 lg:pl-12">
+          <div className="relative flex min-w-0 flex-1 flex-col justify-center gap-4 max-lg:pt-8 lg:pl-12">
             <DashedLine
               orientation="vertical"
               className="absolute top-0 left-0 max-lg:hidden"
@@ -100,7 +100,7 @@ export const Hero = ({ clerkEnabled = false }: HeroProps) => {
           </div>
         </div>
 
-        <div className="mt-12 md:mt-16 lg:mt-20">
+        <div className="w-full min-w-0">
         <Dialog.Root>
           <Dialog.Trigger asChild>
             <button
