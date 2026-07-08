@@ -150,14 +150,33 @@ html:has(.landing) body {
   font-feature-settings: "ss02" on, "ss03" on, "ss04" on;
 }
 
+.landing-background {
+  margin-left: 12px;
+  margin-right: 6px;
+}
+
+.landing-background-top {
+  margin-top: 11px;
+}
+
+.landing-background-bottom {
+  margin-left: 0;
+  margin-right: 0;
+}
+
+.landing-navbar-icon {
+  height: 19px;
+  width: auto;
+}
+
 .landing-footer-watermark {
   overflow: hidden;
-  max-height: calc(24vw * 0.95 * 0.88);
-  transform: translateY(-13px);
+  max-height: calc(24vw * 0.95 * 1);
+  transform: translateY(24px);
 }
 
 @media (min-width: 1024px) {
   .landing-footer-watermark {
-    max-height: calc(15rem * 0.95 * 0.88);
+    max-height: calc(15rem * 0.95 * 1);
   }
 }

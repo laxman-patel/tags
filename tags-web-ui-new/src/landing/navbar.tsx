@@ -21,7 +21,7 @@ export const Navbar = ({ clerkEnabled = false }: NavbarProps) => {
             alt=""
             width={18}
             height={20}
-            className="h-5 w-auto shrink-0"
+            className="landing-navbar-icon w-auto shrink-0"
           />
           <span className="font-display text-[17px] font-semibold tracking-tight">
             tags
