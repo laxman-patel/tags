@@ -21,6 +21,7 @@
     "./tool-approvals": "./src/tool-approvals.ts",
     "./users": "./src/users.ts",
     "./schedules": "./src/schedules.ts",
+    "./schedule-display": "./src/schedule-display.ts",
     "./questions": "./src/questions.ts",
     "./space-sandboxes": "./src/space-sandboxes.ts",
     "./session-search": "./src/session-search.ts",

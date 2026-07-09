@@ -3,7 +3,7 @@ import {
   describeScheduleCadence,
   formatScheduleTimezone,
   scheduleTitleFromPrompt,
-} from "./schedules";
+} from "./schedule-display";
 
 describe("describeScheduleCadence", () => {
   it("describes weekday morning digests", () => {

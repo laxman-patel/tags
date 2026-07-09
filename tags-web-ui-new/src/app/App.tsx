@@ -85,7 +85,7 @@ import {
   describeScheduleCadence,
   formatScheduleTimezone,
   scheduleTitleFromPrompt,
-} from "@tags/core/schedules";
+} from "@tags/core/schedule-display";
 import {
   createSpace,
   deleteSpace as deleteSpaceRequest,
