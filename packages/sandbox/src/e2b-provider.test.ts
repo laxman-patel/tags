@@ -251,10 +251,11 @@ describe("createSandboxProvider", () => {
     expect(commands.some((command) => command.includes("You are Tags for the #dev Space."))).toBe(
       true,
     );
-    expect(commands.some((command) => command.includes("opencode run --agent 'tags'"))).toBe(
+    expect(commands.some((command) => command.includes("opencode run --auto --agent 'tags'"))).toBe(
       true,
     );
     expect(commands.some((command) => command.includes("--format json"))).toBe(true);
+    expect(commands.some((command) => command.includes('"permission": "allow"'))).toBe(true);
   });
 
   it("registers Fireworks router models in opencode config", async () => {

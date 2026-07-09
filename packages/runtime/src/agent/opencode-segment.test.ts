@@ -36,8 +36,23 @@ describe("cleanOpencodeReply", () => {
     expect(cleanOpencodeReply(raw)).toBe(raw);
   });
 
-  it("collapses excess blank lines left by removed noise", () => {
-    const raw = "build · model/x\n\n\n\nReply text.";
-    expect(cleanOpencodeReply(raw)).toBe("Reply text.");
+  it("drops tool checkmarks and permission noise from Slack-facing replies", () => {
+    const raw = [
+      "I'll start by locating the landing page.",
+      "✓ grep",
+      "✓ bash",
+      "✗ bash failed",
+      "! permission requested: external_directory (/tmp/*); auto-rejecting",
+      "",
+      "Opened the PR: https://github.com/acme/repo/pull/1",
+    ].join("\n");
+    expect(cleanOpencodeReply(raw)).toBe(
+      "I'll start by locating the landing page.\n\nOpened the PR: https://github.com/acme/repo/pull/1",
+    );
+  });
+
+  it("collapses excess blank lines", () => {
+    const raw = "First paragraph.\n\n\n\nSecond paragraph.";
+    expect(cleanOpencodeReply(raw)).toBe("First paragraph.\n\nSecond paragraph.");
   });
 });

@@ -520,22 +520,22 @@ async function writeOpencodeConfig(
   request: CodingAgentRequest,
   model: string,
   modelApiKey?: string,
-): Promise<string | undefined> {
+): Promise<string> {
   const hasMcpServers = request.mcpServers && Object.keys(request.mcpServers).length > 0;
   const systemPrompt = request.systemPrompt?.trim();
   const provider = buildFireworksProviderConfig(model, modelApiKey);
 
-  if (!hasMcpServers && !systemPrompt && !provider) {
-    return undefined;
-  }
-
   const opencodeConfig: {
     $schema: string;
-    agent?: Record<string, { mode: "primary"; prompt: string }>;
+    /** Full access in the E2B sandbox — no interactive permission prompts. */
+    permission: "allow";
+    agent?: Record<string, { mode: "primary"; prompt: string; permission?: "allow" }>;
     mcp?: CodingAgentRequest["mcpServers"];
     provider?: Record<string, OpencodeFireworksProviderConfig>;
   } = {
     $schema: "https://opencode.ai/config.json",
+    // Sandbox is already isolated; never pause for external_directory/doom_loop asks.
+    permission: "allow",
   };
 
   if (systemPrompt) {
@@ -543,6 +543,7 @@ async function writeOpencodeConfig(
       [TAGS_AGENT_NAME]: {
         mode: "primary",
         prompt: systemPrompt,
+        permission: "allow",
       },
     };
   }
@@ -569,7 +570,7 @@ async function writeOpencodeConfig(
 }
 
 type PreparedOpencodeRun = {
-  opencodeConfigPath?: string;
+  opencodeConfigPath: string;
   command: string;
 };
 
@@ -593,7 +594,8 @@ export async function prepareOpencodeFireworksRun(
   const agentFlag = args.request.systemPrompt?.trim()
     ? ` --agent ${shellQuote(TAGS_AGENT_NAME)}`
     : "";
-  const command = `FIREWORKS_API_KEY=${shellQuote(modelApiKey)} ${opencodeConfigPath ? `OPENCODE_CONFIG=${shellQuote(opencodeConfigPath)} ` : ""}opencode run${agentFlag} --format json --model ${shellQuote(args.model)} ${shellQuote(args.request.prompt)}`;
+  // --auto auto-approves any residual asks; permission:"allow" in config is the primary gate.
+  const command = `FIREWORKS_API_KEY=${shellQuote(modelApiKey)} OPENCODE_CONFIG=${shellQuote(opencodeConfigPath)} opencode run --auto${agentFlag} --format json --model ${shellQuote(args.model)} ${shellQuote(args.request.prompt)}`;
   return { opencodeConfigPath, command };
 }
 

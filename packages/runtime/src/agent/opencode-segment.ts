@@ -57,6 +57,13 @@ export function cleanOpencodeReply(raw: string): string {
       if (/^[|│>]?\s*\w+\s+·\s+\S+/.test(trimmed) && trimmed.includes("·")) return false;
       // Share footer, e.g. "~ https://opencode.ai/s/…".
       if (/^~\s+https?:\/\//.test(trimmed)) return false;
+      // Readable tool transcript lines (✓ bash / ✗ edit failed / ❌ …) — never Slack-facing.
+      if (/^[✓✗❌]\s*/u.test(trimmed)) return false;
+      // Bang-prefixed status / permission noise from headless opencode.
+      if (/^!\s*(permission requested:|auto-rejecting)/i.test(trimmed)) return false;
+      if (/permission requested:|auto-rejecting|user rejected permission/i.test(trimmed)) {
+        return false;
+      }
       return true;
     })
     .join("\n");
