@@ -546,6 +546,8 @@ async function recordDemoStep(
       const repoUrl = runOutput?.repoUrl ?? config?.repoUrls?.[0] ?? config?.repoUrl ?? undefined;
       const prUrl = runOutput?.prUrl;
       const demo = runOutput?.demo;
+      const branch = runOutput?.branch;
+      const commitSha = runOutput?.commitSha;
 
       if (!secrets.e2bApiKey || !secrets.r2?.publicBaseUrl) {
         await fail(
@@ -555,9 +557,9 @@ async function recordDemoStep(
         return;
       }
 
-      if (!prUrl || !repoUrl) {
+      if (!repoUrl) {
         await fail(
-          "Recording was requested but the agent did not produce PR/repo metadata in .tags/run-output.json.",
+          "Recording was requested but no repo URL is available (Space config or .tags/run-output.json).",
           prUrl,
         );
         return;
@@ -565,10 +567,20 @@ async function recordDemoStep(
 
       if (!demo) {
         await fail(
-          "Recording was requested but the agent did not write a demo recipe in .tags/run-output.json.",
+          "Recording was requested but the agent did not write a demo recipe in .tags/run-output.json. " +
+            "Before finishing, write that file with repoUrl, branch, commitSha, and a demo.kind \"web\" recipe " +
+            "(even if the PR is still opening).",
           prUrl,
         );
         return;
+      }
+
+      if (!prUrl) {
+        emitWarn("demo recording without prUrl", {
+          "space.id": input.spaceId,
+          "run.id": setup.runId,
+          outcome: "degraded",
+        });
       }
 
       const recipeGuard = validateDemoRecipeForRecording({
@@ -587,8 +599,8 @@ async function recordDemoStep(
           apiKey: secrets.e2bApiKey,
           template: secrets.e2bDemoTemplate,
           repoUrl,
-          branch: runOutput?.branch,
-          commitSha: runOutput?.commitSha,
+          branch,
+          commitSha,
           demo,
           maxSeconds: secrets.demoRecording.maxSeconds,
           width: secrets.demoRecording.width,
@@ -603,6 +615,8 @@ async function recordDemoStep(
         const artifactUrl = publicArtifactUrl(secrets.r2, key);
         if (!artifactUrl) throw new Error("R2_PUBLIC_BASE_URL is not configured");
 
+        const subject = prUrl ?? repoUrl;
+
         // R2 is the durable artifact; Slack file upload is best-effort (needs files:write).
         await uploadArtifactBytes(r2Client, secrets.r2, key, recording.video, recording.contentType);
 
@@ -614,7 +628,7 @@ async function recordDemoStep(
             file: recording.video,
             filename: recording.filename,
             title: "Tags demo recording",
-            initialComment: `Demo recording for ${prUrl}\n${artifactUrl}`,
+            initialComment: `Demo recording for ${subject}\n${artifactUrl}`,
           });
         } catch (error) {
           const slackErr = error instanceof Error ? error.message : String(error);
@@ -631,13 +645,13 @@ async function recordDemoStep(
             slack,
             input.channelId,
             setup.threadTs,
-            `Demo recording for ${prUrl}\n${artifactUrl}\n_(Slack file upload failed: ${slackErr}.${scopeHint})_`,
+            `Demo recording for ${subject}\n${artifactUrl}\n_(Slack file upload failed: ${slackErr}.${scopeHint})_`,
           );
         }
 
         let prComment: { htmlUrl?: string } = {};
         const githubEnabled = config?.enabledConnections.includes("github") ?? false;
-        if (githubEnabled && secrets.composioApiKey) {
+        if (prUrl && githubEnabled && secrets.composioApiKey) {
           const composio = await loadComposioTools({
             apiKey: secrets.composioApiKey,
             entityId: input.spaceId,
@@ -681,7 +695,7 @@ async function recordDemoStep(
           metadata: {
             prUrl,
             repoUrl,
-            branch: runOutput?.branch,
+            branch,
             durationMs: recording.durationMs,
             slackFileId: slackFile.fileId,
             slackPermalink: slackFile.permalink,
@@ -719,7 +733,7 @@ async function recordDemoStep(
           slack,
           input.channelId,
           setup.threadTs,
-          `Demo recording failed for ${prUrl}: ${slackMessage}`,
+          `Demo recording failed${prUrl ? ` for ${prUrl}` : ""}: ${slackMessage}`,
         );
       }
     },

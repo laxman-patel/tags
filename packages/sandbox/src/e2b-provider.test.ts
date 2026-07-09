@@ -353,6 +353,12 @@ describe("createSandboxProvider", () => {
       if (command === "cat .tags/run-output.json") {
         throw new Error("missing");
       }
+      if (command.includes("git remote get-url") || command.includes("git rev-parse")) {
+        return { stdout: "", stderr: "", exitCode: 0 };
+      }
+      if (command.includes("find /home/user")) {
+        return { stdout: "", stderr: "", exitCode: 0 };
+      }
       return {
         stdout: "Opened https://github.com/acme/repo/pull/34",
         stderr: "",
@@ -368,6 +374,44 @@ describe("createSandboxProvider", () => {
     });
 
     expect(result.runOutput?.prUrl).toBe("https://github.com/acme/repo/pull/34");
+  });
+
+  it("harvests repo/branch/sha from git when run-output.json is missing", async () => {
+    const sandbox = createMockSandbox("harvest-sandbox");
+    sandbox.commands.run.mockImplementation(async (command: string) => {
+      if (command === "git diff") {
+        return { stdout: "", stderr: "", exitCode: 0 };
+      }
+      if (command === "cat .tags/run-output.json") {
+        throw new Error("missing");
+      }
+      if (command.includes("find /home/user")) {
+        return { stdout: "", stderr: "", exitCode: 0 };
+      }
+      if (command.includes("git remote get-url")) {
+        return { stdout: "git@github.com:acme/repo.git\n", stderr: "", exitCode: 0 };
+      }
+      if (command.includes("abbrev-ref")) {
+        return { stdout: "fix/mcp-link\n", stderr: "", exitCode: 0 };
+      }
+      if (command.includes("git rev-parse HEAD")) {
+        return { stdout: "abc123def456\n", stderr: "", exitCode: 0 };
+      }
+      return { stdout: "Done.", stderr: "", exitCode: 0 };
+    });
+    mocks.create.mockResolvedValue(sandbox);
+
+    const provider = createSandboxProvider({ modelApiKey: "fw_test_key" });
+    const result = await provider.runCodingAgent({
+      prompt: "fix the button",
+      repoUrl: "https://github.com/acme/repo",
+    });
+
+    expect(result.runOutput).toMatchObject({
+      repoUrl: "https://github.com/acme/repo",
+      branch: "fix/mcp-link",
+      commitSha: "abc123def456",
+    });
   });
 
   it("extracts replyText from JSON output and converts output to readable", async () => {

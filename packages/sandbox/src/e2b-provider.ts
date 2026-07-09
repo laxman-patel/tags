@@ -7,6 +7,8 @@ import type {
 } from "./types";
 import {
   extractGitHubPrUrl,
+  mergeTagsRunOutput,
+  normalizeGitHubRepoUrl,
   parseTagsRunOutputJson,
 } from "./run-output";
 import { summarizeOpencodeProgressLine } from "./opencode-progress";
@@ -352,10 +354,43 @@ function mergeRunOutputFromText(
   existing: CodingAgentResult["runOutput"],
   output: string,
 ): CodingAgentResult["runOutput"] {
-  if (existing?.prUrl) return existing;
   const prUrl = extractGitHubPrUrl(output);
   if (!prUrl) return existing;
-  return { ...existing, prUrl };
+  return mergeTagsRunOutput(existing, { prUrl });
+}
+
+async function harvestGitMetadata(
+  sandbox: SandboxInstance,
+  repoPaths: Record<string, string>,
+): Promise<CodingAgentResult["runOutput"]> {
+  for (const repoPath of Object.values(repoPaths)) {
+    try {
+      const remote = await sandbox.commands.run(
+        "git remote get-url origin 2>/dev/null || true",
+        { cwd: repoPath },
+      );
+      const branch = await sandbox.commands.run(
+        "git rev-parse --abbrev-ref HEAD 2>/dev/null || true",
+        { cwd: repoPath },
+      );
+      const sha = await sandbox.commands.run(
+        "git rev-parse HEAD 2>/dev/null || true",
+        { cwd: repoPath },
+      );
+      const repoUrl = normalizeGitHubRepoUrl((remote.stdout ?? "").trim());
+      const branchName = (branch.stdout ?? "").trim();
+      const commitSha = (sha.stdout ?? "").trim();
+      if (!repoUrl && !branchName && !commitSha) continue;
+      return {
+        ...(repoUrl ? { repoUrl } : {}),
+        ...(branchName && branchName !== "HEAD" ? { branch: branchName } : {}),
+        ...(commitSha && /^[0-9a-f]{7,40}$/i.test(commitSha) ? { commitSha } : {}),
+      };
+    } catch {
+      // Optional — continue other repos.
+    }
+  }
+  return undefined;
 }
 
 async function connectSandbox(
@@ -573,6 +608,37 @@ async function readRunOutput(
   return undefined;
 }
 
+/** Prefer cwd `.tags/run-output.json`, then search the sandbox home once. */
+async function findRunOutputFile(
+  sandbox: SandboxInstance,
+  repoPaths: Record<string, string>,
+): Promise<CodingAgentResult["runOutput"]> {
+  const fromRepos = await readRunOutput(sandbox, repoPaths);
+  if (fromRepos) return fromRepos;
+
+  try {
+    const found = await sandbox.commands.run(
+      "find /home/user -path '*/.tags/run-output.json' -type f 2>/dev/null | head -5",
+    );
+    const paths = (found.stdout ?? "")
+      .split("\n")
+      .map((line) => line.trim())
+      .filter(Boolean);
+    for (const path of paths) {
+      try {
+        const result = await sandbox.commands.run(`cat ${shellQuote(path)}`);
+        const parsed = parseTagsRunOutputJson(combineOutput(result));
+        if (parsed) return parsed;
+      } catch {
+        // try next path
+      }
+    }
+  } catch {
+    // optional search
+  }
+  return undefined;
+}
+
 export function createSandboxProvider(config: SandboxProviderConfig = {}): SandboxProvider {
   const template = config.template ?? DEFAULT_OPENCODE_TEMPLATE;
   const fireworksApiKey = requireFireworksApiKey(config.modelApiKey);
@@ -714,8 +780,13 @@ export function createSandboxProvider(config: SandboxProviderConfig = {}): Sandb
           }
         }
 
-        const fileRunOutput = await readRunOutput(sandbox, repoPaths);
-        const runOutput = mergeRunOutputFromText(fileRunOutput, output);
+        const fileRunOutput = await findRunOutputFile(sandbox, repoPaths);
+        const gitMeta = await harvestGitMetadata(sandbox, repoPaths);
+        const runOutput = mergeTagsRunOutput(
+          fileRunOutput,
+          gitMeta,
+          mergeRunOutputFromText(undefined, output),
+        );
 
         completed = true;
         return {

@@ -11,6 +11,8 @@ export {
 export { summarizeOpencodeProgressLine } from "./opencode-progress";
 export {
   extractGitHubPrUrl,
+  mergeTagsRunOutput,
+  normalizeGitHubRepoUrl,
   parseTagsRunOutput,
   parseTagsRunOutputJson,
 } from "./run-output";

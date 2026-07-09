@@ -130,3 +130,42 @@ export function parseTagsRunOutputJson(json: string): TagsRunOutput | undefined 
 export function extractGitHubPrUrl(text: string): string | undefined {
   return text.match(GITHUB_PR_URL_PATTERN)?.[0];
 }
+
+/** Normalize a git remote URL to https://github.com/owner/repo (no .git). */
+export function normalizeGitHubRepoUrl(raw: string): string | undefined {
+  const trimmed = raw.trim();
+  if (!trimmed) return undefined;
+
+  const ssh = trimmed.match(/^git@github\.com:([^/]+)\/([^/.]+?)(?:\.git)?$/i);
+  if (ssh) return `https://github.com/${ssh[1]}/${ssh[2]}`;
+
+  try {
+    const withScheme = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+    const url = new URL(withScheme);
+    if (!/^(www\.)?github\.com$/i.test(url.hostname)) return undefined;
+    const parts = url.pathname.replace(/\.git$/i, "").split("/").filter(Boolean);
+    if (parts.length < 2) return undefined;
+    return `https://github.com/${parts[0]}/${parts[1]}`;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Merge sparse run-output fields. Later sources only fill missing keys
+ * (file beats git harvest beats text scrape).
+ */
+export function mergeTagsRunOutput(
+  ...parts: Array<TagsRunOutput | undefined>
+): TagsRunOutput | undefined {
+  const merged: TagsRunOutput = {};
+  for (const part of parts) {
+    if (!part) continue;
+    if (!merged.prUrl && part.prUrl) merged.prUrl = part.prUrl;
+    if (!merged.repoUrl && part.repoUrl) merged.repoUrl = part.repoUrl;
+    if (!merged.branch && part.branch) merged.branch = part.branch;
+    if (!merged.commitSha && part.commitSha) merged.commitSha = part.commitSha;
+    if (!merged.demo && part.demo) merged.demo = part.demo;
+  }
+  return Object.keys(merged).length > 0 ? merged : undefined;
+}

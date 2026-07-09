@@ -71,13 +71,15 @@ describe("opencode prompts", () => {
     });
 
     expect(withRequest).toContain("# Demo recording required");
-    expect(withRequest).toContain("MUST create or update .tags/run-output.json");
+    expect(withRequest).toContain("Finish checklist");
+    expect(withRequest).toContain("if that file is missing, recording FAILS");
     expect(withRequest).toContain("Hard rules (Tags will REJECT");
     expect(withRequest).toContain('demo.kind MUST be "web"');
     expect(withRequest).toContain("NEVER write .tags/verify-");
     expect(withRequest).toContain("waitForUrl + assertUrl");
     expect(withRequest).toContain("No bun");
     expect(withRequest).toContain("commitSha");
+    expect(withRequest).toContain(".tags/run-output.json");
     expect(withoutRequest).not.toContain("# Demo recording required");
   });
 });
