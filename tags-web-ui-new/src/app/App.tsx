@@ -1408,32 +1408,46 @@ function SpaceDetailView({
               description="Create a recurring task for this Space."
             />
           ) : (
-            <Table>
-              <Table.Header>
-                <Table.Row>
-                  <Table.Head>Task</Table.Head>
-                  <Table.Head>Cron</Table.Head>
-                  <Table.Head>Timezone</Table.Head>
-                  <Table.Head>Last run</Table.Head>
-                  <Table.Head>Status</Table.Head>
-                </Table.Row>
-              </Table.Header>
-              <Table.Body>
-                {schedules.map((schedule) => (
-                  <Table.Row key={schedule.id}>
-                    <Table.Cell><Text size="sm" truncate>{schedule.prompt}</Text></Table.Cell>
-                    <Table.Cell><Text variant="secondary" size="xs">{schedule.cron}</Text></Table.Cell>
-                    <Table.Cell><Text variant="secondary" size="xs">{schedule.timezone}</Text></Table.Cell>
-                    <Table.Cell><Text variant="secondary" size="xs">{formatShortDate(schedule.lastRunAt)}</Text></Table.Cell>
-                    <Table.Cell>
-                      <Badge variant={schedule.enabled ? "success" : "neutral"} appearance="dot">
-                        {schedule.enabled ? "On" : "Off"}
-                      </Badge>
-                    </Table.Cell>
+            <div className="overflow-x-auto">
+              <Table layout="fixed" className="min-w-[40rem]">
+                <Table.Header>
+                  <Table.Row>
+                    <Table.Head className="w-[46%]">Task</Table.Head>
+                    <Table.Head className="w-[18%]">Cron</Table.Head>
+                    <Table.Head className="w-[14%]">Timezone</Table.Head>
+                    <Table.Head className="w-[14%]">Last run</Table.Head>
+                    <Table.Head className="w-[8%]">Status</Table.Head>
                   </Table.Row>
-                ))}
-              </Table.Body>
-            </Table>
+                </Table.Header>
+                <Table.Body>
+                  {schedules.map((schedule) => (
+                    <Table.Row key={schedule.id}>
+                      <Table.Cell className="max-w-0 align-top">
+                        <Text size="sm" className="line-clamp-3 whitespace-normal break-words" title={schedule.prompt}>
+                          {schedule.prompt}
+                        </Text>
+                      </Table.Cell>
+                      <Table.Cell className="align-top whitespace-nowrap">
+                        <Text variant="mono-secondary" size="xs">
+                          {schedule.cron}
+                        </Text>
+                      </Table.Cell>
+                      <Table.Cell className="align-top whitespace-nowrap">
+                        <Text variant="secondary" size="xs">{schedule.timezone}</Text>
+                      </Table.Cell>
+                      <Table.Cell className="align-top whitespace-nowrap">
+                        <Text variant="secondary" size="xs">{formatShortDate(schedule.lastRunAt)}</Text>
+                      </Table.Cell>
+                      <Table.Cell className="align-top">
+                        <Badge variant={schedule.enabled ? "success" : "neutral"} appearance="dot">
+                          {schedule.enabled ? "On" : "Off"}
+                        </Badge>
+                      </Table.Cell>
+                    </Table.Row>
+                  ))}
+                </Table.Body>
+              </Table>
+            </div>
           )}
         </LayerCard>
       )}
