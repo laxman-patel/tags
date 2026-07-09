@@ -1,8 +1,8 @@
-import { drizzle } from "drizzle-orm/postgres-js";
+import { drizzle, type PostgresJsDatabase } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import * as schema from "./schema";
 
-export type Db = ReturnType<typeof createDb>;
+export type Db = PostgresJsDatabase<typeof schema>;
 
 type PostgresClient = ReturnType<typeof postgres>;
 
@@ -17,7 +17,7 @@ const databases = new Map<string, Db>();
  * Under load that exhausts Neon/Postgres connection slots and crashes the
  * process mid-run (Slack shows "Running opencode" stuck in error).
  */
-export function createDb(connectionString: string) {
+export function createDb(connectionString: string): Db {
   const existing = databases.get(connectionString);
   if (existing) return existing;
 

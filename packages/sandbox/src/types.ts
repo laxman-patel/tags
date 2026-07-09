@@ -27,6 +27,8 @@ export interface CodingAgentRequest {
   >;
   /** Live opencode CLI output (E2B `onStdout` / `onStderr`). */
   onOutput?: (chunk: string) => void | Promise<void>;
+  /** Short human step for Slack while opencode is working (e.g. "Cloning the repo"). */
+  onProgress?: (step: string) => void | Promise<void>;
 }
 
 export type DemoStep =

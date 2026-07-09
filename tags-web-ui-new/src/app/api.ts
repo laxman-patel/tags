@@ -348,14 +348,13 @@ export async function loadRunEvents(runId: string): Promise<RunEvent[]> {
         json = prettyJson(p.outputPreview);
         status = "success";
       } else if (event.eventType === "approval.requested") {
-        label = "Approval requested";
+        label = "Approval needed";
         detail = String(p.requestText ?? p.toolName ?? "");
-        json = prettyJson(p.inputPreview);
         status = "pending";
       } else if (event.eventType === "approval.resolved") {
         const decision = p.decision === "approved" ? "approved" : "rejected";
-        label = decision === "approved" ? "Approval approved" : "Approval declined";
-        detail = `Resolved from ${String(p.source ?? "approval flow")}`;
+        label = decision === "approved" ? "Approved" : "Declined";
+        detail = p.source === "dashboard" ? "From the dashboard" : "From Slack";
         status = decision === "approved" ? "success" : "failed";
       } else if (event.eventType === "question.requested") {
         label = "Question asked";

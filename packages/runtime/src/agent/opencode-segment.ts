@@ -318,8 +318,14 @@ export async function runOpencodeSegment(
       sandboxSessionId: sandboxSession.id,
     },
   });
+  await stream.pushEvent({
+    type: "tool.progress",
+    toolName: "opencode",
+    step: "Starting in the sandbox",
+  });
 
   let releaseStatus: SpaceSandboxStatus = "ready";
+  let lastProgressStep: string | null = "Starting in the sandbox";
 
   try {
     const result = await providers.sandbox.runCodingAgent({
@@ -339,6 +345,12 @@ export async function runOpencodeSegment(
       onOutput: async (chunk) => {
         await appendRunEvent(args.db, args.runId, { type: "text.delta", text: chunk });
       },
+      onProgress: async (step) => {
+        if (!step || step === lastProgressStep) return;
+        lastProgressStep = step;
+        // Slack only — don't spam the run timeline with every micro-step.
+        await stream.pushEvent({ type: "tool.progress", toolName: "opencode", step });
+      },
     });
     await recordSpaceSandboxExternalId(args.db, {
       sessionId: sandboxSession.id,
@@ -357,23 +369,10 @@ export async function runOpencodeSegment(
     // surface them to Slack + return the pause result to the Inngest workflow.
     const pendingApproval = await getPendingApprovalByRunId(args.db, args.runId);
     if (pendingApproval) {
-      // The interactive approval card is posted as its own message by the
-      // Inngest workflow (postApprovalStep). Here we just close the streaming
-      // run message cleanly so it doesn't sit in a "thinking" state, and record
-      // the request in the run timeline.
-      await appendRunEvent(args.db, args.runId, {
-        type: "approval.requested",
-        approvalId: pendingApproval.id,
-        requestId: pendingApproval.requestId,
-        toolName: pendingApproval.toolName,
-        riskLevel: pendingApproval.riskLevel,
-        requestText: pendingApproval.requestText,
-        inputPreview: pendingApproval.toolInput,
-        requestedBySlackUserId: pendingApproval.requestedBySlackUserId ?? undefined,
-        expiresAt: pendingApproval.expiresAt.toISOString(),
-      });
+      // Gate already appended `approval.requested` to the run timeline. Close the
+      // stream with a short wait note; Inngest posts the interactive card next.
       await stream.finalize(
-        `:hourglass_flowing_sand: Waiting for approval to *${pendingApproval.requestText}* — see the card below.`,
+        `Waiting for approval — *${pendingApproval.requestText}*`,
       );
       await updateRunStatus(args.db, args.runId, "waiting");
       return {

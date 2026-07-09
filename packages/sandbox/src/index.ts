@@ -8,6 +8,7 @@ export {
   estimateTokenUsageFromText,
   type SandboxProviderConfig,
 } from "./e2b-provider";
+export { summarizeOpencodeProgressLine } from "./opencode-progress";
 export {
   extractGitHubPrUrl,
   parseTagsRunOutput,

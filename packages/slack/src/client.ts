@@ -256,6 +256,7 @@ function formatStreamChunksForSlack(chunks: SlackStreamChunk[]): SlackStreamChun
     if (chunk.type === "task_update") {
       return {
         ...chunk,
+        title: formatMarkdownForSlack(chunk.title),
         ...(chunk.details ? { details: formatMarkdownForSlack(chunk.details) } : {}),
         ...(chunk.output ? { output: formatMarkdownForSlack(chunk.output) } : {}),
       };

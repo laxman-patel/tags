@@ -6,27 +6,27 @@ import { formatMarkdownForSlack } from "../markdown";
 
 export type SlackBlock = Record<string, unknown>;
 
+function mrkdwn(text: string): { type: "mrkdwn"; text: string } {
+  return { type: "mrkdwn", text: formatMarkdownForSlack(text) };
+}
+
 function renderUiCardBlocks(card: UICard): SlackBlock[] {
   switch (card.kind) {
     case "artifact":
       return [
         {
           type: "section",
-          text: {
-            type: "mrkdwn",
-            text: card.url
+          text: mrkdwn(
+            card.url
               ? `📎 *${card.title}* (${card.artifactKind})\n<${card.url}|Open artifact>`
               : `📎 *${card.title}* (${card.artifactKind})`,
-          },
+          ),
         },
         ...(card.preview
           ? [
               {
                 type: "section",
-                text: {
-                  type: "mrkdwn",
-                  text: `\`\`\`${card.preview.slice(0, 500)}\`\`\``,
-                },
+                text: mrkdwn(`\`\`\`${card.preview.slice(0, 500)}\`\`\``),
               },
             ]
           : []),
@@ -35,76 +35,64 @@ function renderUiCardBlocks(card: UICard): SlackBlock[] {
       return [
         {
           type: "section",
-          text: {
-            type: "mrkdwn",
-            text: `*Memory search:* \`${card.query}\`\n${card.items
-              .map((i) => `• [${i.kind}] ${i.content.slice(0, 120)}`)
-              .join("\n") || "_No matches_"}`,
-          },
+          text: mrkdwn(
+            `*Memory search:* \`${card.query}\`\n${
+              card.items.map((i) => `• [${i.kind}] ${i.content.slice(0, 120)}`).join("\n") ||
+              "_No matches_"
+            }`,
+          ),
         },
       ];
     case "memory-saved":
       return [
         {
           type: "section",
-          text: {
-            type: "mrkdwn",
-            text: `💾 Saved *${card.memoryKind}* memory:\n>${card.content}`,
-          },
+          text: mrkdwn(`💾 Saved *${card.memoryKind}* memory:\n>${card.content}`),
         },
       ];
     case "thread-search":
       return [
         {
           type: "section",
-          text: {
-            type: "mrkdwn",
-            text: `*Thread search* — ${card.messageCount} message(s)\n\`\`\`${card.preview.slice(0, 400)}\`\`\``,
-          },
+          text: mrkdwn(
+            `*Thread search* — ${card.messageCount} message(s)\n\`\`\`${card.preview.slice(0, 400)}\`\`\``,
+          ),
         },
       ];
     case "channel-search":
       return [
         {
           type: "section",
-          text: {
-            type: "mrkdwn",
-            text: `*Channel search* — ${card.messageCount} message(s)\n\`\`\`${card.preview.slice(0, 400)}\`\`\``,
-          },
+          text: mrkdwn(
+            `*Channel search* — ${card.messageCount} message(s)\n\`\`\`${card.preview.slice(0, 400)}\`\`\``,
+          ),
         },
       ];
-    case "coding-agent":
-      const diffBlock =
-        card.gitDiffPreview
-          ? `\n*Git diff*\n\`\`\`${card.gitDiffPreview.slice(0, 500)}\`\`\``
-          : "";
+    case "coding-agent": {
+      const diffBlock = card.gitDiffPreview
+        ? `\n*Git diff*\n\`\`\`${card.gitDiffPreview.slice(0, 500)}\`\`\``
+        : "";
       return [
         {
           type: "section",
-          text: {
-            type: "mrkdwn",
-            text: `*Coding agent* — exit \`${card.exitCode}\`\n\`\`\`${card.outputPreview.slice(0, 500)}\`\`\`${diffBlock}`,
-          },
+          text: mrkdwn(
+            `*Coding agent* — exit \`${card.exitCode}\`\n\`\`\`${card.outputPreview.slice(0, 500)}\`\`\`${diffBlock}`,
+          ),
         },
       ];
+    }
     case "schedule-created":
       return [
         {
           type: "section",
-          text: {
-            type: "mrkdwn",
-            text: `📅 *Schedule created* — \`${card.cron}\`\n${card.promptPreview}`,
-          },
+          text: mrkdwn(`📅 *Schedule created* — \`${card.cron}\`\n${card.promptPreview}`),
         },
       ];
     case "generic":
       return [
         {
           type: "section",
-          text: {
-            type: "mrkdwn",
-            text: `*${card.title}*\n${card.body.slice(0, 1500)}`,
-          },
+          text: mrkdwn(`*${card.title}*\n${card.body.slice(0, 1500)}`),
         },
       ];
     default: {
@@ -130,7 +118,7 @@ export function renderSlackBlocks(event: TagsEvent): SlackBlock[] {
       return [
         {
           type: "section",
-          text: { type: "mrkdwn", text: event.text.slice(0, 3000) },
+          text: mrkdwn(event.text.slice(0, 3000)),
         },
       ];
     case "status":
@@ -138,10 +126,7 @@ export function renderSlackBlocks(event: TagsEvent): SlackBlock[] {
         {
           type: "context",
           elements: [
-            {
-              type: "mrkdwn",
-              text: `*${event.label}*${event.detail ? ` — ${event.detail}` : ""}`,
-            },
+            mrkdwn(`*${event.label}*${event.detail ? ` — ${event.detail}` : ""}`),
           ],
         },
       ];
@@ -149,18 +134,21 @@ export function renderSlackBlocks(event: TagsEvent): SlackBlock[] {
       return [
         {
           type: "context",
-          elements: [
-            { type: "mrkdwn", text: `🔧 Running tool: \`${event.toolName}\`` },
-          ],
+          elements: [mrkdwn(`Running \`${event.toolName}\``)],
+        },
+      ];
+    case "tool.progress":
+      return [
+        {
+          type: "context",
+          elements: [mrkdwn(`_${event.step}_`)],
         },
       ];
     case "tool.finished": {
       const blocks: SlackBlock[] = [
         {
           type: "context",
-          elements: [
-            { type: "mrkdwn", text: `✓ Tool finished: \`${event.toolName}\`` },
-          ],
+          elements: [mrkdwn(`Finished \`${event.toolName}\``)],
         },
       ];
       if (event.uiCard) {
@@ -170,60 +158,33 @@ export function renderSlackBlocks(event: TagsEvent): SlackBlock[] {
         if (preview) {
           blocks.push({
             type: "section",
-            text: { type: "mrkdwn", text: `\`\`\`${preview}\`\`\`` },
+            text: mrkdwn(`\`\`\`${preview}\`\`\``),
           });
         }
       }
       return blocks;
     }
     case "approval.requested": {
+      // Buttons live on the standalone card (`buildApprovalCard`). Timeline /
+      // classic fallback only shows a short wait note.
       const summary = formatApprovalSummary(
         event.toolName ?? "",
         event.inputPreview ?? event.requestText,
       );
       return [
         {
-          type: "section",
-          text: {
-            type: "mrkdwn",
-            text: `🔐 *${summary}*\n_Approve or Decline here, or resolve it from the Tags dashboard._`,
-          },
-        },
-        {
-          type: "actions",
-          block_id: `approval_${event.approvalId}`,
-          elements: [
-            {
-              type: "button",
-              action_id: `approval:approve:${event.approvalId}`,
-              text: { type: "plain_text", text: "Approve" },
-              style: "primary",
-              value: event.requestId,
-            },
-            {
-              type: "button",
-              action_id: `approval:reject:${event.approvalId}`,
-              text: { type: "plain_text", text: "Decline" },
-              style: "danger",
-              value: event.requestId,
-            },
-          ],
+          type: "context",
+          elements: [mrkdwn(`Waiting for approval — *${summary}*`)],
         },
       ];
     }
     case "question.requested": {
-      const detailLines: string[] = [];
-      if (event.expiresAt) {
-        const expiry = new Date(event.expiresAt);
-        detailLines.push(`*Expires:* <t:${Math.floor(expiry.getTime() / 1000)}:R>`);
-      }
       return [
         {
           type: "section",
-          text: {
-            type: "mrkdwn",
-            text: `❓ *Tags needs your input:*\n${event.questionText ?? "Please answer the question."}${detailLines.length > 0 ? `\n${detailLines.join("\n")}` : ""}`,
-          },
+          text: mrkdwn(
+            `*Tags needs your input*\n${event.questionText ?? "Please answer the question."}`,
+          ),
         },
         {
           type: "actions",
@@ -243,10 +204,7 @@ export function renderSlackBlocks(event: TagsEvent): SlackBlock[] {
       return [
         {
           type: "section",
-          text: {
-            type: "mrkdwn",
-            text: `📎 Artifact: <${event.artifactUrl}|${event.artifactTitle}>`,
-          },
+          text: mrkdwn(`📎 Artifact: <${event.artifactUrl}|${event.artifactTitle}>`),
         },
       ];
     case "recording.started":
@@ -254,10 +212,9 @@ export function renderSlackBlocks(event: TagsEvent): SlackBlock[] {
         {
           type: "context",
           elements: [
-            {
-              type: "mrkdwn",
-              text: `🎥 Recording demo${event.demoKind ? ` (${event.demoKind})` : ""}${event.prUrl ? ` for <${event.prUrl}|PR>` : ""}`,
-            },
+            mrkdwn(
+              `🎥 Recording demo${event.demoKind ? ` (${event.demoKind})` : ""}${event.prUrl ? ` for <${event.prUrl}|PR>` : ""}`,
+            ),
           ],
         },
       ];
@@ -265,20 +222,18 @@ export function renderSlackBlocks(event: TagsEvent): SlackBlock[] {
       return [
         {
           type: "section",
-          text: {
-            type: "mrkdwn",
-            text: `🎥 Demo recording: <${event.artifactUrl}|watch video>${event.prUrl ? `\nPR: <${event.prUrl}|open>` : ""}`,
-          },
+          text: mrkdwn(
+            `🎥 Demo recording: <${event.artifactUrl}|watch video>${event.prUrl ? `\nPR: <${event.prUrl}|open>` : ""}`,
+          ),
         },
       ];
     case "recording.failed":
       return [
         {
           type: "section",
-          text: {
-            type: "mrkdwn",
-            text: `⚠️ Demo recording failed${event.prUrl ? ` for <${event.prUrl}|PR>` : ""}: ${event.error}`,
-          },
+          text: mrkdwn(
+            `⚠️ Demo recording failed${event.prUrl ? ` for <${event.prUrl}|PR>` : ""}: ${event.error}`,
+          ),
         },
       ];
     case "run.finished":
@@ -288,10 +243,7 @@ export function renderSlackBlocks(event: TagsEvent): SlackBlock[] {
       return [
         {
           type: "section",
-          text: {
-            type: "mrkdwn",
-            text: `❌ Run failed: ${event.error}`,
-          },
+          text: mrkdwn(`❌ Run failed: ${event.error}`),
         },
       ];
     default: {

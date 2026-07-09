@@ -118,6 +118,13 @@ export function EventRenderer(props: { event: TagsEvent }) {
           <span className={mutedClass}>Running</span> <code className="text-xs">{event.toolName}</code>
         </div>
       );
+    case "tool.progress":
+      return (
+        <div className={`${cardClass} bg-muted/40`}>
+          <span className={mutedClass}>{event.toolName}</span>
+          <p className="mt-1 mb-0 text-sm">{event.step}</p>
+        </div>
+      );
     case "tool.finished":
       return (
         <div className="grid gap-2">

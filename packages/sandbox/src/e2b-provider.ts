@@ -9,6 +9,7 @@ import {
   extractGitHubPrUrl,
   parseTagsRunOutputJson,
 } from "./run-output";
+import { summarizeOpencodeProgressLine } from "./opencode-progress";
 
 /** E2B pre-built template with opencode installed (see e2b.dev/docs/agents/opencode). */
 export const DEFAULT_OPENCODE_TEMPLATE = "opencode";
@@ -418,11 +419,14 @@ async function ensureWorkspace(
     const repoUrl = repoUrls[0]!;
     const hasRepo = await pathExists(sandbox, `${REPO_PATH}/.git`);
     if (!hasRepo) {
+      await request.onProgress?.("Cloning the repo");
       await sandbox.commands.run(`rm -rf ${shellQuote(REPO_PATH)}`);
       await sandbox.git.clone(repoUrl, {
         path: REPO_PATH,
         depth: 1,
       });
+    } else {
+      await request.onProgress?.("Opening the repo");
     }
     return { cwd: REPO_PATH, repoPaths: { [repoUrl]: REPO_PATH } };
   }
@@ -436,6 +440,7 @@ async function ensureWorkspace(
     const path = `${REPOS_ROOT}/${name}`;
     const hasRepo = await pathExists(sandbox, `${path}/.git`);
     if (!hasRepo) {
+      await request.onProgress?.("Cloning the repo");
       await sandbox.commands.run(`rm -rf ${shellQuote(path)}`);
       await sandbox.git.clone(url, {
         path,
@@ -620,16 +625,21 @@ export function createSandboxProvider(config: SandboxProviderConfig = {}): Sandb
         const appendStream = async (chunk: string) => {
           const clean = stripAnsi(chunk);
           streamed += clean;
-          if (request.onOutput && clean) {
-            lineBuffer += clean;
-            const lines = lineBuffer.split("\n");
-            lineBuffer = lines.pop() ?? "";
-            for (const line of lines) {
-              if (!line.trim()) continue;
+          if (!clean) return;
+          if (!request.onOutput && !request.onProgress) return;
+
+          lineBuffer += clean;
+          const lines = lineBuffer.split("\n");
+          lineBuffer = lines.pop() ?? "";
+          for (const line of lines) {
+            if (!line.trim()) continue;
+            if (request.onProgress) {
+              const step = summarizeOpencodeProgressLine(line);
+              if (step) await request.onProgress(step);
+            }
+            if (request.onOutput) {
               const formatted = formatJsonLineForStream(line);
-              if (formatted) {
-                await request.onOutput(formatted + "\n");
-              }
+              if (formatted) await request.onOutput(formatted + "\n");
             }
           }
         };
@@ -656,11 +666,15 @@ export function createSandboxProvider(config: SandboxProviderConfig = {}): Sandb
           }
         }
 
-        // Flush remaining line buffer to onOutput.
-        if (lineBuffer.trim() && request.onOutput) {
-          const formatted = formatJsonLineForStream(lineBuffer);
-          if (formatted) {
-            await request.onOutput(formatted + "\n");
+        // Flush remaining line buffer.
+        if (lineBuffer.trim()) {
+          if (request.onProgress) {
+            const step = summarizeOpencodeProgressLine(lineBuffer);
+            if (step) await request.onProgress(step);
+          }
+          if (request.onOutput) {
+            const formatted = formatJsonLineForStream(lineBuffer);
+            if (formatted) await request.onOutput(formatted + "\n");
           }
         }
 

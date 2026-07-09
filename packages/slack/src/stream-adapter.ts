@@ -39,6 +39,10 @@ export class SlackStreamAdapter {
   private statusLabel: string | null = null;
   private native: boolean;
   private openTasks = new Map<string, string>();
+  /** Latest subtitle under an open task (e.g. opencode step). */
+  private taskDetails = new Map<string, string>();
+  private lastProgressAt = 0;
+  private lastProgressStep: string | null = null;
   private stopped = false;
 
   constructor(
@@ -73,8 +77,17 @@ export class SlackStreamAdapter {
           await this.appendClassicBlocks(event);
         }
         return;
+      case "tool.progress":
+        if (this.native) {
+          await this.updateTaskDetails(`tool-${taskId(event.toolName)}`, event.step);
+        } else {
+          this.statusLabel = `Running ${event.toolName} — ${event.step}`;
+          await this.flush(true);
+        }
+        return;
       case "tool.finished":
         if (this.native) {
+          this.taskDetails.delete(`tool-${taskId(event.toolName)}`);
           await this.pushTask(`tool-${taskId(event.toolName)}`, `Ran ${event.toolName}`, "complete");
         } else {
           await this.appendClassicBlocks(event);
@@ -108,6 +121,20 @@ export class SlackStreamAdapter {
         }
         return;
       case "approval.requested":
+        // Interactive Approve/Decline lives on the standalone card posted by
+        // Inngest (`postApprovalStep`). Don't embed a second set of buttons in
+        // the streaming run message — that made the UX feel duplicated/janky.
+        if (this.native) {
+          await this.pushTask(
+            "approval-wait",
+            `Waiting for approval — ${event.requestText || event.toolName || "action"}`,
+            "in_progress",
+          );
+        } else {
+          this.statusLabel = `Waiting for approval — ${event.requestText || event.toolName || "action"}`;
+          await this.flush(true);
+        }
+        return;
       case "question.requested":
       case "artifact.created":
       case "recording.started":
@@ -196,15 +223,49 @@ export class SlackStreamAdapter {
       for (const [openId, openTitle] of this.openTasks) {
         if (openId !== id) {
           chunks.push({ type: "task_update", id: openId, title: openTitle, status: "complete" });
+          this.taskDetails.delete(openId);
         }
       }
       this.openTasks.clear();
       this.openTasks.set(id, title.slice(0, MAX_TASK_TITLE));
     } else {
       this.openTasks.delete(id);
+      this.taskDetails.delete(id);
     }
-    chunks.push({ type: "task_update", id, title: title.slice(0, MAX_TASK_TITLE), status });
+    const details = status === "in_progress" ? this.taskDetails.get(id) : undefined;
+    chunks.push({
+      type: "task_update",
+      id,
+      title: title.slice(0, MAX_TASK_TITLE),
+      status,
+      ...(details ? { details } : {}),
+    });
     await this.appendChunks(chunks);
+  }
+
+  /** Update the small subtitle under an in-flight task (throttled). */
+  private async updateTaskDetails(id: string, step: string): Promise<void> {
+    const title = this.openTasks.get(id);
+    if (!title) return;
+    const cleaned = step.replace(/\s+/g, " ").trim().slice(0, 120);
+    if (!cleaned || cleaned === this.lastProgressStep) return;
+
+    const now = Date.now();
+    // Keep Slack traffic light while still feeling live.
+    if (now - this.lastProgressAt < 900) return;
+
+    this.lastProgressAt = now;
+    this.lastProgressStep = cleaned;
+    this.taskDetails.set(id, cleaned);
+    await this.appendChunks([
+      {
+        type: "task_update",
+        id,
+        title: title.slice(0, MAX_TASK_TITLE),
+        status: "in_progress",
+        details: cleaned,
+      },
+    ]);
   }
 
   private async completeOpenTasks(status: "complete" | "error"): Promise<void> {

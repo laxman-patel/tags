@@ -28,6 +28,12 @@ export function parseTagsEvent(
         toolName: String((payload as { toolName?: string })?.toolName ?? "tool"),
         inputPreview: (payload as { inputPreview?: unknown })?.inputPreview,
       };
+    case "tool.progress":
+      return {
+        type: "tool.progress",
+        toolName: String((payload as { toolName?: string })?.toolName ?? "tool"),
+        step: String((payload as { step?: string })?.step ?? ""),
+      };
     case "tool.finished":
       return {
         type: "tool.finished",

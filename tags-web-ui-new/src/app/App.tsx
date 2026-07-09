@@ -547,15 +547,6 @@ function formatRunStartedAt(value: string) {
   });
 }
 
-function formatApprovalExpiry(value: string) {
-  const expiresAt = new Date(value);
-  if (Number.isNaN(expiresAt.getTime())) return "unknown expiry";
-  const diffMs = expiresAt.getTime() - Date.now();
-  if (diffMs <= 0) return "expired";
-  const minutes = Math.max(1, Math.ceil(diffMs / 60_000));
-  return minutes === 1 ? "expires in 1 min" : `expires in ${minutes} min`;
-}
-
 function ToolLogo({
   tool,
   size = "base",
@@ -2023,24 +2014,12 @@ function ApprovalsView({
             <LayerCard key={apr.id}>
               <LayerCard.Secondary className="flex items-center justify-between gap-4 py-4">
                 <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <ActionIcon action={apr.toolName.replace(/^composio\./, "")} />
-                      <Text bold>{apr.summary}</Text>
-                      <Badge
-                        variant={
-                          apr.riskLevel === "high"
-                            ? "error"
-                            : apr.riskLevel === "medium"
-                              ? "warning"
-                              : "neutral"
-                        }
-                      >
-                        {apr.riskLevel} risk
-                      </Badge>
-                    </div>
-                    <Text variant="secondary" size="xs" className="mt-1 block">
-                      {apr.spaceName} · {apr.requestedAt} · {formatApprovalExpiry(apr.expiresAt)}
-                    </Text>
+                  <Text bold className="block">
+                    {apr.summary}
+                  </Text>
+                  <Text variant="secondary" size="xs" className="mt-1 block">
+                    {apr.spaceName}
+                  </Text>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
                   <Button
@@ -2279,9 +2258,9 @@ function RunDetailView({ run, events, eventsLoading, onBack }: { run: Run; event
                     {hasBody && (
                       <LayerCard.Primary>
                         {event.detail && (
-                          <p className="text-xs text-kumo-subtle break-words">
-                            {event.detail}
-                          </p>
+                          <div className="text-xs text-kumo-subtle break-words">
+                            <Markdown text={event.detail} />
+                          </div>
                         )}
                         {event.json && (
                           <div className={cn(
