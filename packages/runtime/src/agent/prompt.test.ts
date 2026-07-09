@@ -75,6 +75,8 @@ describe("opencode prompts", () => {
     expect(withRequest).toContain('Prefer demo.kind "web"');
     expect(withRequest).toContain("Do NOT hardcode /home/user/repo paths");
     expect(withRequest).toContain("not bun");
+    expect(withRequest).toContain("commitSha");
+    expect(withRequest).toContain("Keep demos under ~60s");
     expect(withoutRequest).not.toContain("# Demo recording required");
   });
 });

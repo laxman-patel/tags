@@ -589,6 +589,7 @@ async function recordDemoStep(
           template: secrets.e2bDemoTemplate,
           repoUrl,
           branch: runOutput?.branch,
+          commitSha: runOutput?.commitSha,
           demo,
           maxSeconds: secrets.demoRecording.maxSeconds,
           width: secrets.demoRecording.width,
@@ -599,18 +600,21 @@ async function recordDemoStep(
         const r2Client = createR2Client(secrets.r2);
         const artifactId = newId();
         const key = artifactBinaryObjectKey(input.organizationId, artifactId, recording.filename);
-        await uploadArtifactBytes(r2Client, secrets.r2, key, recording.video, recording.contentType);
         const artifactUrl = publicArtifactUrl(secrets.r2, key);
         if (!artifactUrl) throw new Error("R2_PUBLIC_BASE_URL is not configured");
 
-        const slackFile = await uploadThreadFile(slack, {
-          channelId: input.channelId,
-          threadTs: setup.threadTs,
-          file: recording.video,
-          filename: recording.filename,
-          title: "Tags demo recording",
-          initialComment: `Demo recording for ${prUrl}\n${artifactUrl}`,
-        });
+        // R2 key → public URL is deterministic; upload both destinations in parallel.
+        const [, slackFile] = await Promise.all([
+          uploadArtifactBytes(r2Client, secrets.r2, key, recording.video, recording.contentType),
+          uploadThreadFile(slack, {
+            channelId: input.channelId,
+            threadTs: setup.threadTs,
+            file: recording.video,
+            filename: recording.filename,
+            title: "Tags demo recording",
+            initialComment: `Demo recording for ${prUrl}\n${artifactUrl}`,
+          }),
+        ]);
 
         let prComment: { htmlUrl?: string } = {};
         const githubEnabled = config?.enabledConnections.includes("github") ?? false;

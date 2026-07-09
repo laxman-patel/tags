@@ -46,6 +46,8 @@ export type DemoRecipe =
       kind: "web";
       repoSubdir?: string;
       installCommand?: string;
+      /** Skip dependency install when node_modules are already present / deps unchanged. */
+      skipInstall?: boolean;
       startCommand: string;
       readyUrl: string;
       readyTimeoutMs?: number;
@@ -83,6 +85,8 @@ export type DemoRecordingRequest = {
   template: string;
   repoUrl: string;
   branch?: string;
+  /** Exact PR head SHA — preferred over branch tip when present. */
+  commitSha?: string;
   demo: DemoRecipe;
   maxSeconds: number;
   width: number;

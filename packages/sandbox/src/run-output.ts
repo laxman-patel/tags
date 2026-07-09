@@ -83,6 +83,7 @@ function parseDemoRecipe(value: unknown): DemoRecipe | undefined {
       steps,
       repoSubdir: optionalString(value.repoSubdir),
       installCommand: optionalString(value.installCommand),
+      skipInstall: value.skipInstall === true ? true : undefined,
       readyTimeoutMs: optionalPositiveInt(value.readyTimeoutMs),
       successText: optionalString(value.successText),
     };

@@ -15,9 +15,11 @@ export {
   parseTagsRunOutputJson,
 } from "./run-output";
 export {
+  playwrightScript,
   recordDemo,
   sanitizeDemoRecipe,
   sanitizeDemoShellCommand,
+  withFastInstallFlags,
 } from "./demo-recorder";
 export type {
   CodingAgentRequest,

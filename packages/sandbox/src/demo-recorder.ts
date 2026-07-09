@@ -8,6 +8,13 @@ import type {
 const RECORDING_PATH = "/tmp/tags-demo.mp4";
 const WORKDIR = "/home/user/demo-repo";
 
+/** Budget for clone + install + ready + capture + pull, beyond maxSeconds. */
+const SANDBOX_OVERHEAD_MS = 10 * 60 * 1000;
+const CLONE_TIMEOUT_MS = 90_000;
+const INSTALL_TIMEOUT_MS = 180_000;
+const DEMO_STEP_TIMEOUT_MS = 90_000;
+const READY_POLL_INTERVAL_S = "0.15";
+
 type CommandResult = { stdout?: string; stderr?: string; exitCode?: number; error?: string };
 type DesktopSandbox = {
   sandboxId: string;
@@ -22,6 +29,11 @@ type DesktopSandbox = {
       },
     ) => Promise<CommandResult>;
   };
+  files?: {
+    read: (path: string, opts: { format: "bytes" }) => Promise<Uint8Array>;
+    write: (path: string, data: string) => Promise<unknown>;
+  };
+  setTimeout?: (timeoutMs: number) => Promise<void>;
   kill: () => Promise<void>;
 };
 
@@ -63,6 +75,32 @@ export function sanitizeDemoShellCommand(command: string): string {
   return next.trim();
 }
 
+/** Append quiet/fast flags to package-manager install commands. */
+export function withFastInstallFlags(command: string): string {
+  const trimmed = command.trim();
+  if (!trimmed) return trimmed;
+
+  const has = (flag: string) => trimmed.includes(flag);
+
+  if (/\bnpm\s+(ci|install)\b/.test(trimmed)) {
+    const extras: string[] = [];
+    if (!has("--no-audit")) extras.push("--no-audit");
+    if (!has("--no-fund")) extras.push("--no-fund");
+    if (!has("--prefer-offline")) extras.push("--prefer-offline");
+    return extras.length ? `${trimmed} ${extras.join(" ")}` : trimmed;
+  }
+
+  if (/\bpnpm\s+install\b/.test(trimmed)) {
+    return has("--prefer-offline") ? trimmed : `${trimmed} --prefer-offline`;
+  }
+
+  if (/\byarn\s+install\b/.test(trimmed)) {
+    return has("--prefer-offline") ? trimmed : `${trimmed} --prefer-offline`;
+  }
+
+  return trimmed;
+}
+
 export function sanitizeDemoRecipe(demo: DemoRecipe): DemoRecipe {
   if (demo.kind === "none") return demo;
   if (demo.kind === "terminal") {
@@ -71,7 +109,11 @@ export function sanitizeDemoRecipe(demo: DemoRecipe): DemoRecipe {
   return {
     ...demo,
     ...(demo.installCommand
-      ? { installCommand: sanitizeDemoShellCommand(demo.installCommand) }
+      ? {
+          installCommand: withFastInstallFlags(
+            sanitizeDemoShellCommand(demo.installCommand),
+          ),
+        }
       : {}),
     startCommand: sanitizeDemoShellCommand(demo.startCommand),
   };
@@ -126,7 +168,12 @@ function validateDemo(demo: DemoRecipe): void {
 
 const PLAYWRIGHT_MODULE = "/opt/tags-playwright/node_modules/playwright";
 
-function playwrightScript(steps: DemoStep[]): string {
+/**
+ * Build the in-sandbox Playwright driver.
+ * Popups (target=_blank) are caught via a short post-click settle — never a
+ * multi-second waitForEvent timeout that stalls every ordinary click.
+ */
+export function playwrightScript(steps: DemoStep[]): string {
   const serialized = JSON.stringify(steps);
   return `
 import { chromium } from "${PLAYWRIGHT_MODULE}";
@@ -135,31 +182,68 @@ const steps = ${serialized};
 const browser = await chromium.launch({
   headless: false,
   executablePath: process.env.CHROMIUM_PATH || undefined,
-  args: ["--no-sandbox", "--disable-dev-shm-usage", "--window-size=1280,800"],
+  args: [
+    "--no-sandbox",
+    "--disable-dev-shm-usage",
+    "--disable-gpu",
+    "--disable-extensions",
+    "--disable-background-networking",
+    "--disable-default-apps",
+    "--disable-sync",
+    "--no-first-run",
+    "--window-size=1280,800",
+  ],
 });
 let page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
+page.setDefaultTimeout(10000);
+page.setDefaultNavigationTimeout(20000);
 for (const step of steps) {
-  if (step.type === "navigate") await page.goto(step.url, { waitUntil: "networkidle" });
-  else if (step.type === "click") {
-    const popupPromise = page.waitForEvent("popup", { timeout: 5000 }).catch(() => null);
-    await page.click(step.selector);
-    const popup = await popupPromise;
+  if (step.type === "navigate") {
+    await page.goto(step.url, { waitUntil: "domcontentloaded", timeout: 20000 });
+  } else if (step.type === "click") {
+    let popup = null;
+    const onPopup = (p) => { popup = p; };
+    page.once("popup", onPopup);
+    try {
+      await page.click(step.selector);
+      await page.waitForTimeout(150);
+    } finally {
+      page.off("popup", onPopup);
+    }
     if (popup) {
       await popup.waitForLoadState("domcontentloaded").catch(() => {});
       await page.close().catch(() => {});
       page = popup;
     }
+  } else if (step.type === "fill") {
+    await page.fill(step.selector, step.value);
+  } else if (step.type === "press") {
+    await page.keyboard.press(step.key);
+  } else if (step.type === "waitForSelector") {
+    await page.waitForSelector(step.selector, { timeout: step.timeoutMs || 10000 });
+  } else if (step.type === "waitForText") {
+    await page.getByText(step.text).waitFor({ timeout: step.timeoutMs || 10000 });
+  } else if (step.type === "waitMs") {
+    await page.waitForTimeout(Math.min(step.ms, 3000));
+  } else if (step.type === "assertText") {
+    await page.getByText(step.text).waitFor({ timeout: 10000 });
   }
-  else if (step.type === "fill") await page.fill(step.selector, step.value);
-  else if (step.type === "press") await page.keyboard.press(step.key);
-  else if (step.type === "waitForSelector") await page.waitForSelector(step.selector, { timeout: step.timeoutMs || 10000 });
-  else if (step.type === "waitForText") await page.getByText(step.text).waitFor({ timeout: step.timeoutMs || 10000 });
-  else if (step.type === "waitMs") await page.waitForTimeout(step.ms);
-  else if (step.type === "assertText") await page.getByText(step.text).waitFor({ timeout: 10000 });
 }
-await page.waitForTimeout(1500);
+await page.waitForTimeout(300);
 await browser.close();
 `;
+}
+
+function sandboxLifetimeMs(maxSeconds: number): number {
+  return Math.max(maxSeconds * 1000 + SANDBOX_OVERHEAD_MS, 12 * 60 * 1000);
+}
+
+async function bumpSandboxTimeout(
+  sandbox: DesktopSandbox,
+  remainingMs: number,
+): Promise<void> {
+  if (typeof sandbox.setTimeout !== "function") return;
+  await sandbox.setTimeout(Math.max(remainingMs, 60_000)).catch(() => {});
 }
 
 async function createDesktopSandbox(args: DemoRecordingRequest): Promise<DesktopSandbox> {
@@ -175,7 +259,7 @@ async function createDesktopSandbox(args: DemoRecordingRequest): Promise<Desktop
   }
   return (await create.call(SandboxCtor, args.template, {
     apiKey: args.apiKey,
-    timeoutMs: Math.max(args.maxSeconds + 120, 180) * 1000,
+    timeoutMs: sandboxLifetimeMs(args.maxSeconds),
     resolution: [args.width, args.height],
   })) as DesktopSandbox;
 }
@@ -183,39 +267,77 @@ async function createDesktopSandbox(args: DemoRecordingRequest): Promise<Desktop
 async function setupRepo(sandbox: DesktopSandbox, args: DemoRecordingRequest): Promise<string> {
   await runChecked(sandbox, `rm -rf ${shellQuote(WORKDIR)}`);
   const branch = args.branch ? ` --branch ${shellQuote(args.branch)}` : "";
+  // Shallow clone first; optionally pin to the exact PR head after.
   await runChecked(
     sandbox,
-    `git clone --depth 1${branch} ${shellQuote(args.repoUrl)} ${shellQuote(WORKDIR)}`,
-    { timeoutMs: 120_000 },
+    `git clone --depth 1 --single-branch --no-tags${branch} ${shellQuote(args.repoUrl)} ${shellQuote(WORKDIR)}`,
+    { timeoutMs: CLONE_TIMEOUT_MS },
   );
+
+  if (args.commitSha?.trim()) {
+    const sha = args.commitSha.trim();
+    // Depth-1 may not contain the SHA if the tip moved; deepen once then checkout.
+    await runChecked(
+      sandbox,
+      [
+        `cd ${shellQuote(WORKDIR)} &&`,
+        `(git cat-file -e ${shellQuote(sha)}^{commit} 2>/dev/null || git fetch --depth 50 origin ${shellQuote(sha)}) &&`,
+        `git checkout --force ${shellQuote(sha)}`,
+      ].join(" "),
+      { timeoutMs: 60_000 },
+    );
+  }
 
   const subdir = args.demo.kind !== "none" ? args.demo.repoSubdir : undefined;
   return subdir ? `${WORKDIR}/${subdir.replace(/^\/+/, "")}` : WORKDIR;
 }
 
 async function inferInstallCommand(sandbox: DesktopSandbox, cwd: string): Promise<string | null> {
-  const checks = [
-    { file: "pnpm-lock.yaml", command: "corepack enable && pnpm install --frozen-lockfile" },
-    { file: "bun.lockb", command: "npm install" },
-    { file: "bun.lock", command: "npm install" },
-    { file: "package-lock.json", command: "npm ci" },
-    { file: "yarn.lock", command: "corepack enable && yarn install --frozen-lockfile" },
-    { file: "package.json", command: "npm install" },
-  ];
-  for (const check of checks) {
-    const result = await sandbox.commands.run(`test -f ${shellQuote(check.file)} && echo yes || true`, {
-      cwd,
-    });
-    if ((result.stdout ?? "").includes("yes")) return check.command;
+  // One round-trip instead of sequential test -f calls.
+  const result = await sandbox.commands.run(
+    [
+      "if test -f pnpm-lock.yaml; then echo pnpm",
+      "elif test -f bun.lockb || test -f bun.lock; then echo npm",
+      "elif test -f package-lock.json; then echo npmci",
+      "elif test -f yarn.lock; then echo yarn",
+      "elif test -f package.json; then echo npm",
+      "else echo none; fi",
+    ].join("; "),
+    { cwd },
+  );
+  const kind = (result.stdout ?? "").trim();
+  switch (kind) {
+    case "pnpm":
+      return withFastInstallFlags(
+        "corepack enable && pnpm install --frozen-lockfile",
+      );
+    case "npmci":
+      return withFastInstallFlags("npm ci");
+    case "yarn":
+      return withFastInstallFlags(
+        "corepack enable && yarn install --frozen-lockfile",
+      );
+    case "npm":
+      return withFastInstallFlags("npm install");
+    case "none":
+      return null;
+    default:
+      return null;
   }
-  return null;
 }
 
 async function startRecording(sandbox: DesktopSandbox, args: DemoRecordingRequest): Promise<void> {
   await runChecked(sandbox, `rm -f ${shellQuote(RECORDING_PATH)}`);
+  // Cap capture slightly above maxSeconds as a safety net; stopRecording is the
+  // primary end signal so demos aren't truncated mid-step by a tight -t.
+  const captureCap = Math.max(args.maxSeconds + 30, Math.ceil(DEMO_STEP_TIMEOUT_MS / 1000) + 15);
   const command = [
     "ffmpeg",
     "-y",
+    "-loglevel",
+    "error",
+    "-thread_queue_size",
+    "512",
     "-video_size",
     `${args.width}x${args.height}`,
     "-framerate",
@@ -225,7 +347,17 @@ async function startRecording(sandbox: DesktopSandbox, args: DemoRecordingReques
     "-i",
     ":0.0",
     "-t",
-    String(args.maxSeconds),
+    String(captureCap),
+    "-c:v",
+    "libx264",
+    "-preset",
+    "ultrafast",
+    "-tune",
+    "zerolatency",
+    "-crf",
+    "28",
+    "-threads",
+    "0",
     "-pix_fmt",
     "yuv420p",
     "-movflags",
@@ -238,14 +370,57 @@ async function startRecording(sandbox: DesktopSandbox, args: DemoRecordingReques
 
 async function stopRecording(sandbox: DesktopSandbox): Promise<void> {
   await sandbox.commands.run(
-    "if test -f /tmp/tags-ffmpeg.pid; then kill -INT $(cat /tmp/tags-ffmpeg.pid) 2>/dev/null || true; fi; sleep 2",
+    [
+      "if test -f /tmp/tags-ffmpeg.pid; then",
+      "  kill -INT $(cat /tmp/tags-ffmpeg.pid) 2>/dev/null || true;",
+      "  for i in 1 2 3 4 5 6 7 8; do",
+      "    kill -0 $(cat /tmp/tags-ffmpeg.pid) 2>/dev/null || break;",
+      "    sleep 0.15;",
+      "  done;",
+      "  kill -KILL $(cat /tmp/tags-ffmpeg.pid) 2>/dev/null || true;",
+      "fi",
+    ].join(" "),
   );
 }
 
+async function cleanupDemoProcesses(sandbox: DesktopSandbox): Promise<void> {
+  await sandbox.commands.run(
+    [
+      "if test -f /tmp/tags-demo-app.pid; then",
+      "  kill $(cat /tmp/tags-demo-app.pid) 2>/dev/null || true;",
+      "  sleep 0.2;",
+      "  kill -KILL $(cat /tmp/tags-demo-app.pid) 2>/dev/null || true;",
+      "fi;",
+      "pkill -f 'node /tmp/tags-demo-playwright' 2>/dev/null || true;",
+      "pkill -f chromium 2>/dev/null || true;",
+    ].join(" "),
+  ).catch(() => {});
+}
+
 async function readRecording(sandbox: DesktopSandbox): Promise<Buffer> {
+  const exists = await sandbox.commands.run(
+    `test -s ${shellQuote(RECORDING_PATH)} && echo yes || echo no`,
+  );
+  if (!(exists.stdout ?? "").includes("yes")) {
+    const ffmpegLog = await sandbox.commands.run("tail -n 40 /tmp/tags-ffmpeg.log || true");
+    const detail = combineOutput(ffmpegLog);
+    throw new Error(
+      detail
+        ? `Demo recording file was not created\n--- ffmpeg log ---\n${detail.slice(0, 800)}`
+        : "Demo recording file was not created",
+    );
+  }
+
+  if (sandbox.files?.read) {
+    const bytes = await sandbox.files.read(RECORDING_PATH, { format: "bytes" });
+    if (!bytes.byteLength) throw new Error("Demo recording file was empty");
+    return Buffer.from(bytes);
+  }
+
+  // Fallback when files API is unavailable (tests / older SDKs).
   const result = await runChecked(
     sandbox,
-    `test -s ${shellQuote(RECORDING_PATH)} && base64 -w0 ${shellQuote(RECORDING_PATH)}`,
+    `base64 -w0 ${shellQuote(RECORDING_PATH)}`,
     { timeoutMs: 60_000 },
   );
   const encoded = (result.stdout ?? "").trim();
@@ -259,21 +434,30 @@ async function prepareWebDemo(
   demo: Extract<DemoRecipe, { kind: "web" }>,
 ): Promise<string[]> {
   const logs: string[] = [];
-  const installCommand = demo.installCommand ?? (await inferInstallCommand(sandbox, cwd));
+  const skipInstall = demo.skipInstall === true;
+  const installCommand = skipInstall
+    ? null
+    : demo.installCommand ?? (await inferInstallCommand(sandbox, cwd));
   if (installCommand) {
+    await bumpSandboxTimeout(sandbox, INSTALL_TIMEOUT_MS + DEMO_STEP_TIMEOUT_MS + 120_000);
     logs.push(
-      combineOutput(await runChecked(sandbox, installCommand, { cwd, timeoutMs: 180_000 })),
+      combineOutput(
+        await runChecked(sandbox, installCommand, {
+          cwd,
+          timeoutMs: INSTALL_TIMEOUT_MS,
+        }),
+      ),
     );
   }
   await sandbox.commands.run(
     `${demo.startCommand} >/tmp/tags-demo-app.log 2>&1 & echo $! > /tmp/tags-demo-app.pid`,
     { cwd },
   );
-  const timeoutMs = demo.readyTimeoutMs ?? 60_000;
+  const timeoutMs = demo.readyTimeoutMs ?? 45_000;
   try {
     const ready = await runChecked(
       sandbox,
-      `timeout ${Math.ceil(timeoutMs / 1000)} bash -lc 'until curl -fsS ${shellQuote(demo.readyUrl)} >/dev/null; do sleep 1; done'`,
+      `timeout ${Math.ceil(timeoutMs / 1000)} bash -lc 'until curl -fsS --max-time 1 ${shellQuote(demo.readyUrl)} >/dev/null; do sleep ${READY_POLL_INTERVAL_S}; done'`,
       { timeoutMs: timeoutMs + 5_000 },
     );
     logs.push(combineOutput(ready));
@@ -296,11 +480,15 @@ async function runWebDemoSteps(
   demo: Extract<DemoRecipe, { kind: "web" }>,
 ): Promise<string> {
   const script = playwrightScript(demo.steps);
-  await runChecked(sandbox, `cat > /tmp/tags-demo-playwright.mjs <<'EOF'\n${script}\nEOF`);
+  if (sandbox.files?.write) {
+    await sandbox.files.write("/tmp/tags-demo-playwright.mjs", script);
+  } else {
+    await runChecked(sandbox, `cat > /tmp/tags-demo-playwright.mjs <<'EOF'\n${script}\nEOF`);
+  }
   return combineOutput(
     await runChecked(sandbox, "node /tmp/tags-demo-playwright.mjs", {
       cwd,
-      timeoutMs: 120_000,
+      timeoutMs: DEMO_STEP_TIMEOUT_MS,
       envs: {
         DISPLAY: ":0",
         NODE_PATH: "/opt/tags-playwright/node_modules",
@@ -317,8 +505,8 @@ async function runTerminalDemo(
 ): Promise<string> {
   const result = await runChecked(
     sandbox,
-    `xterm -geometry 140x40 -e bash -lc ${shellQuote(`${demo.command}; sleep 2`)}`,
-    { cwd, timeoutMs: 120_000, envs: { DISPLAY: ":0" } },
+    `xterm -geometry 140x40 -e bash -lc ${shellQuote(`${demo.command}; sleep 0.6`)}`,
+    { cwd, timeoutMs: DEMO_STEP_TIMEOUT_MS, envs: { DISPLAY: ":0" } },
   );
   return combineOutput(result);
 }
@@ -340,7 +528,13 @@ export async function recordDemo(args: DemoRecordingRequest): Promise<DemoRecord
       prepLogs.push(...(await prepareWebDemo(sandbox, cwd, demo)));
     }
 
-    // Start ffmpeg only after clone/install/app-ready so maxSeconds covers the demo.
+    // Keep enough lifetime for capture + video pull after prep.
+    await bumpSandboxTimeout(
+      sandbox,
+      args.maxSeconds * 1000 + DEMO_STEP_TIMEOUT_MS + 90_000,
+    );
+
+    // Start ffmpeg only after clone/install/app-ready so capture covers the demo.
     await startRecording(sandbox, args);
     try {
       switch (demo.kind) {
@@ -360,6 +554,7 @@ export async function recordDemo(args: DemoRecordingRequest): Promise<DemoRecord
       }
     } finally {
       await stopRecording(sandbox);
+      await cleanupDemoProcesses(sandbox);
     }
     const video = await readRecording(sandbox);
     const filename = `tags-demo-${safeFilenamePart(args.branch ?? sandbox.sandboxId)}.mp4`;
