@@ -8,7 +8,7 @@ import type {
 const RECORDING_PATH = "/tmp/tags-demo.mp4";
 const WORKDIR = "/home/user/demo-repo";
 
-type CommandResult = { stdout?: string; stderr?: string; exitCode?: number };
+type CommandResult = { stdout?: string; stderr?: string; exitCode?: number; error?: string };
 type DesktopSandbox = {
   sandboxId: string;
   commands: {
@@ -37,6 +37,80 @@ function safeFilenamePart(value: string): string {
   return value.replace(/[^a-zA-Z0-9._-]+/g, "-").replace(/^-|-$/g, "").slice(0, 80);
 }
 
+/**
+ * Demo recipes are authored inside the coding sandbox (`/home/user/repo`, often
+ * with bun). The recorder clones to `/home/user/demo-repo` and only has Node /
+ * npm / corepack. Rewrite absolute paths and bun → npm/npx so recipes work.
+ */
+export function sanitizeDemoShellCommand(command: string): string {
+  let next = command.trim();
+  if (!next) return next;
+
+  next = next
+    .replace(/\/home\/user\/repo(?:\/apps\/web)?/g, ".")
+    .replace(/\/home\/user\/demo-repo(?:\/apps\/web)?/g, ".");
+
+  // Drop no-op `cd . &&` / `cd ./foo &&` prefixes that remain after rewrites.
+  next = next.replace(/^(?:cd\s+\.(?:\/[^\s;&|]+)?\s*&&\s*)+/g, "");
+
+  next = next
+    .replace(/\bbunx\b/g, "npx")
+    .replace(/\bbun\s+run\b/g, "npm run")
+    .replace(/\bbun\s+install\b/g, "npm install")
+    .replace(/\bbun\s+i\b/g, "npm install")
+    .replace(/\bbun\b/g, "npm");
+
+  return next.trim();
+}
+
+export function sanitizeDemoRecipe(demo: DemoRecipe): DemoRecipe {
+  if (demo.kind === "none") return demo;
+  if (demo.kind === "terminal") {
+    return { ...demo, command: sanitizeDemoShellCommand(demo.command) };
+  }
+  return {
+    ...demo,
+    ...(demo.installCommand
+      ? { installCommand: sanitizeDemoShellCommand(demo.installCommand) }
+      : {}),
+    startCommand: sanitizeDemoShellCommand(demo.startCommand),
+  };
+}
+
+function commandFailureMessage(command: string, error: unknown): string {
+  const result = error as CommandResult & { message?: string; name?: string };
+  const exit =
+    typeof result.exitCode === "number" ? `exit ${result.exitCode}` : "command failed";
+  const output = combineOutput(result);
+  const message = typeof result.message === "string" ? result.message : "";
+  const detail = [output, message].filter(Boolean).join("\n").trim();
+  const shortCmd = command.length > 120 ? `${command.slice(0, 117)}…` : command;
+  if (!detail) return `${exit}: ${shortCmd}`;
+  const clipped = detail.length > 800 ? `${detail.slice(0, 797)}…` : detail;
+  return `${exit} while running \`${shortCmd}\`:\n${clipped}`;
+}
+
+async function runChecked(
+  sandbox: DesktopSandbox,
+  command: string,
+  options?: {
+    cwd?: string;
+    timeoutMs?: number;
+    envs?: Record<string, string>;
+    background?: boolean;
+  },
+): Promise<CommandResult> {
+  try {
+    const result = await sandbox.commands.run(command, options);
+    if (typeof result.exitCode === "number" && result.exitCode !== 0) {
+      throw Object.assign(new Error(`exit status ${result.exitCode}`), result);
+    }
+    return result;
+  } catch (error) {
+    throw new Error(commandFailureMessage(command, error));
+  }
+}
+
 function validateDemo(demo: DemoRecipe): void {
   if (demo.kind === "none") {
     throw new Error(`No recordable demo: ${demo.reason}`);
@@ -63,10 +137,19 @@ const browser = await chromium.launch({
   executablePath: process.env.CHROMIUM_PATH || undefined,
   args: ["--no-sandbox", "--disable-dev-shm-usage", "--window-size=1280,800"],
 });
-const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
+let page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
 for (const step of steps) {
   if (step.type === "navigate") await page.goto(step.url, { waitUntil: "networkidle" });
-  else if (step.type === "click") await page.click(step.selector);
+  else if (step.type === "click") {
+    const popupPromise = page.waitForEvent("popup", { timeout: 5000 }).catch(() => null);
+    await page.click(step.selector);
+    const popup = await popupPromise;
+    if (popup) {
+      await popup.waitForLoadState("domcontentloaded").catch(() => {});
+      await page.close().catch(() => {});
+      page = popup;
+    }
+  }
   else if (step.type === "fill") await page.fill(step.selector, step.value);
   else if (step.type === "press") await page.keyboard.press(step.key);
   else if (step.type === "waitForSelector") await page.waitForSelector(step.selector, { timeout: step.timeoutMs || 10000 });
@@ -98,9 +181,10 @@ async function createDesktopSandbox(args: DemoRecordingRequest): Promise<Desktop
 }
 
 async function setupRepo(sandbox: DesktopSandbox, args: DemoRecordingRequest): Promise<string> {
-  await sandbox.commands.run(`rm -rf ${shellQuote(WORKDIR)}`);
+  await runChecked(sandbox, `rm -rf ${shellQuote(WORKDIR)}`);
   const branch = args.branch ? ` --branch ${shellQuote(args.branch)}` : "";
-  await sandbox.commands.run(
+  await runChecked(
+    sandbox,
     `git clone --depth 1${branch} ${shellQuote(args.repoUrl)} ${shellQuote(WORKDIR)}`,
     { timeoutMs: 120_000 },
   );
@@ -112,18 +196,23 @@ async function setupRepo(sandbox: DesktopSandbox, args: DemoRecordingRequest): P
 async function inferInstallCommand(sandbox: DesktopSandbox, cwd: string): Promise<string | null> {
   const checks = [
     { file: "pnpm-lock.yaml", command: "corepack enable && pnpm install --frozen-lockfile" },
+    { file: "bun.lockb", command: "npm install" },
+    { file: "bun.lock", command: "npm install" },
     { file: "package-lock.json", command: "npm ci" },
     { file: "yarn.lock", command: "corepack enable && yarn install --frozen-lockfile" },
+    { file: "package.json", command: "npm install" },
   ];
   for (const check of checks) {
-    const result = await sandbox.commands.run(`test -f ${shellQuote(check.file)} && echo yes || true`, { cwd });
+    const result = await sandbox.commands.run(`test -f ${shellQuote(check.file)} && echo yes || true`, {
+      cwd,
+    });
     if ((result.stdout ?? "").includes("yes")) return check.command;
   }
   return null;
 }
 
 async function startRecording(sandbox: DesktopSandbox, args: DemoRecordingRequest): Promise<void> {
-  await sandbox.commands.run(`rm -f ${shellQuote(RECORDING_PATH)}`);
+  await runChecked(sandbox, `rm -f ${shellQuote(RECORDING_PATH)}`);
   const command = [
     "ffmpeg",
     "-y",
@@ -143,6 +232,7 @@ async function startRecording(sandbox: DesktopSandbox, args: DemoRecordingReques
     "+faststart",
     shellQuote(RECORDING_PATH),
   ].join(" ");
+  // Background ffmpeg — don't treat the shell wrapper as a long-running checked command.
   await sandbox.commands.run(`${command} >/tmp/tags-ffmpeg.log 2>&1 & echo $! > /tmp/tags-ffmpeg.pid`);
 }
 
@@ -153,7 +243,8 @@ async function stopRecording(sandbox: DesktopSandbox): Promise<void> {
 }
 
 async function readRecording(sandbox: DesktopSandbox): Promise<Buffer> {
-  const result = await sandbox.commands.run(
+  const result = await runChecked(
+    sandbox,
     `test -s ${shellQuote(RECORDING_PATH)} && base64 -w0 ${shellQuote(RECORDING_PATH)}`,
     { timeoutMs: 60_000 },
   );
@@ -168,20 +259,34 @@ async function prepareWebDemo(
   demo: Extract<DemoRecipe, { kind: "web" }>,
 ): Promise<string[]> {
   const logs: string[] = [];
-  const installCommand = demo.installCommand ?? await inferInstallCommand(sandbox, cwd);
+  const installCommand = demo.installCommand ?? (await inferInstallCommand(sandbox, cwd));
   if (installCommand) {
-    logs.push(combineOutput(await sandbox.commands.run(installCommand, { cwd, timeoutMs: 180_000 })));
+    logs.push(
+      combineOutput(await runChecked(sandbox, installCommand, { cwd, timeoutMs: 180_000 })),
+    );
   }
   await sandbox.commands.run(
     `${demo.startCommand} >/tmp/tags-demo-app.log 2>&1 & echo $! > /tmp/tags-demo-app.pid`,
     { cwd },
   );
   const timeoutMs = demo.readyTimeoutMs ?? 60_000;
-  const ready = await sandbox.commands.run(
-    `timeout ${Math.ceil(timeoutMs / 1000)} bash -lc 'until curl -fsS ${shellQuote(demo.readyUrl)} >/dev/null; do sleep 1; done'`,
-    { timeoutMs: timeoutMs + 5_000 },
-  );
-  logs.push(combineOutput(ready));
+  try {
+    const ready = await runChecked(
+      sandbox,
+      `timeout ${Math.ceil(timeoutMs / 1000)} bash -lc 'until curl -fsS ${shellQuote(demo.readyUrl)} >/dev/null; do sleep 1; done'`,
+      { timeoutMs: timeoutMs + 5_000 },
+    );
+    logs.push(combineOutput(ready));
+  } catch (error) {
+    const appLog = await sandbox.commands.run("tail -n 80 /tmp/tags-demo-app.log || true", { cwd });
+    const appOut = combineOutput(appLog);
+    const base = error instanceof Error ? error.message : String(error);
+    throw new Error(
+      appOut
+        ? `${base}\n--- app log ---\n${appOut.slice(0, 1200)}`
+        : base,
+    );
+  }
   return logs;
 }
 
@@ -191,9 +296,9 @@ async function runWebDemoSteps(
   demo: Extract<DemoRecipe, { kind: "web" }>,
 ): Promise<string> {
   const script = playwrightScript(demo.steps);
-  await sandbox.commands.run(`cat > /tmp/tags-demo-playwright.mjs <<'EOF'\n${script}\nEOF`);
+  await runChecked(sandbox, `cat > /tmp/tags-demo-playwright.mjs <<'EOF'\n${script}\nEOF`);
   return combineOutput(
-    await sandbox.commands.run("node /tmp/tags-demo-playwright.mjs", {
+    await runChecked(sandbox, "node /tmp/tags-demo-playwright.mjs", {
       cwd,
       timeoutMs: 120_000,
       envs: {
@@ -210,7 +315,8 @@ async function runTerminalDemo(
   cwd: string,
   demo: Extract<DemoRecipe, { kind: "terminal" }>,
 ): Promise<string> {
-  const result = await sandbox.commands.run(
+  const result = await runChecked(
+    sandbox,
     `xterm -geometry 140x40 -e bash -lc ${shellQuote(`${demo.command}; sleep 2`)}`,
     { cwd, timeoutMs: 120_000, envs: { DISPLAY: ":0" } },
   );
@@ -218,13 +324,13 @@ async function runTerminalDemo(
 }
 
 export async function recordDemo(args: DemoRecordingRequest): Promise<DemoRecordingResult> {
-  validateDemo(args.demo);
-  if (args.demo.kind === "none") {
-    throw new Error(`No recordable demo: ${args.demo.reason}`);
+  const demo = sanitizeDemoRecipe(args.demo);
+  validateDemo(demo);
+  if (demo.kind === "none") {
+    throw new Error(`No recordable demo: ${demo.reason}`);
   }
-  const demo = args.demo;
   const started = Date.now();
-  const sandbox = await createDesktopSandbox(args);
+  const sandbox = await createDesktopSandbox({ ...args, demo });
   let logs = "";
   try {
     const cwd = await setupRepo(sandbox, { ...args, demo });
