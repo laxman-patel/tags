@@ -603,18 +603,37 @@ async function recordDemoStep(
         const artifactUrl = publicArtifactUrl(secrets.r2, key);
         if (!artifactUrl) throw new Error("R2_PUBLIC_BASE_URL is not configured");
 
-        // R2 key → public URL is deterministic; upload both destinations in parallel.
-        const [, slackFile] = await Promise.all([
-          uploadArtifactBytes(r2Client, secrets.r2, key, recording.video, recording.contentType),
-          uploadThreadFile(slack, {
+        // R2 is the durable artifact; Slack file upload is best-effort (needs files:write).
+        await uploadArtifactBytes(r2Client, secrets.r2, key, recording.video, recording.contentType);
+
+        let slackFile: { fileId?: string; permalink?: string } = {};
+        try {
+          slackFile = await uploadThreadFile(slack, {
             channelId: input.channelId,
             threadTs: setup.threadTs,
             file: recording.video,
             filename: recording.filename,
             title: "Tags demo recording",
             initialComment: `Demo recording for ${prUrl}\n${artifactUrl}`,
-          }),
-        ]);
+          });
+        } catch (error) {
+          const slackErr = error instanceof Error ? error.message : String(error);
+          emitWarn("demo recording Slack upload failed", {
+            "space.id": input.spaceId,
+            "run.id": setup.runId,
+            outcome: "error",
+            "error.type": error instanceof Error ? error.name : typeof error,
+          });
+          const scopeHint = /missing_scope/i.test(slackErr)
+            ? " Reinstall the Slack app so it grants `files:write` (and `files:read`)."
+            : "";
+          await postThreadMessage(
+            slack,
+            input.channelId,
+            setup.threadTs,
+            `Demo recording for ${prUrl}\n${artifactUrl}\n_(Slack file upload failed: ${slackErr}.${scopeHint})_`,
+          );
+        }
 
         let prComment: { htmlUrl?: string } = {};
         const githubEnabled = config?.enabledConnections.includes("github") ?? false;

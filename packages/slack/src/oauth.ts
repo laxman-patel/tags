@@ -5,6 +5,8 @@ export const DEFAULT_SLACK_BOT_SCOPES = [
   "channels:read",
   "chat:write",
   "chat:write.public",
+  "files:read",
+  "files:write",
   "groups:history",
   "groups:read",
   "reactions:read",
