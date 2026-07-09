@@ -19,6 +19,7 @@ import {
   Loader,
   Field,
   Input,
+  InputArea,
   Switch,
   Tabs,
   Surface,
@@ -80,6 +81,11 @@ import {
   YAxis,
 } from "recharts";
 import { isGitHubToolkitConnected } from "@tags/core/composio-toolkits";
+import {
+  describeScheduleCadence,
+  formatScheduleTimezone,
+  scheduleTitleFromPrompt,
+} from "@tags/core/schedules";
 import {
   createSpace,
   deleteSpace as deleteSpaceRequest,
@@ -533,6 +539,20 @@ function formatShortDate(value: string | null) {
     hour: "2-digit",
     minute: "2-digit",
   });
+}
+
+function formatScheduleLastRun(value: string | null) {
+  if (!value) return "Not run yet";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Not run yet";
+  return `Last run ${formatShortDate(value)}`;
+}
+
+function scheduleCadenceHint(cron: string, timezone: string) {
+  const cadence = describeScheduleCadence(cron);
+  const zone = formatScheduleTimezone(timezone);
+  if (cadence === cron.trim()) return `${cron} · ${zone}`;
+  return `${cadence} · ${zone}`;
 }
 
 function formatRunStartedAt(value: string) {
@@ -1385,9 +1405,16 @@ function SpaceDetailView({
       )}
 
       {tab === "schedules" && (
-        <LayerCard className="p-0">
+        <LayerCard className="overflow-hidden p-0">
           <div className="flex items-center justify-between gap-3 border-b border-kumo-hairline px-4 py-3">
-            <Text bold>Schedules</Text>
+            <div className="flex min-w-0 items-baseline gap-2">
+              <Text bold>Schedules</Text>
+              {schedules && schedules.length > 0 && (
+                <Text variant="secondary" size="xs">
+                  {schedules.length}
+                </Text>
+              )}
+            </div>
             <Button
               variant="primary"
               size="sm"
@@ -1402,51 +1429,49 @@ function SpaceDetailView({
               <Loader />
             </div>
           ) : !schedules || schedules.length === 0 ? (
-            <Empty
-              icon={<ClockIcon size={40} />}
-              title="No schedules"
-              description="Create a recurring task for this Space."
-            />
+            <div className="px-5 py-12">
+              <Empty
+                icon={<ClockIcon size={40} />}
+                title="No schedules"
+                description="Set a recurring task for this Space."
+              />
+              <div className="mt-5 flex justify-center">
+                <Button variant="primary" icon={PlusIcon} onClick={() => setAddScheduleOpen(true)}>
+                  New schedule
+                </Button>
+              </div>
+            </div>
           ) : (
-            <div className="overflow-x-auto">
-              <Table layout="fixed" className="min-w-[40rem]">
-                <Table.Header>
-                  <Table.Row>
-                    <Table.Head className="w-[46%]">Task</Table.Head>
-                    <Table.Head className="w-[18%]">Cron</Table.Head>
-                    <Table.Head className="w-[14%]">Timezone</Table.Head>
-                    <Table.Head className="w-[14%]">Last run</Table.Head>
-                    <Table.Head className="w-[8%]">Status</Table.Head>
-                  </Table.Row>
-                </Table.Header>
-                <Table.Body>
-                  {schedules.map((schedule) => (
-                    <Table.Row key={schedule.id}>
-                      <Table.Cell className="max-w-0 align-top">
-                        <Text size="sm" className="line-clamp-3 whitespace-normal break-words" title={schedule.prompt}>
-                          {schedule.prompt}
+            <div className="divide-y divide-kumo-hairline">
+              {schedules.map((schedule) => {
+                const title = scheduleTitleFromPrompt(schedule.prompt);
+                return (
+                  <div
+                    key={schedule.id}
+                    className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-4 px-4 py-3.5"
+                  >
+                    <div className="min-w-0" title={schedule.prompt}>
+                      <Text bold size="sm" truncate>
+                        {title}
+                      </Text>
+                      <div className="mt-1 flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5">
+                        <Text variant="secondary" size="xs">
+                          {scheduleCadenceHint(schedule.cron, schedule.timezone)}
                         </Text>
-                      </Table.Cell>
-                      <Table.Cell className="align-top whitespace-nowrap">
-                        <Text variant="mono-secondary" size="xs">
-                          {schedule.cron}
+                        <Text variant="secondary" size="xs">
+                          ·
                         </Text>
-                      </Table.Cell>
-                      <Table.Cell className="align-top whitespace-nowrap">
-                        <Text variant="secondary" size="xs">{schedule.timezone}</Text>
-                      </Table.Cell>
-                      <Table.Cell className="align-top whitespace-nowrap">
-                        <Text variant="secondary" size="xs">{formatShortDate(schedule.lastRunAt)}</Text>
-                      </Table.Cell>
-                      <Table.Cell className="align-top">
-                        <Badge variant={schedule.enabled ? "success" : "neutral"} appearance="dot">
-                          {schedule.enabled ? "On" : "Off"}
-                        </Badge>
-                      </Table.Cell>
-                    </Table.Row>
-                  ))}
-                </Table.Body>
-              </Table>
+                        <Text variant="secondary" size="xs">
+                          {formatScheduleLastRun(schedule.lastRunAt)}
+                        </Text>
+                      </div>
+                    </div>
+                    <Badge variant={schedule.enabled ? "success" : "neutral"} appearance="dot">
+                      {schedule.enabled ? "On" : "Off"}
+                    </Badge>
+                  </div>
+                );
+              })}
             </div>
           )}
         </LayerCard>
@@ -1516,26 +1541,34 @@ function SpaceDetailView({
               />
             </div>
             <div className="flex flex-col gap-4 px-5 py-5">
-              <Field label="Task">
-                <Input
+              <Field label="What should it do?">
+                <InputArea
                   value={schedulePrompt}
                   onChange={(event) => setSchedulePrompt(event.target.value)}
-                  placeholder="Summarize yesterday's incidents"
+                  placeholder="Post a morning standup digest in this channel"
+                  rows={4}
                   autoFocus
                 />
               </Field>
-              <Field label="Cron">
+              <Field
+                label="When"
+                description={
+                  scheduleCron.trim()
+                    ? scheduleCadenceHint(scheduleCron, scheduleTimezone || "UTC")
+                    : "Example: 30 9 * * 1-5 for weekdays at 9:30 AM"
+                }
+              >
                 <Input
                   value={scheduleCron}
                   onChange={(event) => setScheduleCron(event.target.value)}
-                  placeholder="0 9 * * 1-5"
+                  placeholder="30 9 * * 1-5"
                 />
               </Field>
               <Field label="Timezone">
                 <Input
                   value={scheduleTimezone}
                   onChange={(event) => setScheduleTimezone(event.target.value)}
-                  placeholder="UTC"
+                  placeholder="America/New_York"
                 />
               </Field>
             </div>
