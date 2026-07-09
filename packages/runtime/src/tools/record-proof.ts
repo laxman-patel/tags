@@ -149,38 +149,8 @@ export function createRecordProofTool(
         recording.contentType,
       );
 
-      const thread = await getThreadById(db, ctx.threadId, {
-        organizationId: ctx.organizationId,
-        spaceId: ctx.spaceId,
-      });
-      const threadTs = thread?.providerThreadId;
-
-      let slackFile: { fileId?: string; permalink?: string } = {};
-      if (providerConfig.slackBotToken && threadTs) {
-        const slack = createSlackClient(providerConfig.slackBotToken);
-        try {
-          slackFile = await uploadThreadFile(slack, {
-            channelId: ctx.channelId,
-            threadTs,
-            file: recording.video,
-            filename: recording.filename,
-            title: parsed.title,
-            initialComment: `${parsed.title}\n${artifactUrl}`,
-          });
-        } catch (error) {
-          const slackErr = error instanceof Error ? error.message : String(error);
-          const scopeHint = /missing_scope/i.test(slackErr)
-            ? " Reinstall the Slack app so it grants `files:write`."
-            : "";
-          await postThreadMessage(
-            slack,
-            ctx.channelId,
-            threadTs,
-            `${parsed.title}\n${artifactUrl}\n_(Slack file upload failed: ${slackErr}.${scopeHint})_`,
-          );
-        }
-      }
-
+      // Persist the artifact before Slack so a bad bot token cannot wipe a
+      // successful recording (agent was seeing invalid_auth and retrying forever).
       const artifact = await createArtifact(db, {
         id: artifactId,
         organizationId: ctx.organizationId,
@@ -197,8 +167,6 @@ export function createRecordProofTool(
           baseUrl: parsed.baseUrl,
           durationMs: recording.durationMs,
           journeys: recording.journeys,
-          slackFileId: slackFile.fileId,
-          slackPermalink: slackFile.permalink,
           sandboxId,
         },
       });
@@ -210,6 +178,47 @@ export function createRecordProofTool(
         artifactUrl,
         artifactTitle: parsed.title,
       });
+
+      const thread = await getThreadById(db, ctx.threadId, {
+        organizationId: ctx.organizationId,
+        spaceId: ctx.spaceId,
+      });
+      const threadTs = thread?.providerThreadId;
+
+      let slackFile: { fileId?: string; permalink?: string } = {};
+      let slackWarning: string | undefined;
+      if (providerConfig.slackBotToken && threadTs) {
+        const slack = createSlackClient(providerConfig.slackBotToken);
+        try {
+          slackFile = await uploadThreadFile(slack, {
+            channelId: ctx.channelId,
+            threadTs,
+            file: recording.video,
+            filename: recording.filename,
+            title: parsed.title,
+            initialComment: `${parsed.title}\n${artifactUrl}`,
+          });
+        } catch (error) {
+          const slackErr = error instanceof Error ? error.message : String(error);
+          const hint = /missing_scope/i.test(slackErr)
+            ? " Reinstall the Slack app so it grants `files:write`."
+            : /invalid_auth/i.test(slackErr)
+              ? " Workspace bot token is invalid — check Slack install / TAGS_ENCRYPTION_KEY."
+              : "";
+          slackWarning = `Slack file upload failed: ${slackErr}.${hint}`;
+          try {
+            await postThreadMessage(
+              slack,
+              ctx.channelId,
+              threadTs,
+              `${parsed.title}\n${artifactUrl}\n_(${slackWarning})_`,
+            );
+          } catch {
+            // Chat may fail with the same bad token; artifact URL is still valid.
+          }
+        }
+      }
+
       await ctx.emit({
         type: "recording.finished",
         artifactId,
@@ -226,6 +235,7 @@ export function createRecordProofTool(
           journeys: recording.journeys,
           slackFileId: slackFile.fileId,
           slackPermalink: slackFile.permalink,
+          ...(slackWarning ? { slackWarning } : {}),
         },
         uiCard: {
           kind: "artifact",

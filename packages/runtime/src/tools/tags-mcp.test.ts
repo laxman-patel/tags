@@ -54,4 +54,12 @@ describe("tags MCP server config", () => {
 
     expect(token).toBeNull();
   });
+
+  it("sets a long enough timeout for record_proof", () => {
+    const config = createTagsMcpServerConfig({
+      appUrl: "https://tags.example.test",
+      token: "tok",
+    });
+    expect(config.timeout).toBeGreaterThanOrEqual(180_000);
+  });
 });

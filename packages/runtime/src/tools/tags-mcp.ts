@@ -205,23 +205,23 @@ export async function handleTagsMcpRequest(
     return new Response("Unauthorized", { status: 401 });
   }
 
+  // Prefer the workspace OAuth bot token (same as Inngest). A stale env
+  // SLACK_BOT_TOKEN must not shadow it — Slack APIs return invalid_auth.
   let providerConfig = deps.providerConfig;
-  if (!providerConfig.slackBotToken) {
-    const rows = await deps.db
-      .select()
-      .from(workspaces)
-      .where(eq(workspaces.id, claims.workspaceId))
-      .limit(1);
-    const workspace = rows[0];
-    if (workspace?.botAccessTokenCiphertext) {
-      if (!deps.encryptionKey) {
-        return new Response("Slack token encryption key is not configured", { status: 500 });
-      }
-      providerConfig = {
-        ...providerConfig,
-        slackBotToken: decryptSlackBotToken(workspace, deps.encryptionKey),
-      };
+  const rows = await deps.db
+    .select()
+    .from(workspaces)
+    .where(eq(workspaces.id, claims.workspaceId))
+    .limit(1);
+  const workspace = rows[0];
+  if (workspace?.botAccessTokenCiphertext) {
+    if (!deps.encryptionKey) {
+      return new Response("Slack token encryption key is not configured", { status: 500 });
     }
+    providerConfig = {
+      ...providerConfig,
+      slackBotToken: decryptSlackBotToken(workspace, deps.encryptionKey),
+    };
   }
 
   const providers = deps.providers ?? (await createRuntimeProviders(providerConfig));
