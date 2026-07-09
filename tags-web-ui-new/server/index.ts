@@ -2309,7 +2309,7 @@ async function handleMcpApi(req: IncomingMessage, res: ServerResponse, url: URL)
   const secrets = loadRuntimeSecrets();
   const response = await handleTagsMcpRequest(request, {
     signingSecret: secrets.mcpSigningKey ?? "",
-    db: createDb(secrets.databaseUrl),
+    db: getDb(),
     providerConfig: buildRuntimeProviderConfig(secrets),
     encryptionKey: secrets.encryptionKey,
     appUrl: secrets.appUrl,
@@ -2327,7 +2327,7 @@ async function handleComposioMcpApi(req: IncomingMessage, res: ServerResponse, u
   const secrets = loadRuntimeSecrets();
   const response = await handleComposioMcpRequest(request, {
     signingSecret: secrets.mcpSigningKey ?? "",
-    db: createDb(secrets.databaseUrl),
+    db: getDb(),
     providerConfig: buildRuntimeProviderConfig(secrets),
     appUrl: secrets.appUrl,
   });

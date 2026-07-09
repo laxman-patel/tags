@@ -5,7 +5,8 @@ import { newId, spaceSandboxSessions } from "@tags/db";
 
 export type SpaceSandboxStatus = "ready" | "leased" | "expired" | "failed";
 
-export const DEFAULT_SPACE_SANDBOX_LEASE_MS = 12 * 60_000;
+/** Must stay above the opencode command timeout in e2b-provider (20m). */
+export const DEFAULT_SPACE_SANDBOX_LEASE_MS = 25 * 60_000;
 
 export type SpaceSandboxSession = typeof spaceSandboxSessions.$inferSelect;
 

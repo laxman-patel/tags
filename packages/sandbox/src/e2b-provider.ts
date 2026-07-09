@@ -574,9 +574,13 @@ export function createSandboxProvider(config: SandboxProviderConfig = {}): Sandb
 
   return {
     async runCodingAgent(request: CodingAgentRequest): Promise<CodingAgentResult> {
+      // Coding + PR + demo-recipe work routinely exceeds 8–10 minutes. Keep the
+      // sandbox lifetime above the command timeout so E2B doesn't kill the box
+      // while opencode is still running.
+      const commandTimeoutMs = 20 * 60_000;
       const sandboxOptions = {
         apiKey: config.apiKey,
-        timeoutMs: config.timeoutMs ?? 10 * 60_000,
+        timeoutMs: config.timeoutMs ?? commandTimeoutMs + 2 * 60_000,
         envs: sandboxFireworksEnvs(fireworksApiKey),
       };
 
@@ -636,7 +640,7 @@ export function createSandboxProvider(config: SandboxProviderConfig = {}): Sandb
         try {
           const result = await sandbox.commands.run(command, {
             cwd,
-            timeoutMs: 8 * 60_000,
+            timeoutMs: commandTimeoutMs,
             onStdout: (data) => appendStream(data),
             onStderr: (data) => appendStream(data),
           });
