@@ -59,7 +59,7 @@ import { upsertDemoRecordingCommentWithComposio } from "../integrations/composio
 import { loadComposioTools } from "../tools/composio";
 import { executeComposioActionForSpace, normalizeComposioToolkits } from "../tools/composio-mcp-proxy";
 import type { UICard } from "@tags/core/ui-cards";
-import { recordDemo, validateDemoRecipeForRecording, type TagsRunOutput } from "@tags/sandbox";
+import { recordDemo, resolveDemoRunOutput, validateDemoRecipeForRecording, type TagsRunOutput } from "@tags/sandbox";
 import { withSpan } from "@superlog/otel-helpers";
 import {
   agentRunDuration,
@@ -261,7 +261,9 @@ export const tagsRunFunction: InngestFunction.Any = inngest.createFunction(
       }
 
       if (threadStatus === "done" && segment.kind === "complete") {
-        await step.run("record-demo", () => recordDemoStep(input, setup, segment.runOutput));
+        await step.run("record-demo", () =>
+          recordDemoStep(input, setup, segment.runOutput, segment.text),
+        );
       }
     } catch (error) {
       threadStatus = "failed";
@@ -514,6 +516,7 @@ async function recordDemoStep(
   input: TagsRunInput,
   setup: RunSetup,
   runOutput: TagsRunOutput | undefined,
+  replyText?: string,
 ): Promise<void> {
   if (!wantsDemoRecording(input.triggerText)) return;
 
@@ -543,11 +546,21 @@ async function recordDemoStep(
       };
 
       const config = await loadActiveSpaceConfig(db, input.spaceId);
-      const repoUrl = runOutput?.repoUrl ?? config?.repoUrls?.[0] ?? config?.repoUrl ?? undefined;
-      const prUrl = runOutput?.prUrl;
-      const demo = runOutput?.demo;
-      const branch = runOutput?.branch;
-      const commitSha = runOutput?.commitSha;
+      const spaceRepoUrl = config?.repoUrls?.[0] ?? config?.repoUrl ?? undefined;
+
+      // Sandbox often misses .tags/run-output.json even when the agent committed it
+      // to the PR. Resolve from reply PR URL + GitHub raw/API as a hard fallback.
+      const resolved = await resolveDemoRunOutput({
+        sandboxOutput: runOutput,
+        replyText,
+        spaceRepoUrl,
+      });
+
+      const repoUrl = resolved?.repoUrl ?? spaceRepoUrl;
+      const prUrl = resolved?.prUrl;
+      const demo = resolved?.demo;
+      const branch = resolved?.branch;
+      const commitSha = resolved?.commitSha;
 
       if (!secrets.e2bApiKey || !secrets.r2?.publicBaseUrl) {
         await fail(

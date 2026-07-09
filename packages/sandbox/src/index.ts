@@ -17,6 +17,11 @@ export {
   parseTagsRunOutputJson,
 } from "./run-output";
 export {
+  buildRunOutputRawUrls,
+  fetchTagsRunOutputFromGitHub,
+  resolveDemoRunOutput,
+} from "./resolve-demo-run-output";
+export {
   isTerminalDemoCheat,
   triggerRequiresClickThrough,
   triggerRequiresWebDemo,
