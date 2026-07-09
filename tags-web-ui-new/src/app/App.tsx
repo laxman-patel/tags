@@ -555,6 +555,12 @@ function scheduleCadenceHint(cron: string, timezone: string) {
   return `${cadence} · ${zone}`;
 }
 
+function formatArtifactKind(kind: string) {
+  const trimmed = kind.trim();
+  if (!trimmed) return "File";
+  return trimmed.charAt(0).toUpperCase() + trimmed.slice(1).toLowerCase();
+}
+
 function formatRunStartedAt(value: string) {
   if (!value) return "—";
   const date = new Date(value);
@@ -1478,46 +1484,58 @@ function SpaceDetailView({
       )}
 
       {tab === "artifacts" && (
-        <LayerCard className="p-0">
+        <LayerCard className="overflow-hidden p-0">
           <div className="flex items-center justify-between gap-3 border-b border-kumo-hairline px-4 py-3">
-            <Text bold>Artifacts</Text>
-            <Text variant="secondary" size="xs">{artifacts?.length ?? 0} shown</Text>
+            <div className="flex min-w-0 items-baseline gap-2">
+              <Text bold>Artifacts</Text>
+              {artifacts && artifacts.length > 0 && (
+                <Text variant="secondary" size="xs">
+                  {artifacts.length}
+                </Text>
+              )}
+            </div>
           </div>
           {artifactsLoading ? (
             <div className="flex min-h-40 items-center justify-center">
               <Loader />
             </div>
           ) : !artifacts || artifacts.length === 0 ? (
-            <Empty
-              icon={<FileTextIcon size={40} />}
-              title="No artifacts"
-              description="Generated artifacts will appear here."
-            />
+            <div className="px-5 py-12">
+              <Empty
+                icon={<FileTextIcon size={40} />}
+                title="No artifacts"
+                description="Generated files and recordings will show up here."
+              />
+            </div>
           ) : (
-            <Table>
-              <Table.Header>
-                <Table.Row>
-                  <Table.Head>Artifact</Table.Head>
-                  <Table.Head>Type</Table.Head>
-                  <Table.Head>Created</Table.Head>
-                  <Table.Head />
-                </Table.Row>
-              </Table.Header>
-              <Table.Body>
-                {artifacts.map((artifact) => (
-                  <Table.Row
-                    key={artifact.id}
-                    className="cursor-pointer"
-                    onClick={() => window.open(artifact.url, "_blank", "noopener,noreferrer")}
-                  >
-                    <Table.Cell><Text size="sm" truncate>{artifact.title}</Text></Table.Cell>
-                    <Table.Cell><Badge variant="neutral">{artifact.kind}</Badge></Table.Cell>
-                    <Table.Cell><Text variant="secondary" size="xs">{formatShortDate(artifact.createdAt)}</Text></Table.Cell>
-                    <Table.Cell><ArrowSquareOutIcon size={14} className="text-kumo-subtle" /></Table.Cell>
-                  </Table.Row>
-                ))}
-              </Table.Body>
-            </Table>
+            <div className="divide-y divide-kumo-hairline">
+              {artifacts.map((artifact) => (
+                <button
+                  key={artifact.id}
+                  type="button"
+                  className="grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-4 px-4 py-3.5 text-left transition-colors hover:bg-kumo-elevated/40 active:scale-[0.995]"
+                  onClick={() => window.open(artifact.url, "_blank", "noopener,noreferrer")}
+                >
+                  <div className="min-w-0" title={artifact.title}>
+                    <Text bold size="sm" truncate>
+                      {artifact.title}
+                    </Text>
+                    <div className="mt-1 flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5">
+                      <Text variant="secondary" size="xs">
+                        {formatArtifactKind(artifact.kind)}
+                      </Text>
+                      <Text variant="secondary" size="xs">
+                        ·
+                      </Text>
+                      <Text variant="secondary" size="xs">
+                        {formatShortDate(artifact.createdAt)}
+                      </Text>
+                    </div>
+                  </div>
+                  <ArrowSquareOutIcon size={14} className="shrink-0 text-kumo-subtle" />
+                </button>
+              ))}
+            </div>
           )}
         </LayerCard>
       )}
