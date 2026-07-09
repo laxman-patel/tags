@@ -13,7 +13,8 @@ describe("playwrightScript", () => {
     expect(script).toContain("http://127.0.0.1:3000");
     expect(script).toContain("a[href='/docs']");
     expect(script).toContain("assertUrl");
-    expect(script).toContain("chromium.launch");
-    expect(script).toContain("headless: false");
+    expect(script).toContain("import playwright from");
+    expect(script).toContain("const { chromium } = playwright");
+    expect(script).toContain("/opt/tags-playwright/node_modules/playwright/index.js");
   });
 });

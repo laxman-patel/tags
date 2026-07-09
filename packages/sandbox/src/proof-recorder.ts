@@ -7,8 +7,10 @@ import type {
   ProofStep,
 } from "./types";
 
-const RECORDING_PATH = "/tmp/tags-proof.mp4";
-const PLAYWRIGHT_MODULE = "/opt/tags-playwright/node_modules/playwright";
+const RECORDING_PATH = "/home/user/.tags-proof/recording.mp4";
+const PROOF_WORKDIR = "/home/user/.tags-proof";
+/** Explicit file entry — bare package dir fails under Node ESM (`ERR_UNSUPPORTED_DIR_IMPORT`). */
+const PLAYWRIGHT_MODULE = "/opt/tags-playwright/node_modules/playwright/index.js";
 const JOURNEY_TIMEOUT_MS = 90_000;
 const READY_POLL_INTERVAL_S = "0.15";
 
@@ -67,7 +69,8 @@ async function runChecked(
 export function playwrightScript(steps: ProofStep[]): string {
   const serialized = JSON.stringify(steps);
   return `
-import { chromium } from "${PLAYWRIGHT_MODULE}";
+import playwright from "${PLAYWRIGHT_MODULE}";
+const { chromium } = playwright;
 
 const steps = ${serialized};
 const browser = await chromium.launch({
@@ -153,12 +156,22 @@ async function ensureBaseUrlReady(sandbox: ProofSandbox, baseUrl: string): Promi
   }
 }
 
+async function ensureProofWorkdir(sandbox: ProofSandbox): Promise<void> {
+  await runChecked(
+    sandbox,
+    `mkdir -p ${shellQuote(PROOF_WORKDIR)} && chmod 755 ${shellQuote(PROOF_WORKDIR)}`,
+  );
+}
+
 async function startRecording(
   sandbox: ProofSandbox,
   args: Pick<ProofRecordingRequest, "maxSeconds" | "width" | "height" | "fps">,
 ): Promise<void> {
+  await ensureProofWorkdir(sandbox);
   await runChecked(sandbox, `rm -f ${shellQuote(RECORDING_PATH)}`);
   const captureCap = Math.max(args.maxSeconds + 30, Math.ceil(JOURNEY_TIMEOUT_MS / 1000) + 15);
+  const ffmpegLog = `${PROOF_WORKDIR}/ffmpeg.log`;
+  const ffmpegPid = `${PROOF_WORKDIR}/ffmpeg.pid`;
   const command = [
     "ffmpeg",
     "-y",
@@ -192,19 +205,22 @@ async function startRecording(
     "+faststart",
     shellQuote(RECORDING_PATH),
   ].join(" ");
-  await sandbox.commands.run(`${command} >/tmp/tags-ffmpeg.log 2>&1 & echo $! > /tmp/tags-ffmpeg.pid`);
+  await sandbox.commands.run(
+    `${command} >${shellQuote(ffmpegLog)} 2>&1 & echo $! > ${shellQuote(ffmpegPid)}`,
+  );
 }
 
 async function stopRecording(sandbox: ProofSandbox): Promise<void> {
+  const ffmpegPid = `${PROOF_WORKDIR}/ffmpeg.pid`;
   await sandbox.commands.run(
     [
-      "if test -f /tmp/tags-ffmpeg.pid; then",
-      "  kill -INT $(cat /tmp/tags-ffmpeg.pid) 2>/dev/null || true;",
+      `if test -f ${shellQuote(ffmpegPid)}; then`,
+      `  kill -INT $(cat ${shellQuote(ffmpegPid)}) 2>/dev/null || true;`,
       "  for i in 1 2 3 4 5 6 7 8; do",
-      "    kill -0 $(cat /tmp/tags-ffmpeg.pid) 2>/dev/null || break;",
+      `    kill -0 $(cat ${shellQuote(ffmpegPid)}) 2>/dev/null || break;`,
       "    sleep 0.15;",
       "  done;",
-      "  kill -KILL $(cat /tmp/tags-ffmpeg.pid) 2>/dev/null || true;",
+      `  kill -KILL $(cat ${shellQuote(ffmpegPid)}) 2>/dev/null || true;`,
       "fi",
     ].join(" "),
   );
@@ -214,7 +230,7 @@ async function cleanupProofProcesses(sandbox: ProofSandbox): Promise<void> {
   await sandbox.commands
     .run(
       [
-        "pkill -f 'node /tmp/tags-proof-playwright' 2>/dev/null || true;",
+        `pkill -f 'node ${PROOF_WORKDIR}/playwright' 2>/dev/null || true;`,
         "pkill -f chromium 2>/dev/null || true;",
       ].join(" "),
     )
@@ -226,7 +242,9 @@ async function readRecording(sandbox: ProofSandbox): Promise<Buffer> {
     `test -s ${shellQuote(RECORDING_PATH)} && echo yes || echo no`,
   );
   if (!(exists.stdout ?? "").includes("yes")) {
-    const ffmpegLog = await sandbox.commands.run("tail -n 40 /tmp/tags-ffmpeg.log || true");
+    const ffmpegLog = await sandbox.commands.run(
+      `tail -n 40 ${shellQuote(`${PROOF_WORKDIR}/ffmpeg.log`)} || true`,
+    );
     const detail = combineOutput(ffmpegLog);
     throw new Error(
       detail
@@ -249,18 +267,26 @@ async function readRecording(sandbox: ProofSandbox): Promise<Buffer> {
   return Buffer.from(encoded, "base64");
 }
 
+async function writeProofScript(
+  sandbox: ProofSandbox,
+  scriptPath: string,
+  script: string,
+): Promise<void> {
+  await ensureProofWorkdir(sandbox);
+  // Write as the sandbox user via shell. E2B files.write can create root-owned
+  // files that later attempts cannot overwrite (permission denied).
+  await runChecked(sandbox, `rm -f ${shellQuote(scriptPath)}`);
+  await runChecked(sandbox, `cat > ${shellQuote(scriptPath)} <<'EOF'\n${script}\nEOF`);
+}
+
 async function runJourney(
   sandbox: ProofSandbox,
   journey: ProofJourney,
   index: number,
 ): Promise<{ ok: boolean; logs: string; error?: string }> {
-  const scriptPath = `/tmp/tags-proof-playwright-${index}.mjs`;
+  const scriptPath = `${PROOF_WORKDIR}/playwright-${index}.mjs`;
   const script = playwrightScript(journey.steps);
-  if (sandbox.files?.write) {
-    await sandbox.files.write(scriptPath, script);
-  } else {
-    await runChecked(sandbox, `cat > ${shellQuote(scriptPath)} <<'EOF'\n${script}\nEOF`);
-  }
+  await writeProofScript(sandbox, scriptPath, script);
 
   try {
     const result = await runChecked(sandbox, `node ${shellQuote(scriptPath)}`, {
