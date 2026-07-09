@@ -683,6 +683,8 @@ async function recordDemoStep(
         });
       } catch (error) {
         const message = error instanceof Error ? error.message : "Demo recording failed";
+        const slackMessage =
+          message.length > 1500 ? `${message.slice(0, 1497)}…` : message;
         await emit({ type: "recording.failed", prUrl, error: message });
         emitWarn("demo recording failed", {
           "space.id": input.spaceId,
@@ -694,7 +696,7 @@ async function recordDemoStep(
           slack,
           input.channelId,
           setup.threadTs,
-          `Demo recording failed for ${prUrl}: ${message}`,
+          `Demo recording failed for ${prUrl}: ${slackMessage}`,
         );
       }
     },
