@@ -4,6 +4,7 @@ import type {
   DemoRecordingResult,
   DemoStep,
 } from "./types";
+import { validateDemoRecipeForRecording } from "./demo-recipe-guard";
 
 const RECORDING_PATH = "/tmp/tags-demo.mp4";
 const WORKDIR = "/home/user/demo-repo";
@@ -227,6 +228,18 @@ for (const step of steps) {
     await page.waitForTimeout(Math.min(step.ms, 3000));
   } else if (step.type === "assertText") {
     await page.getByText(step.text).waitFor({ timeout: 10000 });
+  } else if (step.type === "waitForUrl") {
+    const timeout = step.timeoutMs || 10000;
+    const pattern = step.url.startsWith("^") || step.url.includes(".*")
+      ? new RegExp(step.url)
+      : step.url;
+    await page.waitForURL(pattern, { timeout });
+  } else if (step.type === "assertUrl") {
+    const current = page.url();
+    const ok = step.url.startsWith("^") || step.url.includes(".*")
+      ? new RegExp(step.url).test(current)
+      : current.includes(step.url);
+    if (!ok) throw new Error("Expected URL to match " + JSON.stringify(step.url) + " but got " + JSON.stringify(current));
   }
 }
 await page.waitForTimeout(300);
@@ -516,6 +529,13 @@ export async function recordDemo(args: DemoRecordingRequest): Promise<DemoRecord
   validateDemo(demo);
   if (demo.kind === "none") {
     throw new Error(`No recordable demo: ${demo.reason}`);
+  }
+  const recipeGuard = validateDemoRecipeForRecording({
+    demo,
+    triggerText: args.triggerText ?? "",
+  });
+  if (!recipeGuard.ok) {
+    throw new Error(recipeGuard.reason);
   }
   const started = Date.now();
   const sandbox = await createDesktopSandbox({ ...args, demo });

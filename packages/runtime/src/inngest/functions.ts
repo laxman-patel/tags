@@ -59,7 +59,7 @@ import { upsertDemoRecordingCommentWithComposio } from "../integrations/composio
 import { loadComposioTools } from "../tools/composio";
 import { executeComposioActionForSpace, normalizeComposioToolkits } from "../tools/composio-mcp-proxy";
 import type { UICard } from "@tags/core/ui-cards";
-import { recordDemo, type TagsRunOutput } from "@tags/sandbox";
+import { recordDemo, validateDemoRecipeForRecording, type TagsRunOutput } from "@tags/sandbox";
 import { withSpan } from "@superlog/otel-helpers";
 import {
   agentRunDuration,
@@ -571,13 +571,12 @@ async function recordDemoStep(
         return;
       }
 
-      if (demo.kind === "none") {
-        await fail(
-          demo.reason.trim()
-            ? `Agent could not record a demo: ${demo.reason}`
-            : "Agent reported that no demo could be recorded.",
-          prUrl,
-        );
+      const recipeGuard = validateDemoRecipeForRecording({
+        demo,
+        triggerText: input.triggerText,
+      });
+      if (!recipeGuard.ok) {
+        await fail(recipeGuard.reason, prUrl);
         return;
       }
 
@@ -595,6 +594,7 @@ async function recordDemoStep(
           width: secrets.demoRecording.width,
           height: secrets.demoRecording.height,
           fps: secrets.demoRecording.fps,
+          triggerText: input.triggerText,
         });
 
         const r2Client = createR2Client(secrets.r2);

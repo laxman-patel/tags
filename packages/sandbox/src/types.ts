@@ -39,7 +39,11 @@ export type DemoStep =
   | { type: "waitForSelector"; selector: string; timeoutMs?: number }
   | { type: "waitForText"; text: string; timeoutMs?: number }
   | { type: "waitMs"; ms: number }
-  | { type: "assertText"; text: string };
+  | { type: "assertText"; text: string }
+  /** Wait until the current page URL matches (substring or regex source). */
+  | { type: "waitForUrl"; url: string; timeoutMs?: number }
+  /** Assert the current page URL contains this substring (or matches regex). */
+  | { type: "assertUrl"; url: string };
 
 export type DemoRecipe =
   | {
@@ -92,6 +96,8 @@ export type DemoRecordingRequest = {
   width: number;
   height: number;
   fps: number;
+  /** Original Slack trigger — used to reject terminal cheats / weak web recipes. */
+  triggerText?: string;
 };
 
 export type DemoRecordingResult = {

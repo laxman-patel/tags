@@ -72,11 +72,12 @@ describe("opencode prompts", () => {
 
     expect(withRequest).toContain("# Demo recording required");
     expect(withRequest).toContain("MUST create or update .tags/run-output.json");
-    expect(withRequest).toContain('Prefer demo.kind "web"');
-    expect(withRequest).toContain("Do NOT hardcode /home/user/repo paths");
-    expect(withRequest).toContain("not bun");
+    expect(withRequest).toContain("Hard rules (Tags will REJECT");
+    expect(withRequest).toContain('demo.kind MUST be "web"');
+    expect(withRequest).toContain("NEVER write .tags/verify-");
+    expect(withRequest).toContain("waitForUrl + assertUrl");
+    expect(withRequest).toContain("No bun");
     expect(withRequest).toContain("commitSha");
-    expect(withRequest).toContain("Keep demos under ~60s");
     expect(withoutRequest).not.toContain("# Demo recording required");
   });
 });

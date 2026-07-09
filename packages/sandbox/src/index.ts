@@ -15,6 +15,13 @@ export {
   parseTagsRunOutputJson,
 } from "./run-output";
 export {
+  isTerminalDemoCheat,
+  triggerRequiresClickThrough,
+  triggerRequiresWebDemo,
+  validateDemoRecipeForRecording,
+} from "./demo-recipe-guard";
+export type { DemoRecipeGuardResult } from "./demo-recipe-guard";
+export {
   playwrightScript,
   recordDemo,
   sanitizeDemoRecipe,

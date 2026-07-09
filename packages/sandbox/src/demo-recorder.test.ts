@@ -79,4 +79,14 @@ describe("playwrightScript", () => {
     expect(script).toContain("Math.min(step.ms, 3000)");
     expect(script).toContain("--disable-gpu");
   });
+
+  it("supports waitForUrl and assertUrl steps", () => {
+    const script = playwrightScript([
+      { type: "waitForUrl", url: "/surfaces/mcp" },
+      { type: "assertUrl", url: "/surfaces/mcp" },
+    ]);
+    expect(script).toContain('step.type === "waitForUrl"');
+    expect(script).toContain('step.type === "assertUrl"');
+    expect(script).toContain("page.waitForURL");
+  });
 });

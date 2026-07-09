@@ -53,6 +53,16 @@ function parseDemoStep(value: unknown): DemoStep | null {
       const text = optionalString(value.text);
       return text ? { type, text } : null;
     }
+    case "waitForUrl": {
+      const url = optionalString(value.url);
+      return url
+        ? { type, url, timeoutMs: optionalPositiveInt(value.timeoutMs) }
+        : null;
+    }
+    case "assertUrl": {
+      const url = optionalString(value.url);
+      return url ? { type, url } : null;
+    }
     default:
       return null;
   }

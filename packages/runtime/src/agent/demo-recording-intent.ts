@@ -11,6 +11,9 @@ function normalizeTriggerText(text: string): string {
 /**
  * True when the Slack @tags message asks for a video / screencast / visual proof
  * of the change. Scoped to the triggering message only.
+ *
+ * Recipe quality (web vs terminal cheat) is enforced separately by
+ * `validateDemoRecipeForRecording` in @tags/sandbox before E2B starts.
  */
 export function wantsDemoRecording(text: string): boolean {
   const normalized = normalizeTriggerText(text);
