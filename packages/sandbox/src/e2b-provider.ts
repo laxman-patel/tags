@@ -1,4 +1,4 @@
-import { Sandbox } from "e2b";
+import { Sandbox } from "@e2b/desktop";
 import type {
   CodingAgentRequest,
   CodingAgentResult,
@@ -13,8 +13,11 @@ import {
 } from "./run-output";
 import { summarizeOpencodeProgressLine } from "./opencode-progress";
 
-/** E2B pre-built template with opencode installed (see e2b.dev/docs/agents/opencode). */
-export const DEFAULT_OPENCODE_TEMPLATE = "opencode";
+/**
+ * Unified GUI coding + proof template (desktop + opencode + ffmpeg + Playwright).
+ * Build from `infra/e2b/tags-opencode-desktop`.
+ */
+export const DEFAULT_OPENCODE_TEMPLATE = "tags-opencode-desktop";
 
 export const REPO_PATH = "/home/user/repo";
 export const WORKDIR = "/home/user/workspace";
@@ -31,8 +34,8 @@ export type SandboxProviderConfig = {
   /** E2B API key. */
   apiKey?: string;
   /**
-   * E2B sandbox template. Defaults to the pre-built `opencode` template.
-   * Build a custom template with `Template().fromTemplate('opencode')` for faster cold starts.
+   * E2B sandbox template. Defaults to `tags-opencode-desktop`
+   * (desktop + opencode + ffmpeg + Playwright).
    */
   template?: string;
   /** Fireworks API key — injected into the sandbox env and opencode provider config. */
@@ -41,6 +44,8 @@ export type SandboxProviderConfig = {
   model?: string;
   /** Max sandbox lifetime in ms. */
   timeoutMs?: number;
+  /** Desktop resolution for GUI sandboxes. */
+  resolution?: [number, number];
 };
 
 function shellQuote(value: string): string {
@@ -645,7 +650,7 @@ export function createSandboxProvider(config: SandboxProviderConfig = {}): Sandb
 
   return {
     async runCodingAgent(request: CodingAgentRequest): Promise<CodingAgentResult> {
-      // Coding + PR + demo-recipe work routinely exceeds 8–10 minutes. Keep the
+      // Coding + PR + proof recording routinely exceeds 8–10 minutes. Keep the
       // sandbox lifetime above the command timeout so E2B doesn't kill the box
       // while opencode is still running.
       const commandTimeoutMs = 20 * 60_000;
@@ -653,6 +658,7 @@ export function createSandboxProvider(config: SandboxProviderConfig = {}): Sandb
         apiKey: config.apiKey,
         timeoutMs: config.timeoutMs ?? commandTimeoutMs + 2 * 60_000,
         envs: sandboxFireworksEnvs(fireworksApiKey),
+        resolution: config.resolution ?? ([1280, 800] as [number, number]),
       };
 
       let createdSandbox = false;
@@ -671,6 +677,14 @@ export function createSandboxProvider(config: SandboxProviderConfig = {}): Sandb
       if (!sandbox) {
         sandbox = await Sandbox.create(template, sandboxOptions);
         createdSandbox = true;
+      }
+
+      if (request.onSandboxReady) {
+        await request.onSandboxReady({
+          sandboxId: sandbox.sandboxId,
+          createdSandbox,
+          reusedSandbox,
+        });
       }
 
       let streamed = "";

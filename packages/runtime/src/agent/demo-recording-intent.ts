@@ -1,19 +1,9 @@
-function normalizeTriggerText(text: string): string {
-  return text
-    .toLowerCase()
-    .replace(/<@[^>]+>/g, " ")
-    .replace(/@tags/g, " ")
-    .replace(/[^\p{L}\p{N}_?]+/gu, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
 /**
  * True when the Slack @tags message asks for a video / screencast / visual proof
  * of the change. Scoped to the triggering message only.
  *
- * Recipe quality (web vs terminal cheat) is enforced separately by
- * `validateDemoRecipeForRecording` in @tags/sandbox before E2B starts.
+ * When true, the opencode system prompt nudges the agent to call `record_proof`
+ * after starting the local app.
  */
 export function wantsDemoRecording(text: string): boolean {
   const normalized = normalizeTriggerText(text);
@@ -29,4 +19,14 @@ export function wantsDemoRecording(text: string): boolean {
     /\bshow\s+me\s+(it\s+)?working\b/,
     /\brecord\s+yourself\b/,
   ].some((pattern) => pattern.test(normalized));
+}
+
+function normalizeTriggerText(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/<@[^>]+>/g, " ")
+    .replace(/@tags/g, " ")
+    .replace(/[^\p{L}\p{N}_?]+/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 }

@@ -1,7 +1,5 @@
 import { Composio } from "@composio/core";
 
-const MARKER_PREFIX = "<!-- tags-demo-recording:";
-
 const GITHUB_LIST_REPO_TOOL_SLUGS = [
   "GITHUB_LIST_REPOSITORIES_FOR_THE_AUTHENTICATED_USER",
   "GITHUB_LIST_REPOS",
@@ -87,22 +85,6 @@ export function parseGitHubPrUrl(url: string): GitHubPrRef | null {
   } catch {
     return null;
   }
-}
-
-function marker(runId: string): string {
-  return `${MARKER_PREFIX}${runId} -->`;
-}
-
-function buildCommentBody(args: {
-  runId: string;
-  artifactUrl: string;
-  appUrl: string;
-  slackPermalink?: string;
-}): string {
-  return `${marker(args.runId)}
-Demo recording for this Tags run: [watch MP4](${args.artifactUrl})
-
-Run timeline: ${args.appUrl}/runs/${args.runId}${args.slackPermalink ? `\nSlack upload: ${args.slackPermalink}` : ""}`;
 }
 
 function findTool(tools: ComposioToolMap, patterns: RegExp[]): [string, ComposioExecutableTool] | null {
@@ -369,82 +351,4 @@ export async function testGitHubRepoAccessWithComposio(args: {
       message: `Composio GitHub repo check failed: ${resultMessage(error)}`,
     };
   }
-}
-
-export async function upsertDemoRecordingCommentWithComposio(args: {
-  tools: ComposioToolMap;
-  prUrl: string;
-  runId: string;
-  artifactUrl: string;
-  appUrl: string;
-  slackPermalink?: string;
-}): Promise<{ htmlUrl?: string }> {
-  const ref = parseGitHubPrUrl(args.prUrl);
-  if (!ref) throw new Error(`Unsupported GitHub PR URL: ${args.prUrl}`);
-
-  const listTool = findTool(args.tools, [
-    /^GITHUB_LIST_COMMENTS_IN_AN_ISSUE$/i,
-    /github.*list.*comments.*issue/i,
-    /github.*issue.*comments.*list/i,
-  ]);
-  const createTool = findTool(args.tools, [
-    /^GITHUB_CREATE_AN_ISSUE_COMMENT$/i,
-    /github.*create.*issue.*comment/i,
-  ]);
-  const updateTool = findTool(args.tools, [
-    /^GITHUB_UPDATE_AN_ISSUE_COMMENT$/i,
-    /github.*update.*issue.*comment/i,
-  ]);
-
-  if (!createTool) {
-    throw new Error("Composio GitHub create issue comment tool is unavailable");
-  }
-
-  const body = buildCommentBody(args);
-  let existing: unknown | undefined;
-
-  if (listTool) {
-    const [, tool] = listTool;
-    const result = await tool.execute!(
-      {
-        owner: ref.owner,
-        repo: ref.repo,
-        issue_number: ref.number,
-        issueNumber: ref.number,
-      },
-      {},
-    );
-    existing = asArray(result).find((comment) => commentBody(comment)?.includes(marker(args.runId)));
-  }
-
-  if (existing && updateTool) {
-    const id = commentId(existing);
-    if (id !== undefined) {
-      const [, tool] = updateTool;
-      const result = await tool.execute!(
-        {
-          owner: ref.owner,
-          repo: ref.repo,
-          comment_id: id,
-          commentId: id,
-          body,
-        },
-        {},
-      );
-      return { htmlUrl: commentHtmlUrl(result) ?? commentHtmlUrl(existing) };
-    }
-  }
-
-  const [, create] = createTool;
-  const result = await create.execute!(
-    {
-      owner: ref.owner,
-      repo: ref.repo,
-      issue_number: ref.number,
-      issueNumber: ref.number,
-      body,
-    },
-    {},
-  );
-  return { htmlUrl: commentHtmlUrl(result) };
 }

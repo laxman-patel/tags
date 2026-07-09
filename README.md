@@ -75,13 +75,13 @@ In your Slack app settings (production domain `https://<your-domain>`):
 | Event Subscriptions | `https://<your-domain>/api/slack/events` |
 | Interactivity | `https://<your-domain>/api/slack/interactions` |
 
-**Bot token scopes:** `app_mentions:read`, `channels:history`, `chat:write`, `reactions:write` (👀/✅ acknowledgment reactions), `files:read` (read documents attached in threads), `files:write` (upload demo recordings). After adding scopes, reinstall the app to the workspace.
+**Bot token scopes:** `app_mentions:read`, `channels:history`, `chat:write`, `reactions:write` (👀/✅ acknowledgment reactions), `files:read` (read documents attached in threads), `files:write` (upload proof videos). After adding scopes, reinstall the app to the workspace.
 
 Streaming replies use Slack's native `chat.startStream`/`chat.appendStream`/`chat.stopStream` APIs (animated "Tags is thinking…" indicator, markdown rendering, task timeline). These need `chat:write` only; if streaming is unavailable the bot falls back to posting and editing a regular message.
 
-Demo recordings trigger when an `@tags` message asks for a video, screencast, or visual proof of the change. The agent invents a demo recipe from the codebase and writes it to `.tags/run-output.json`; Tags then records in an E2B desktop sandbox and uploads the MP4 to Slack (and R2). Requires `E2B_API_KEY`, public R2 artifact URLs (`R2_PUBLIC_BASE_URL` — use an `r2.dev` or custom domain, not the S3 API endpoint), Slack bot `files:write`, and the `tags-demo-desktop` E2B template (`infra/e2b/tags-demo-desktop`). Optional GitHub PR comments use the Space's Composio GitHub connection when enabled.
+Proof videos: when an `@tags` message asks for a video, screencast, or visual proof, the agent starts the local app in the Space sandbox and calls the `record_proof` tool. That records the desktop (ffmpeg + Playwright), uploads the MP4 to R2 as a video artifact, and posts it to the Slack thread. Requires `E2B_API_KEY`, public R2 artifact URLs (`R2_PUBLIC_BASE_URL` — use an `r2.dev` or custom domain, not the S3 API endpoint), Slack bot `files:write`, and the unified `tags-opencode-desktop` E2B template (`infra/e2b/tags-opencode-desktop`).
 
-Build the desktop template once: `cd infra/e2b/tags-demo-desktop && E2B_API_KEY=... npm install && npm run build`. Sanity-check infra: `pnpm demo-recording:sanity` (needs the same env vars as production).
+Build the template once: `cd infra/e2b/tags-opencode-desktop && E2B_API_KEY=... npm install && npm run build`. Set `E2B_OPENCODE_TEMPLATE=tags-opencode-desktop` on the runtime. Sanity-check: `pnpm proof-recording:sanity`.
 
 **Event subscriptions:** `app_mention`, `message.channels` (required for thread-reply triggers and passive channel learning — bot messages are ignored). Set `SLACK_BOT_USER_ID` for accurate mention detection in thread replies.
 

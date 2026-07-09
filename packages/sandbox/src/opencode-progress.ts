@@ -109,7 +109,9 @@ function summarizeNarration(text: string): string | null {
   if (/\b(investigat|looking into|reproduc|bug|issue)\b/.test(lower)) return "Investigating the bug";
   if (/\b(pull request|open(ing)? a pr|create(ing)? a pr)\b/.test(lower)) return "Opening a pull request";
   if (/\b(push(ing)?|commit(ting)?)\b/.test(lower)) return "Pushing the change";
-  if (/\b(video|screencast|demo recording|record(ing)?)\b/.test(lower)) return "Preparing the demo recording";
+  if (/\b(video|screencast|proof recording|record_proof|record(ing)?)\b/.test(lower)) {
+    return "Recording proof video";
+  }
   if (/\b(fix|patch|edit|change)\b/.test(lower)) return "Making the fix";
   if (/\b(read|check|inspect|look)\b/.test(lower)) return "Reading the code";
 

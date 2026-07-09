@@ -49,6 +49,18 @@ export function canAcquireSpaceSandboxLease(
   );
 }
 
+export async function getSpaceSandboxSessionBySpaceId(
+  db: Db,
+  spaceId: string,
+): Promise<SpaceSandboxSession | null> {
+  const rows = await db
+    .select()
+    .from(spaceSandboxSessions)
+    .where(eq(spaceSandboxSessions.spaceId, spaceId))
+    .limit(1);
+  return rows[0] ?? null;
+}
+
 export async function getOrCreateSpaceSandboxSession(
   db: Db,
   config: SpaceSandboxConfig,

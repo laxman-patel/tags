@@ -11,7 +11,7 @@
     "db:seed": "pnpm --filter @tags/db seed",
     "lint": "pnpm -r lint",
     "typecheck": "pnpm -r typecheck",
-    "demo-recording:sanity": "tsx scripts/demo-recording-sanity.ts"
+    "proof-recording:sanity": "tsx scripts/proof-recording-sanity.ts"
   },
   "devDependencies": {
     "@types/node": "^26.1.0",

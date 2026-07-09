@@ -62,7 +62,7 @@ describe("opencode prompts", () => {
     expect(prompt).toContain("# Task thread");
   });
 
-  it("adds mandatory demo recipe instructions when recording was requested", () => {
+  it("adds record_proof instructions when proof was requested", () => {
     const withRequest = buildOpencodeSystemPrompt("# Identity\nYou are Tags.", "dev", {
       demoRecordingRequested: true,
     });
@@ -70,16 +70,12 @@ describe("opencode prompts", () => {
       demoRecordingRequested: false,
     });
 
-    expect(withRequest).toContain("# Demo recording required");
-    expect(withRequest).toContain("Finish checklist");
-    expect(withRequest).toContain("if that file is missing, recording FAILS");
-    expect(withRequest).toContain("Hard rules (Tags will REJECT");
-    expect(withRequest).toContain('demo.kind MUST be "web"');
-    expect(withRequest).toContain("NEVER write .tags/verify-");
-    expect(withRequest).toContain("waitForUrl + assertUrl");
-    expect(withRequest).toContain("No bun");
-    expect(withRequest).toContain("commitSha");
-    expect(withRequest).toContain(".tags/run-output.json");
-    expect(withoutRequest).not.toContain("# Demo recording required");
+    expect(withRequest).toContain("# Proof recording required");
+    expect(withRequest).toContain("record_proof");
+    expect(withRequest).toContain("Start the real local app");
+    expect(withRequest).toContain("journeys that cover every path");
+    expect(withRequest).not.toContain(".tags/run-output.json — if that file is missing");
+    expect(withRequest).not.toContain("demo.kind MUST be");
+    expect(withoutRequest).not.toContain("# Proof recording required");
   });
 });

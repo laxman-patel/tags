@@ -54,7 +54,7 @@ describe("summarizeOpencodeProgressLine", () => {
           part: { text: "Now I need to set up the video proof for the demo recording." },
         }),
       ),
-    ).toBe("Preparing the demo recording");
+    ).toBe("Recording proof video");
   });
 
   it("ignores empty lines", () => {

@@ -28,7 +28,7 @@ const mocks = vi.hoisted(() => ({
   connect: vi.fn(),
 }));
 
-vi.mock("e2b", () => ({
+vi.mock("@e2b/desktop", () => ({
   Sandbox: {
     create: mocks.create,
     connect: mocks.connect,
@@ -169,9 +169,10 @@ describe("createSandboxProvider", () => {
       }),
     );
     expect(mocks.create).toHaveBeenCalledWith(
-      "opencode",
+      "tags-opencode-desktop",
       expect.objectContaining({
         envs: { FIREWORKS_API_KEY: "fw_test_key" },
+        resolution: [1280, 800],
       }),
     );
     const commands = sandbox.commands.run.mock.calls.map((call) => String(call[0]));
@@ -196,9 +197,10 @@ describe("createSandboxProvider", () => {
     });
 
     expect(mocks.create).toHaveBeenCalledWith(
-      "opencode",
+      "tags-opencode-desktop",
       expect.objectContaining({
         envs: { FIREWORKS_API_KEY: "fw_test_key" },
+        resolution: [1280, 800],
       }),
     );
     expect(sandbox.kill).toHaveBeenCalled();
@@ -340,8 +342,8 @@ describe("createSandboxProvider", () => {
     expect(result.runOutput).toMatchObject({
       prUrl: "https://github.com/acme/repo/pull/12",
       branch: "tags/demo",
-      demo: { kind: "web", startCommand: "pnpm dev" },
     });
+    expect(result.runOutput).not.toHaveProperty("demo");
   });
 
   it("falls back to a PR URL found in opencode output", async () => {

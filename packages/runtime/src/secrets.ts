@@ -10,14 +10,14 @@ const runtimeSecretsSchema = z.object({
   TAGS_ENCRYPTION_KEY: z.string().optional(),
   NEXT_PUBLIC_APP_URL: z.url().default("http://localhost:3000"),
   E2B_API_KEY: z.string().optional(),
+  /** Unified desktop+opencode template (default: tags-opencode-desktop). */
   E2B_OPENCODE_TEMPLATE: z.string().optional(),
-  E2B_DEMO_TEMPLATE: z.string().default("tags-demo-desktop"),
   COMPOSIO_API_KEY: z.string().optional(),
   INNGEST_SIGNING_KEY: z.string().optional(),
-  DEMO_RECORDING_MAX_SECONDS: z.coerce.number().int().positive().default(90),
-  DEMO_RECORDING_WIDTH: z.coerce.number().int().positive().default(1280),
-  DEMO_RECORDING_HEIGHT: z.coerce.number().int().positive().default(800),
-  DEMO_RECORDING_FPS: z.coerce.number().int().positive().default(15),
+  PROOF_RECORDING_MAX_SECONDS: z.coerce.number().int().positive().default(90),
+  PROOF_RECORDING_WIDTH: z.coerce.number().int().positive().default(1280),
+  PROOF_RECORDING_HEIGHT: z.coerce.number().int().positive().default(800),
+  PROOF_RECORDING_FPS: z.coerce.number().int().positive().default(15),
 });
 
 export type RuntimeSecrets = {
@@ -28,11 +28,10 @@ export type RuntimeSecrets = {
   appUrl: string;
   e2bApiKey?: string;
   e2bOpencodeTemplate?: string;
-  e2bDemoTemplate: string;
   composioApiKey?: string;
   mcpSigningKey?: string;
   r2?: R2Config;
-  demoRecording: {
+  proofRecording: {
     maxSeconds: number;
     width: number;
     height: number;
@@ -60,14 +59,13 @@ export function loadRuntimeSecrets(): RuntimeSecrets {
     appUrl: env.NEXT_PUBLIC_APP_URL,
     e2bApiKey: env.E2B_API_KEY,
     e2bOpencodeTemplate: env.E2B_OPENCODE_TEMPLATE,
-    e2bDemoTemplate: env.E2B_DEMO_TEMPLATE,
     composioApiKey: env.COMPOSIO_API_KEY,
     mcpSigningKey: env.INNGEST_SIGNING_KEY,
-    demoRecording: {
-      maxSeconds: env.DEMO_RECORDING_MAX_SECONDS,
-      width: env.DEMO_RECORDING_WIDTH,
-      height: env.DEMO_RECORDING_HEIGHT,
-      fps: env.DEMO_RECORDING_FPS,
+    proofRecording: {
+      maxSeconds: env.PROOF_RECORDING_MAX_SECONDS,
+      width: env.PROOF_RECORDING_WIDTH,
+      height: env.PROOF_RECORDING_HEIGHT,
+      fps: env.PROOF_RECORDING_FPS,
     },
     ...(r2 ? { r2 } : {}),
   };
@@ -82,10 +80,9 @@ export function buildRuntimeProviderConfig(
     composioApiKey: secrets.composioApiKey,
     e2bApiKey: secrets.e2bApiKey,
     e2bOpencodeTemplate: secrets.e2bOpencodeTemplate,
-    e2bDemoTemplate: secrets.e2bDemoTemplate,
     fireworksApiKey: secrets.fireworksApiKey,
     mcpSigningKey: secrets.mcpSigningKey,
-    demoRecording: secrets.demoRecording,
+    proofRecording: secrets.proofRecording,
   };
 
   if (secrets.r2) {

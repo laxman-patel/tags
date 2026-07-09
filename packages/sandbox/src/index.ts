@@ -17,32 +17,21 @@ export {
   parseTagsRunOutputJson,
 } from "./run-output";
 export {
-  buildRunOutputRawUrls,
-  fetchTagsRunOutputFromGitHub,
-  resolveDemoRunOutput,
-} from "./resolve-demo-run-output";
-export {
-  isTerminalDemoCheat,
-  triggerRequiresClickThrough,
-  triggerRequiresWebDemo,
-  validateDemoRecipeForRecording,
-} from "./demo-recipe-guard";
-export type { DemoRecipeGuardResult } from "./demo-recipe-guard";
-export {
+  connectDesktopSandbox,
+  createDesktopSandbox,
   playwrightScript,
-  recordDemo,
-  sanitizeDemoRecipe,
-  sanitizeDemoShellCommand,
-  withFastInstallFlags,
-} from "./demo-recorder";
+  recordProofInSandbox,
+} from "./proof-recorder";
 export type {
   CodingAgentRequest,
   CodingAgentResult,
-  DemoRecipe,
-  DemoRecordingRequest,
-  DemoRecordingResult,
-  DemoStep,
   OpencodeRunTokenUsage,
+  ProofJourney,
+  ProofJourneyResult,
+  ProofRecordingRequest,
+  ProofRecordingResult,
+  ProofSandbox,
+  ProofStep,
   SandboxProvider,
   TagsRunOutput,
 } from "./types";

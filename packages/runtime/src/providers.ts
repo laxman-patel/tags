@@ -9,14 +9,12 @@ export type RuntimeProviderConfig = {
   e2bApiKey?: string;
   /** Fireworks key — registered with opencode auth before sandbox runs. */
   fireworksApiKey?: string;
-  /** E2B template name (default: pre-built `opencode` template). */
+  /** E2B template name (default: tags-opencode-desktop). */
   e2bOpencodeTemplate?: string;
-  /** E2B desktop template used for post-change demo recording. */
-  e2bDemoTemplate?: string;
   r2?: R2Config;
   /** Signs short-lived run tokens for the Tags MCP bridge used by opencode. */
   mcpSigningKey?: string;
-  demoRecording?: {
+  proofRecording?: {
     maxSeconds: number;
     width: number;
     height: number;
@@ -52,6 +50,9 @@ export async function createRuntimeProviders(
     apiKey: config.e2bApiKey,
     template: config.e2bOpencodeTemplate,
     modelApiKey: config.fireworksApiKey,
+    resolution: config.proofRecording
+      ? [config.proofRecording.width, config.proofRecording.height]
+      : undefined,
   });
 
   let r2: RuntimeProviders["r2"];

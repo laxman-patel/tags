@@ -46,7 +46,8 @@ export function createTagsMcpServerConfig(args: {
     headers: {
       Authorization: `Bearer ${args.token}`,
     },
-    timeout: 30_000,
+    // record_proof can run ffmpeg + Playwright for up to ~2 minutes.
+    timeout: 180_000,
   };
 }
 

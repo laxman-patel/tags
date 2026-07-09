@@ -5,6 +5,7 @@ export const ALWAYS_ENABLED_NATIVE_TOOLS = [
   "save_memory",
   "session_search",
   "create_artifact",
+  "record_proof",
   "run_coding_agent",
   "ask_user",
   "create_schedule",
@@ -54,6 +55,12 @@ export const NATIVE_TOOL_METADATA: Record<NativeToolId, NativeToolMetadata> = {
     id: "create_artifact",
     name: "Artifacts",
     description: "Create files, reports, and rich run artifacts.",
+    provider: "Tags",
+  },
+  record_proof: {
+    id: "record_proof",
+    name: "Proof recording",
+    description: "Record a video proof of a local app in the Space sandbox.",
     provider: "Tags",
   },
   run_coding_agent: {

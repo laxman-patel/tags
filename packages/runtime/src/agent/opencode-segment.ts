@@ -340,6 +340,18 @@ export async function runOpencodeSegment(
         keepAlive: true,
       },
       mcpServers: Object.keys(mcpServers).length > 0 ? mcpServers : undefined,
+      onSandboxReady: async ({ sandboxId, createdSandbox, reusedSandbox }) => {
+        await recordSpaceSandboxExternalId(args.db, {
+          sessionId: sandboxSession.id,
+          externalSandboxId: sandboxId,
+          metadata: {
+            createdSandbox,
+            reusedSandbox,
+            runId: args.runId,
+            phase: "ready",
+          },
+        });
+      },
       // Raw opencode stdout is TUI noise (banner, "build · model" header) —
       // keep it in the run timeline (DB) but never stream it into Slack.
       onOutput: async (chunk) => {

@@ -11,6 +11,8 @@ export type TagsMcpRunClaims = {
   actorSlackUserId: string;
   enabledTools: string[];
   enabledConnections?: string[];
+  /** Live E2B sandbox id for this Space run (set when known before MCP token mint). */
+  sandboxId?: string;
   exp: number;
 };
 

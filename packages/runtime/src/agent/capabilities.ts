@@ -12,6 +12,7 @@ const NATIVE_TOOL_DESCRIPTIONS: Record<string, string> = {
   save_memory: "edit the Space MEMORY.md file",
   session_search: "search prior Slack threads in this Space",
   create_artifact: "publish durable markdown, JSON, HTML, links, and diffs",
+  record_proof: "record a video proof of a local app in the Space sandbox",
   ask_user: "pause and ask a human for missing information",
   create_schedule: "create recurring Space tasks with approval",
   run_coding_agent: "use the persistent Space sandbox for approved coding work",

@@ -1,6 +1,7 @@
 import type { Db } from "@tags/db";
 import type { RuntimeProviderConfig, RuntimeProviders } from "../providers";
 import { createCreateArtifactTool } from "./create-artifact";
+import { createRecordProofTool } from "./record-proof";
 import { createRunCodingAgentTool } from "./run-coding-agent";
 import { createSearchChannelTool } from "./search-channel";
 import { createSearchMemoryTool } from "./search-memory";
@@ -31,6 +32,7 @@ export function resolveTools(
     save_memory: createSaveMemoryTool(db),
     session_search: createSessionSearchTool(db),
     create_artifact: createCreateArtifactTool(db, appUrl),
+    record_proof: createRecordProofTool(db, options.providerConfig),
     run_coding_agent: createRunCodingAgentTool(db, options.providerConfig),
     ask_user: createAskUserTool(db),
     create_schedule: createCreateScheduleTool(db),

@@ -24,7 +24,7 @@ Process:
      v4 serve pattern (GET/POST/PUT), checkpointing/maxRuntime guidance,
      `step.run` granularity, `step.waitForEvent` for approvals, no secrets in
      event payloads.
-   - **E2B + opencode** (`packages/sandbox`): pre-built `opencode` template
+   - **E2B + opencode** (`packages/sandbox`): unified `tags-opencode-desktop` template (desktop + opencode + proof recording)
      usage, `opencode run` CLI vs `opencode serve` + `@opencode-ai/sdk`,
      custom template for cold-start reduction, sandbox timeout defaults.
    - **AI SDK + Fireworks** (`packages/runtime/src/agent`): current `ai` /

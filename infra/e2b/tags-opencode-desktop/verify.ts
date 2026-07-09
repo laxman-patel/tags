@@ -1,7 +1,7 @@
 import "dotenv/config";
 import { Sandbox } from "@e2b/desktop";
 
-const TEMPLATE = process.env.E2B_DEMO_TEMPLATE ?? "tags-demo-desktop";
+const TEMPLATE = process.env.E2B_OPENCODE_TEMPLATE ?? "tags-opencode-desktop";
 
 async function main() {
   if (!process.env.E2B_API_KEY) {
@@ -18,8 +18,8 @@ async function main() {
       "which ffmpeg && ffmpeg -version | head -1",
       "which git && git --version",
       "which curl && curl --version | head -1",
-      "which xterm",
       "which node && node --version",
+      "which opencode && opencode --version",
       "test -d /opt/tags-playwright/node_modules/playwright && echo playwright-ok",
       "test -d /ms-playwright && echo browsers-ok",
       `node -e "import('/opt/tags-playwright/node_modules/playwright/index.js').then(() => console.log('playwright-import-ok'))"`,
@@ -36,7 +36,7 @@ async function main() {
       }
     }
 
-    console.log("tags-demo-desktop verification passed");
+    console.log("tags-opencode-desktop verification passed");
   } finally {
     await sandbox.kill();
   }

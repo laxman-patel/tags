@@ -87,6 +87,18 @@ export function createRunCodingAgentTool(
             sandboxId: sandboxLease.externalSandboxId,
             keepAlive: true,
           },
+          onSandboxReady: async ({ sandboxId, createdSandbox, reusedSandbox }) => {
+            await recordSpaceSandboxExternalId(db, {
+              sessionId: sandboxSession.id,
+              externalSandboxId: sandboxId,
+              metadata: {
+                createdSandbox,
+                reusedSandbox,
+                runId: ctx.runId,
+                phase: "ready",
+              },
+            });
+          },
           onOutput: async (chunk) => {
             await ctx.emit({ type: "text.delta", text: chunk });
           },

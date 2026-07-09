@@ -29,9 +29,19 @@ export interface CodingAgentRequest {
   onOutput?: (chunk: string) => void | Promise<void>;
   /** Short human step for Slack while opencode is working (e.g. "Cloning the repo"). */
   onProgress?: (step: string) => void | Promise<void>;
+  /**
+   * Called as soon as the sandbox is connected/created, before opencode starts.
+   * Used so mid-run tools like `record_proof` can reconnect to the live box.
+   */
+  onSandboxReady?: (info: {
+    sandboxId: string;
+    createdSandbox: boolean;
+    reusedSandbox: boolean;
+  }) => void | Promise<void>;
 }
 
-export type DemoStep =
+/** Browser interaction step for in-sandbox proof recording. */
+export type ProofStep =
   | { type: "navigate"; url: string }
   | { type: "click"; selector: string }
   | { type: "fill"; selector: string; value: string }
@@ -45,25 +55,58 @@ export type DemoStep =
   /** Assert the current page URL contains this substring (or matches regex). */
   | { type: "assertUrl"; url: string };
 
-export type DemoRecipe =
-  | {
-      kind: "web";
-      repoSubdir?: string;
-      installCommand?: string;
-      /** Skip dependency install when node_modules are already present / deps unchanged. */
-      skipInstall?: boolean;
-      startCommand: string;
-      readyUrl: string;
-      readyTimeoutMs?: number;
-      steps: DemoStep[];
-      successText?: string;
-    }
-  | {
-      kind: "terminal";
-      repoSubdir?: string;
-      command: string;
-    }
-  | { kind: "none"; reason: string };
+export type ProofJourney = {
+  name: string;
+  steps: ProofStep[];
+};
+
+export type ProofRecordingRequest = {
+  /** Already-connected desktop sandbox (do not kill). */
+  sandbox: ProofSandbox;
+  baseUrl: string;
+  journeys: ProofJourney[];
+  maxSeconds: number;
+  width: number;
+  height: number;
+  fps: number;
+  filenameHint?: string;
+};
+
+export type ProofJourneyResult = {
+  name: string;
+  ok: boolean;
+  error?: string;
+};
+
+export type ProofRecordingResult = {
+  video: Buffer;
+  filename: string;
+  contentType: "video/mp4";
+  durationMs: number;
+  journeys: ProofJourneyResult[];
+  logs: string;
+};
+
+/** Minimal sandbox surface used by the proof recorder. */
+export type ProofSandbox = {
+  sandboxId: string;
+  commands: {
+    run: (
+      command: string,
+      options?: {
+        cwd?: string;
+        timeoutMs?: number;
+        envs?: Record<string, string>;
+        background?: boolean;
+      },
+    ) => Promise<{ stdout?: string; stderr?: string; exitCode?: number }>;
+  };
+  files?: {
+    read: (path: string, opts: { format: "bytes" }) => Promise<Uint8Array>;
+    write: (path: string, data: string) => Promise<unknown>;
+  };
+  setTimeout?: (timeoutMs: number) => Promise<void>;
+};
 
 export type OpencodeRunTokenUsage = {
   promptTokens: number;
@@ -81,31 +124,6 @@ export type TagsRunOutput = {
   repoUrl?: string;
   branch?: string;
   commitSha?: string;
-  demo?: DemoRecipe;
-};
-
-export type DemoRecordingRequest = {
-  apiKey?: string;
-  template: string;
-  repoUrl: string;
-  branch?: string;
-  /** Exact PR head SHA — preferred over branch tip when present. */
-  commitSha?: string;
-  demo: DemoRecipe;
-  maxSeconds: number;
-  width: number;
-  height: number;
-  fps: number;
-  /** Original Slack trigger — used to reject terminal cheats / weak web recipes. */
-  triggerText?: string;
-};
-
-export type DemoRecordingResult = {
-  video: Buffer;
-  filename: string;
-  contentType: "video/mp4";
-  durationMs: number;
-  logs: string;
 };
 
 export interface CodingAgentResult {

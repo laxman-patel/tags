@@ -28,12 +28,12 @@ describe("mergeTagsRunOutput", () => {
   it("fills gaps without overwriting earlier fields", () => {
     expect(
       mergeTagsRunOutput(
-        { demo: { kind: "terminal", command: "npm test" } },
+        { commitSha: "abc123" },
         { repoUrl: "https://github.com/acme/repo", branch: "fix/x" },
         { prUrl: "https://github.com/acme/repo/pull/1", branch: "other" },
       ),
     ).toEqual({
-      demo: { kind: "terminal", command: "npm test" },
+      commitSha: "abc123",
       repoUrl: "https://github.com/acme/repo",
       branch: "fix/x",
       prUrl: "https://github.com/acme/repo/pull/1",
@@ -42,32 +42,26 @@ describe("mergeTagsRunOutput", () => {
 });
 
 describe("parseTagsRunOutputJson", () => {
-  it("parses waitForUrl steps", () => {
+  it("parses PR metadata and ignores legacy demo fields", () => {
     const parsed = parseTagsRunOutputJson(
       JSON.stringify({
         repoUrl: "https://github.com/acme/repo",
+        branch: "fix/x",
+        commitSha: "deadbeef",
         demo: {
           kind: "web",
           startCommand: "npx next dev --port 3000",
           readyUrl: "http://127.0.0.1:3000",
-          steps: [
-            { type: "navigate", url: "http://127.0.0.1:3000" },
-            { type: "click", selector: "a[href*='mcp']" },
-            { type: "waitForUrl", url: "/surfaces/mcp" },
-            { type: "assertUrl", url: "/surfaces/mcp" },
-          ],
+          steps: [{ type: "navigate", url: "http://127.0.0.1:3000" }],
         },
       }),
     );
-    expect(parsed?.demo).toMatchObject({ kind: "web" });
-    if (parsed?.demo?.kind === "web") {
-      expect(parsed.demo.steps.map((s) => s.type)).toEqual([
-        "navigate",
-        "click",
-        "waitForUrl",
-        "assertUrl",
-      ]);
-    }
+    expect(parsed).toEqual({
+      repoUrl: "https://github.com/acme/repo",
+      branch: "fix/x",
+      commitSha: "deadbeef",
+    });
+    expect(parsed).not.toHaveProperty("demo");
   });
 });
 
