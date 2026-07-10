@@ -30,13 +30,13 @@
 <br />
 
 <p align="center">
-  <a href="https://raw.githubusercontent.com/laxman-patel/tags/main/tags-web-ui-new/public/tags-vid-demo-web.mp4">
-    <img src="https://raw.githubusercontent.com/laxman-patel/tags/main/tags-web-ui-new/public/slack-landing-2560.webp" alt="Tags working inside a Slack thread" width="100%" />
+  <a href="https://cdn.jsdelivr.net/gh/laxman-patel/tags@main/tags-web-ui-new/public/tags-vid-demo-readme.mp4" title="Play the Tags product demo">
+    <img src="https://raw.githubusercontent.com/laxman-patel/tags/main/tags-web-ui-new/public/readme-demo-thumbnail.webp" alt="Play the Tags product demo" width="100%" />
   </a>
 </p>
 
 <p align="center">
-  <a href="https://raw.githubusercontent.com/laxman-patel/tags/main/tags-web-ui-new/public/tags-vid-demo-web.mp4"><strong>▶ Watch the 4:38 product demo</strong></a>
+  <a href="https://cdn.jsdelivr.net/gh/laxman-patel/tags@main/tags-web-ui-new/public/tags-vid-demo-readme.mp4"><strong>▶ Watch the 4:38 product demo</strong></a>
   <br />
   <sub>See a Slack thread become completed, reviewable work.</sub>
 </p>
