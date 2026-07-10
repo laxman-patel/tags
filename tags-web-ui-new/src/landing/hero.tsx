@@ -8,6 +8,7 @@ import {
   ShieldCheck,
   X,
 } from "lucide-react";
+import { useState } from "react";
 
 import { DashedLine } from "./dashed-line";
 import { GitHubIcon } from "./github-icon";
@@ -44,6 +45,8 @@ type HeroProps = {
 };
 
 export const Hero = ({ clerkEnabled = false }: HeroProps) => {
+  const [demoOpen, setDemoOpen] = useState(false);
+
   return (
     <section className="pb-16 pt-28 lg:pb-24 lg:pt-36">
       <div className="container">
@@ -102,7 +105,9 @@ export const Hero = ({ clerkEnabled = false }: HeroProps) => {
         <div className="mt-12 min-w-0 md:mt-16 lg:mt-20">
           <Dialog.Root
             modal={false}
+            open={demoOpen}
             onOpenChange={(open) => {
+              setDemoOpen(open);
               document.body.style.overflow = open ? "hidden" : "";
             }}
           >
@@ -115,7 +120,7 @@ export const Hero = ({ clerkEnabled = false }: HeroProps) => {
                   <img
                     src={DEMO_SCREENSHOT_SRC}
                     alt="Tags Slack demo"
-                    className="h-full w-full object-cover object-top"
+                    className="h-full w-full object-cover object-center"
                   />
                 ) : null}
                 <div className="absolute inset-0 grid place-items-center bg-black/0 transition-colors group-hover:bg-black/10">
@@ -133,11 +138,16 @@ export const Hero = ({ clerkEnabled = false }: HeroProps) => {
               </button>
             </Dialog.Trigger>
             <Dialog.Portal>
-              <Dialog.Overlay className="fixed inset-0 z-50 bg-black/80" />
+              <Dialog.Overlay className="fixed inset-0 z-50" />
               <Dialog.Content
-                className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6"
+                className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-3 backdrop-blur-md sm:p-6"
                 onOpenAutoFocus={(event) => event.preventDefault()}
-                onInteractOutside={(event) => event.preventDefault()}
+                onClick={(event) => {
+                  if (event.target === event.currentTarget) {
+                    setDemoOpen(false);
+                    document.body.style.overflow = "";
+                  }
+                }}
               >
                 <Dialog.Title className="sr-only">
                   Tags demo video
