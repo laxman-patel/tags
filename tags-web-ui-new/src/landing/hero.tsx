@@ -100,7 +100,12 @@ export const Hero = ({ clerkEnabled = false }: HeroProps) => {
         </div>
 
         <div className="mt-12 min-w-0 md:mt-16 lg:mt-20">
-          <Dialog.Root>
+          <Dialog.Root
+            modal={false}
+            onOpenChange={(open) => {
+              document.body.style.overflow = open ? "hidden" : "";
+            }}
+          >
             <Dialog.Trigger asChild>
               <button
                 type="button"
@@ -110,7 +115,7 @@ export const Hero = ({ clerkEnabled = false }: HeroProps) => {
                   <img
                     src={DEMO_SCREENSHOT_SRC}
                     alt="Tags Slack demo"
-                    className="h-full w-full object-cover object-left-top"
+                    className="h-full w-full object-cover object-top"
                   />
                 ) : null}
                 <div className="absolute inset-0 grid place-items-center bg-black/0 transition-colors group-hover:bg-black/10">
@@ -129,11 +134,18 @@ export const Hero = ({ clerkEnabled = false }: HeroProps) => {
             </Dialog.Trigger>
             <Dialog.Portal>
               <Dialog.Overlay className="fixed inset-0 z-50 bg-black/80" />
-              <Dialog.Content className="fixed inset-0 z-50 flex items-center justify-center p-4">
+              <Dialog.Content
+                className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6"
+                onOpenAutoFocus={(event) => event.preventDefault()}
+                onInteractOutside={(event) => event.preventDefault()}
+              >
                 <Dialog.Title className="sr-only">
                   Tags demo video
                 </Dialog.Title>
-                <div className="relative aspect-video w-full max-w-4xl overflow-hidden rounded-xl bg-black">
+                <div
+                  className="relative aspect-video w-[min(96rem,calc(100vw-1.5rem),calc((100dvh-1.5rem)*16/9))] overflow-hidden rounded-xl bg-black sm:w-[min(96rem,calc(100vw-3rem),calc((100dvh-3rem)*16/9))]"
+                  onPointerDown={(event) => event.stopPropagation()}
+                >
                   {DEMO_VIDEO_SRC ? (
                     <video
                       src={DEMO_VIDEO_SRC}
@@ -141,6 +153,7 @@ export const Hero = ({ clerkEnabled = false }: HeroProps) => {
                       controls
                       autoPlay
                       playsInline
+                      preload="auto"
                       className="h-full w-full"
                     />
                   ) : (

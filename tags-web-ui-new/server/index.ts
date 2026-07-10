@@ -2343,15 +2343,79 @@ const mimeTypes: Record<string, string> = {
   ".jpg": "image/jpeg",
   ".jpeg": "image/jpeg",
   ".svg": "image/svg+xml",
+  ".webp": "image/webp",
+  ".mp4": "video/mp4",
+  ".webm": "video/webm",
 };
+
+function parseByteRange(
+  rangeHeader: string,
+  size: number,
+): { start: number; end: number } | "invalid" | null {
+  const match = /^bytes=(\d*)-(\d*)$/i.exec(rangeHeader.trim());
+  if (!match) return "invalid";
+  const rawStart = match[1];
+  const rawEnd = match[2];
+  if (!rawStart && !rawEnd) return "invalid";
+
+  let start: number;
+  let end: number;
+  if (!rawStart) {
+    const suffix = Number(rawEnd);
+    if (!Number.isFinite(suffix) || suffix <= 0) return "invalid";
+    start = Math.max(size - suffix, 0);
+    end = size - 1;
+  } else {
+    start = Number(rawStart);
+    end = rawEnd ? Number(rawEnd) : size - 1;
+    if (!Number.isFinite(start) || !Number.isFinite(end)) return "invalid";
+  }
+
+  if (start < 0 || end < start || start >= size) return "invalid";
+  return { start, end: Math.min(end, size - 1) };
+}
 
 async function serveStatic(req: IncomingMessage, res: ServerResponse, url: URL) {
   const pathname = decodeURIComponent(url.pathname);
   const requested = pathname === "/" ? "/index.html" : pathname;
   let filePath = path.join(distRoot, requested);
   if (!filePath.startsWith(distRoot)) return sendJson(res, 403, { error: "Forbidden" });
-  if (!existsSync(filePath) || !(await stat(filePath)).isFile()) filePath = path.join(distRoot, "index.html");
-  res.writeHead(200, { "content-type": mimeTypes[path.extname(filePath)] ?? "application/octet-stream" });
+  if (!existsSync(filePath) || !(await stat(filePath)).isFile()) {
+    filePath = path.join(distRoot, "index.html");
+  }
+
+  const fileStat = await stat(filePath);
+  const contentType = mimeTypes[path.extname(filePath)] ?? "application/octet-stream";
+  const size = fileStat.size;
+  const rangeHeader = req.headers.range;
+
+  if (rangeHeader) {
+    const range = parseByteRange(rangeHeader, size);
+    if (range === "invalid") {
+      res.writeHead(416, {
+        "content-range": `bytes */${size}`,
+        "accept-ranges": "bytes",
+      });
+      res.end();
+      return;
+    }
+    if (range) {
+      res.writeHead(206, {
+        "content-type": contentType,
+        "content-length": range.end - range.start + 1,
+        "content-range": `bytes ${range.start}-${range.end}/${size}`,
+        "accept-ranges": "bytes",
+      });
+      createReadStream(filePath, { start: range.start, end: range.end }).pipe(res);
+      return;
+    }
+  }
+
+  res.writeHead(200, {
+    "content-type": contentType,
+    "content-length": size,
+    "accept-ranges": "bytes",
+  });
   createReadStream(filePath).pipe(res);
 }
 
