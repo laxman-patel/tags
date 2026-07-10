@@ -13,6 +13,7 @@ import { useState } from "react";
 import { DashedLine } from "./dashed-line";
 import { GitHubIcon } from "./github-icon";
 import { GetStartedButton } from "./get-started-button";
+import { keepLastWordsTogether } from "./typography";
 
 const DEMO_SCREENSHOT_SRC = "/slack-landing-2560.webp";
 const DEMO_VIDEO_SRC = "/tags-vid-demo-web.mp4";
@@ -57,8 +58,9 @@ export const Hero = ({ clerkEnabled = false }: HeroProps) => {
             </h1>
 
             <p className="mt-5 max-w-xl text-base leading-relaxed text-muted-foreground md:text-lg">
-              Mention @tags in any channel. It reads the whole thread, does the
-              work, and asks before doing anything it shouldn&apos;t.
+              {keepLastWordsTogether(
+                "Mention @tags in any channel. It reads the whole thread, does the work, and asks before doing anything it shouldn't.",
+              )}
             </p>
 
             <div className="mt-8 flex flex-wrap items-center gap-4 lg:flex-nowrap">
@@ -93,7 +95,7 @@ export const Hero = ({ clerkEnabled = false }: HeroProps) => {
                       {feature.title}
                     </h2>
                     <p className="max-w-76 text-sm text-muted-foreground">
-                      {feature.description}
+                      {keepLastWordsTogether(feature.description)}
                     </p>
                   </div>
                 </div>

@@ -8,6 +8,7 @@ import notionLogo from "./logos/notion.svg";
 import wordLogo from "./logos/word.svg";
 import { cn } from "./cn";
 import { DashedLine } from "./dashed-line";
+import { keepLastWordsTogether } from "./typography";
 
 type LogoImage = {
   src: string;
@@ -42,7 +43,7 @@ const topItems: CapabilityItem[] = [
   {
     title: "Connect the tools you already use.",
     description:
-      "GitHub, Linear, Notion and more through Composio — authorized per Space, gated by approvals.",
+      "GitHub, Linear, Notion and more through Composio. Each connection belongs to its Space and risky actions need approval.",
     logos,
     className:
       "flex-1 [&>.title-container]:mb-5 md:[&>.title-container]:mb-8 md:[&>.title-container]:translate-x-2 xl:[&>.title-container]:translate-x-4 [&>.title-container]:translate-x-0",
@@ -62,9 +63,9 @@ const topItems: CapabilityItem[] = [
 
 const bottomItems: CapabilityItem[] = [
   {
-    title: "Schedules.",
+    title: "Scheduled work.",
     description:
-      "Recurring runs — standups, digests, checks — on a cron the agent maintains.",
+      "Run standups, digests, and recurring checks on a schedule the agent maintains.",
     placeholder: {
       label: "schedule list",
       className: "aspect-[305/280] w-full max-w-[305px]",
@@ -73,21 +74,22 @@ const bottomItems: CapabilityItem[] = [
       "[&>.title-container]:mb-5 md:[&>.title-container]:mb-8 xl:[&>.image-container]:translate-x-6 [&>.image-container]:translate-x-2",
   },
   {
-    title: "Spend tracking.",
+    title: "Ships working code.",
     description:
-      "Token usage and cost per Space, per run, with monthly budgets enforced.",
+      "Tags edits your repo in an isolated workspace and returns the pull request, branch, and commit.",
     placeholder: {
-      label: "spend dashboard",
+      label: "pull request",
       className: "aspect-[320/103] w-full max-w-[320px]",
     },
     className:
       "justify-normal [&>.title-container]:mb-5 md:[&>.title-container]:mb-0 [&>.image-container]:flex-1 md:[&>.image-container]:place-items-center md:[&>.image-container]:-translate-y-3",
   },
   {
-    title: "Audit everything.",
-    description: "Every action, approval, and tool call is logged and exportable.",
+    title: "Proves the result.",
+    description:
+      "Ask for visual proof and Tags records the real app, then posts the video to Slack.",
     placeholder: {
-      label: "audit log",
+      label: "recorded demo",
       className: "aspect-[305/280] w-full max-w-[305px]",
     },
     className:
@@ -160,7 +162,10 @@ const Item = ({ item, isLast, className }: ItemProps) => {
     >
       <div className="title-container text-balance">
         <h3 className="inline font-semibold">{item.title} </h3>
-        <span className="text-muted-foreground"> {item.description}</span>
+        <span className="text-muted-foreground">
+          {" "}
+          {keepLastWordsTogether(item.description)}
+        </span>
       </div>
 
       {item.logos ? (

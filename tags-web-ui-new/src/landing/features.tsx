@@ -1,24 +1,25 @@
 import { DashedLine } from "./dashed-line";
+import { keepLastWordsTogether } from "./typography";
 import { Card, CardContent } from "./ui";
 
 const items = [
   {
     title: "One Space per channel",
     description:
-      "Each Slack channel gets its own agent — scoped tools, memory, and spend limits.",
+      "Each channel keeps its own instructions, connections, tools, and memory.",
     label: "spaces dashboard",
   },
   {
-    title: "Approvals before actions",
+    title: "From thread to pull request",
     description:
-      "External writes and sensitive tools pause in-thread until someone approves.",
-    label: "slack approval card",
+      "Tags works in an isolated repo, makes the change, and opens a pull request.",
+    label: "coding workspace",
   },
   {
-    title: "Every run, replayable",
+    title: "Proof posted to the thread",
     description:
-      "Tool calls, artifacts, and token usage persisted — browse or export any run.",
-    label: "run timeline",
+      "Ask for a demo and Tags records the real app, then shares the video in Slack.",
+    label: "video proof",
   },
 ];
 
@@ -38,8 +39,9 @@ export const Features = () => {
             Built for teams that live in{"\u00A0"}Slack
           </h2>
           <p className="leading-snug text-muted-foreground">
-            Mention @tags in any thread. It reads the full conversation, does
-            the work, and stays scoped to that channel&apos;s Space.
+            {keepLastWordsTogether(
+              "Mention @tags in any thread. It reads the full conversation, does the work, and stays scoped to that channel's Space.",
+            )}
           </p>
         </div>
 
@@ -62,7 +64,7 @@ export const Features = () => {
                       {item.title}
                     </h3>
                     <p className="mt-1.5 text-sm leading-snug text-muted-foreground">
-                      {item.description}
+                      {keepLastWordsTogether(item.description)}
                     </p>
                   </div>
                 </div>

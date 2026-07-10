@@ -14,7 +14,7 @@ type LandingProps = {
 
 export default function Landing({ clerkEnabled = false }: LandingProps) {
   useEffect(() => {
-    document.title = "Tags — the open-source AI teammate for Slack";
+    document.title = "Tags | The open-source AI teammate for Slack";
   }, []);
 
   if (clerkEnabled) {

@@ -2,6 +2,7 @@ import { LinkButton } from "@cloudflare/kumo";
 
 import { GitHubIcon } from "./github-icon";
 import { GetStartedButton } from "./get-started-button";
+import { keepLastWordsTogether } from "./typography";
 
 type FooterProps = {
   clerkEnabled?: boolean;
@@ -15,7 +16,9 @@ export function Footer({ clerkEnabled = false }: FooterProps) {
           Put an AI teammate in every channel
         </h2>
         <p className="mx-auto max-w-lg leading-snug text-balance text-muted-foreground">
-          Open source and self-hostable. Running in your Slack in minutes.
+          {keepLastWordsTogether(
+            "Open source and self-hostable. Running in your Slack in minutes.",
+          )}
         </p>
         <div className="mt-5 flex flex-wrap items-center justify-center gap-3">
           <GetStartedButton clerkEnabled={clerkEnabled} size="lg" />

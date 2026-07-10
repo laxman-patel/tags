@@ -62,7 +62,7 @@
   --shadow-xl: 0 1px 3px 0px hsl(0 0% 0% / 0.1), 0 8px 10px -1px hsl(0 0% 0% / 0.1);
   --shadow-2xl: 0 1px 3px 0px hsl(0 0% 0% / 0.25);
 
-  /* Soft elevation tokens — used in place of hard borders */
+  /* Soft elevation tokens used in place of hard borders */
   --shadow-button: 0 1px 2px rgba(16, 24, 40, 0.1), 0 1px 1px rgba(16, 24, 40, 0.04);
   --shadow-nav: 0 1px 1px rgba(16, 24, 40, 0.04), 0 8px 24px -10px rgba(16, 24, 40, 0.22);
   --shadow-card: 0 1px 2px rgba(16, 24, 40, 0.04), 0 18px 40px -22px rgba(16, 24, 40, 0.28);
@@ -148,6 +148,17 @@ html:has(.landing) body {
   font-family: var(--font-display);
   font-weight: 600;
   font-feature-settings: "ss02" on, "ss03" on, "ss04" on;
+}
+
+.landing h1,
+.landing h2,
+.landing h3 {
+  text-wrap: balance;
+}
+
+.landing p,
+.landing .title-container {
+  text-wrap: pretty;
 }
 
 .landing-background {
