@@ -1,123 +1,151 @@
-# Tags
+<div align="center">
 
-Open-source Claude Tag for teams — channel-native org harness built on **opencode**, with **Fireworks** inference for now.
+<a href="https://github.com/laxman-patel/tags">
+  <img src="https://raw.githubusercontent.com/laxman-patel/tags/main/tags-icon-transparent.svg" alt="Tags" width="84" />
+</a>
 
-**Must-not-miss features:** generative UI (Block Kit from `run_events`), streaming Slack replies, human-in-the-loop approvals, full thread context.
+<h1>Tags</h1>
 
-## Prerequisites
+<p><strong>The open-source AI teammate for Slack.</strong></p>
 
-- Node.js 22+
-- pnpm 9+
-- Docker (for local Postgres)
-- Slack app with Events API + Interactivity
-- Fireworks API key
+<p>
+  Mention <code>@tags</code> in any channel. It reads the whole thread, does the work,<br />
+  and asks before doing anything it shouldn't.
+</p>
 
-## Phases implemented
+<p>
+  <a href="#quick-start"><strong>Quick start</strong></a> ·
+  <a href="#how-it-works">How it works</a> ·
+  <a href="https://github.com/laxman-patel/tags/issues">Issues</a>
+</p>
 
-| Phase | Status |
-| --- | --- |
-| 0 | Walking skeleton (Slack + Inngest + approval) |
-| 1 | Space admin API + config versioning |
-| 2 | Slack thread sync, rate limits, run links |
-| 3 | Artifacts, approval inbox, UI package |
-| 4 | Memory tools, context packing, memory browser |
-| 5 | Approval authorization + audit events |
-| 6 | Run timeline / tool trace depth |
-| 7 | Usage records + spend dashboard |
-| 8 | Schedules + Inngest cron tick |
-| 9 | Audit UI, export, redaction helpers |
+<p>
+  <a href="https://github.com/laxman-patel/tags/stargazers"><img src="https://img.shields.io/github/stars/laxman-patel/tags?style=flat&logo=github&label=stars&color=226AD6" alt="GitHub stars" /></a>
+  <img src="https://img.shields.io/badge/self--hostable-yes-226AD6" alt="Self-hostable" />
+  <img src="https://img.shields.io/badge/Node.js-22%2B-339933?logo=nodedotjs&logoColor=white" alt="Node.js 22 or newer" />
+</p>
+
+</div>
+
+<br />
+
+<p align="center">
+  <a href="https://raw.githubusercontent.com/laxman-patel/tags/main/tags-web-ui-new/public/tags-vid-demo-web.mp4">
+    <img src="https://raw.githubusercontent.com/laxman-patel/tags/main/tags-web-ui-new/public/slack-landing-2560.webp" alt="Tags working inside a Slack thread" width="100%" />
+  </a>
+</p>
+
+<p align="center">
+  <a href="https://raw.githubusercontent.com/laxman-patel/tags/main/tags-web-ui-new/public/tags-vid-demo-web.mp4"><strong>▶ Watch the 4:38 product demo</strong></a>
+  <br />
+  <sub>See a Slack thread become completed, reviewable work.</sub>
+</p>
+
+## An agent your whole team can share
+
+Most AI assistants live in another tab and lose the context where work began. Tags lives in the Slack thread. Each channel becomes a **Space** with its own instructions, tools, connections, memory, approval policy, and budget.
+
+- [x] Reads the full thread and carries the right context into every run
+- [x] Streams live progress instead of disappearing behind a spinner
+- [x] Pauses external writes and sensitive actions for human approval
+- [x] Replies with interactive Slack UI, artifacts, and visual proof
+- [x] Connects to GitHub, Linear, Notion, and more through Composio
+- [x] Remembers decisions and schedules recurring work per Space
+- [x] Persists every run, tool call, approval, artifact, and token cost
+
+## How it works
+
+```mermaid
+flowchart LR
+    A["Slack thread<br/><b>@tags</b>"] --> B["Space context<br/>instructions · memory · tools"]
+    B --> C["Durable agent run<br/>opencode · Inngest"]
+    C --> D["Read-only tools"]
+    C -. "write or sensitive action" .-> E{"Approve in Slack"}
+    E -- approved --> F["External tools"]
+    D --> G["Streaming result<br/>cards · artifacts · proof"]
+    F --> G
+    C --> H["Run log · usage · audit"]
+```
+
+Slack stays the interface. Postgres is the source of truth, Inngest runs durable jobs, opencode drives the agent, and E2B provides isolated workspaces for code execution and proof recording.
 
 ## Quick start
 
+You need **Node.js 22+**, **pnpm 10.6.5** (via Corepack), **Docker**, and a **Fireworks API key**. A Slack app and a public tunnel are only required for the end-to-end Slack flow.
+
 ```bash
+git clone https://github.com/laxman-patel/tags.git
+cd tags
+
+corepack enable
+pnpm install
+
 docker compose up -d postgres
 cp .env.example .env
-# Edit .env with your secrets
+```
 
-pnpm install
+Set the local database and inference values in `.env`:
+
+```dotenv
+DATABASE_URL=postgresql://tags_app:tags_app@localhost:5433/tags
+DATABASE_MIGRATE_URL=postgresql://tags:tags@localhost:5433/tags
+NEXT_PUBLIC_APP_URL=http://localhost:3000
+FIREWORKS_API_KEY=...
+```
+
+Then migrate, seed, and start Tags:
+
+```bash
 pnpm db:migrate
 pnpm db:seed
-
 pnpm dev
 ```
 
-Point Slack Event Subscriptions and Interactivity to:
+Open [http://localhost:3000](http://localhost:3000). See [`.env.example`](./.env.example) for Slack, Clerk, Inngest, Composio, E2B, R2, and observability settings.
 
-- `https://<tunnel>/api/slack/events`
-- `https://<tunnel>/api/slack/interactions`
+<details>
+<summary><strong>Connect a Slack workspace</strong></summary>
 
-Subscribe to `app_mention`. Map your test channel via seed env vars or update the seeded space row.
+1. Add your Slack and Clerk credentials to `.env`, then generate `TAGS_ENCRYPTION_KEY` with `openssl rand -base64 32`.
+2. Expose port `3000` with a public HTTPS tunnel and set `NEXT_PUBLIC_APP_URL` to that URL.
+3. Configure your Slack app:
 
-## Production deploy (Railway)
+   | Setting | URL |
+   | --- | --- |
+   | OAuth redirect | `https://<your-domain>/api/slack/oauth/callback` |
+   | Event Subscriptions | `https://<your-domain>/api/slack/events` |
+   | Interactivity | `https://<your-domain>/api/slack/interactions` |
 
-### Environment
+4. Subscribe to the `app_mention` bot event, install the app through Tags, and create a Space for the channel you want to use.
+5. Run an Inngest dev server locally, or provide `INNGEST_EVENT_KEY` and `INNGEST_SIGNING_KEY` for a hosted environment.
 
-Set `NEXT_PUBLIC_APP_URL` to your public Railway URL **before** building (e.g. `https://tags-production.up.railway.app`). Slack OAuth redirects, run links posted to Slack, schedule evaluation, Inngest, and MCP depend on it.
+</details>
 
-Required at production boot: `DATABASE_URL`, `FIREWORKS_API_KEY`, `SLACK_CLIENT_ID`, `SLACK_CLIENT_SECRET`, `SLACK_SIGNING_SECRET`, `TAGS_ENCRYPTION_KEY`, `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY`, `INNGEST_EVENT_KEY`, `INNGEST_SIGNING_KEY`, `NEXT_PUBLIC_APP_URL`.
+## Repository
 
-`SLACK_BOT_TOKEN` is a legacy/dev-only fallback. Production Slack access is installed per account through OAuth and stored encrypted with `TAGS_ENCRYPTION_KEY`.
-
-Migrations run automatically via `preDeployCommand` when `DATABASE_MIGRATE_URL` (owner role) is set.
-
-### CI/CD
-
-Railway is connected to the GitHub repo `laxman-patel/tags` and auto-deploys the `tags-web` service from the `main` branch. Pushes to `main` trigger Railway builds directly; GitHub Actions only runs verification.
-
-Keep app secrets in Railway variables: Neon (`DATABASE_URL`, `DATABASE_MIGRATE_URL`), Inngest (`INNGEST_EVENT_KEY`, `INNGEST_SIGNING_KEY`), Cloudflare R2 (`R2_*`), Slack, Clerk, Fireworks, and other runtime keys. Railway builds with `railway.json`, runs `pnpm db:migrate` before release, and starts `@tags/control-plane`.
-
-### Slack app configuration
-
-In your Slack app settings (production domain `https://<your-domain>`):
-
-| Setting | URL |
+| Path | Purpose |
 | --- | --- |
-| Event Subscriptions | `https://<your-domain>/api/slack/events` |
-| Interactivity | `https://<your-domain>/api/slack/interactions` |
+| [`tags-web-ui-new`](./tags-web-ui-new) | React product UI and Node control plane |
+| [`packages/runtime`](./packages/runtime) | Agent loop, tools, context, and durable jobs |
+| [`packages/slack`](./packages/slack) | OAuth, signature verification, streaming, and Block Kit |
+| [`packages/core`](./packages/core) | Spaces, runs, approvals, memory, schedules, and usage |
+| [`packages/db`](./packages/db) | Drizzle schema, migrations, and row-level security |
+| [`packages/sandbox`](./packages/sandbox) | E2B execution and proof recording |
 
-**Bot token scopes:** `app_mentions:read`, `channels:history`, `chat:write`, `reactions:write` (👀/✅ acknowledgment reactions), `files:read` (read documents attached in threads), `files:write` (upload proof videos). After adding scopes, reinstall the app to the workspace.
+## Develop and deploy
 
-Streaming replies use Slack's native `chat.startStream`/`chat.appendStream`/`chat.stopStream` APIs (animated "Tags is thinking…" indicator, markdown rendering, task timeline). These need `chat:write` only; if streaming is unavailable the bot falls back to posting and editing a regular message.
-
-Proof videos: when an `@tags` message asks for a video, screencast, or visual proof, the agent starts the local app in the Space sandbox and calls the `record_proof` tool. That records the desktop (ffmpeg + Playwright), uploads the MP4 to R2 as a video artifact, and posts it to the Slack thread. Requires `E2B_API_KEY`, public R2 artifact URLs (`R2_PUBLIC_BASE_URL` — use an `r2.dev` or custom domain, not the S3 API endpoint), Slack bot `files:write`, and the unified `tags-opencode-desktop` E2B template (`infra/e2b/tags-opencode-desktop`).
-
-Build the template once: `cd infra/e2b/tags-opencode-desktop && E2B_API_KEY=... npm install && npm run build`. Set `E2B_OPENCODE_TEMPLATE=tags-opencode-desktop` on the runtime. Sanity-check: `pnpm proof-recording:sanity`.
-
-**Event subscriptions:** `app_mention`, `message.channels` (required for thread-reply triggers and passive channel learning — bot messages are ignored). Set `SLACK_BOT_USER_ID` for accurate mention detection in thread replies.
-
-Sync Inngest at `https://<your-domain>/api/inngest` from the Inngest dashboard after deploy.
-
-### Bootstrap data
-
-After migrations, seed or create your first Space:
+With local Postgres running and migrations applied, run the project checks before opening a pull request:
 
 ```bash
-# Option A — seed script (set real Slack team/channel IDs)
-SEED_SLACK_TEAM_ID=T… SEED_SLACK_CHANNEL_ID=C… pnpm db:seed
+pnpm -r typecheck
+pnpm test
+pnpm --filter @tags/control-plane build
 ```
 
-```bash
-# Option B — admin API (requires Clerk admin via ADMIN_USER_IDS or org:admin)
-POST /api/spaces
-```
+The repository includes a [Railway configuration](./railway.json) for building the control plane, running database migrations, and starting the production server. Production requires the database, Fireworks, Slack, Clerk, Inngest, and app URL variables documented in [`.env.example`](./.env.example).
 
-Run and artifact pages require Clerk sign-in (`/runs`, `/artifacts`).
+Tags is under active development. Bug reports, feature ideas, and pull requests are welcome in [GitHub Issues](https://github.com/laxman-patel/tags/issues).
 
-## Verify Phase 0
-
-1. `@tags summarize this thread` — streams progress in Slack
-2. `@tags create a linear issue for this bug` — pauses on Approve/Reject
-3. Kill `pnpm dev` mid-run, restart — Inngest run resumes; approval still works
-4. Open `/runs/<run-id>` for the event timeline
-
-## Monorepo
-
-| Package | Role |
-| --- | --- |
-| `packages/db` | Drizzle schema, migrations, RLS |
-| `packages/core` | Spaces, threads, runs domain logic |
-| `packages/runtime` | opencode harness integration, tools, Inngest durable runs |
-| `packages/slack` | Signature verify, Block Kit, stream adapter |
-| `packages/ui` | Generative UI — React cards from `TagsEvent` / `UICard` |
-
-See [PLAN.md](./PLAN.md) for the full product plan.
+<div align="center">
+  <sub>Built for teams that live in Slack.</sub>
+</div>
