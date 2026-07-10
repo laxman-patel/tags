@@ -31,7 +31,7 @@
 
 <p align="center">
   <a href="https://cdn.jsdelivr.net/gh/laxman-patel/tags@main/tags-web-ui-new/public/tags-vid-demo-readme.mp4" title="Play the Tags product demo">
-    <img src="https://raw.githubusercontent.com/laxman-patel/tags/main/tags-web-ui-new/public/readme-demo-thumbnail.webp" alt="Play the Tags product demo" width="100%" />
+    <img src="https://raw.githubusercontent.com/laxman-patel/tags/main/tags-web-ui-new/public/slack-landing-2560.webp" alt="Play the Tags product demo" width="100%" />
   </a>
 </p>
 
