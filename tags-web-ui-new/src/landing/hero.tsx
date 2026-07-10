@@ -13,9 +13,8 @@ import { DashedLine } from "./dashed-line";
 import { GitHubIcon } from "./github-icon";
 import { GetStartedButton } from "./get-started-button";
 
-// Replace with the real Slack screenshot + demo video when available.
-const DEMO_SCREENSHOT_SRC: string | null = null;
-const DEMO_VIDEO_SRC: string | null = null;
+const DEMO_SCREENSHOT_SRC = "/slack-landing-2560.webp";
+const DEMO_VIDEO_SRC = "/tags-vid-demo-web.mp4";
 
 const features = [
   {
@@ -113,18 +112,19 @@ export const Hero = ({ clerkEnabled = false }: HeroProps) => {
                     alt="Tags Slack demo"
                     className="h-full w-full object-cover object-left-top"
                   />
-                ) : (
-                  <div className="grid h-full w-full place-items-center">
-                    <div className="flex flex-col items-center gap-4">
-                      <div className="flex size-16 items-center justify-center rounded-full bg-transparent text-primary ring-1 ring-primary/25 transition-transform group-hover:scale-105">
-                        <Play className="size-7 fill-current" />
-                      </div>
+                ) : null}
+                <div className="absolute inset-0 grid place-items-center bg-black/0 transition-colors group-hover:bg-black/10">
+                  <div className="flex flex-col items-center gap-4">
+                    <div className="flex size-16 items-center justify-center rounded-full bg-background/90 text-primary shadow-lg ring-1 ring-black/10 transition-transform group-hover:scale-105">
+                      <Play className="size-7 fill-current" />
+                    </div>
+                    {!DEMO_SCREENSHOT_SRC ? (
                       <span className="text-sm text-muted-foreground">
                         Watch Tags work a Slack thread
                       </span>
-                    </div>
+                    ) : null}
                   </div>
-                )}
+                </div>
               </button>
             </Dialog.Trigger>
             <Dialog.Portal>
@@ -137,8 +137,10 @@ export const Hero = ({ clerkEnabled = false }: HeroProps) => {
                   {DEMO_VIDEO_SRC ? (
                     <video
                       src={DEMO_VIDEO_SRC}
+                      poster={DEMO_SCREENSHOT_SRC ?? undefined}
                       controls
                       autoPlay
+                      playsInline
                       className="h-full w-full"
                     />
                   ) : (
