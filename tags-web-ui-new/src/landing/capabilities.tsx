@@ -34,6 +34,7 @@ type CapabilityItem = {
   description: string;
   logos?: LogoImage[];
   image?: ScreenshotImage;
+  imageFirst?: boolean;
   className: string;
 };
 
@@ -77,19 +78,18 @@ const topItems: CapabilityItem[] = [
 const bottomItems: CapabilityItem[] = [
   {
     title: "Scheduled work.",
-    description:
-      "Run standups, digests, and recurring checks on a schedule the agent maintains.",
+    description: "Standups, digests, and checks on a schedule Tags runs.",
+    imageFirst: true,
     image: {
       src: scheduleImage,
       alt: "Tags schedule showing recurring standups, digests, and checks",
-      width: 1400,
-      height: 933,
-      className: "aspect-[3/2] w-full max-w-[340px]",
-      objectClassName: "object-contain object-center",
-      fade: true,
+      width: 1281,
+      height: 805,
+      className: "aspect-[8/5] w-full max-w-[340px]",
+      objectClassName: "object-cover object-center",
     },
     className:
-      "[&>.title-container]:mb-5 md:[&>.title-container]:mb-9 [&>.image-container]:place-items-center",
+      "justify-normal gap-5 [&>.title-container]:mb-0 [&>.image-container]:place-items-center",
   },
   {
     title: "Approval stays human.",
@@ -177,6 +177,24 @@ type ItemProps = {
 };
 
 const Item = ({ item, isLast, className }: ItemProps) => {
+  const title = (
+    <div className="title-container text-balance">
+      <h3 className="inline font-semibold">{item.title} </h3>
+      <span className="text-muted-foreground">
+        {" "}
+        {keepLastWordsTogether(item.description)}
+      </span>
+    </div>
+  );
+
+  const media = item.logos ? (
+    <LogoGrid logos={item.logos} />
+  ) : item.image ? (
+    <div className="image-container grid grid-cols-1 gap-4">
+      <Screenshot {...item.image} />
+    </div>
+  ) : null;
+
   return (
     <div
       className={cn(
@@ -185,21 +203,17 @@ const Item = ({ item, isLast, className }: ItemProps) => {
         item.className,
       )}
     >
-      <div className="title-container text-balance">
-        <h3 className="inline font-semibold">{item.title} </h3>
-        <span className="text-muted-foreground">
-          {" "}
-          {keepLastWordsTogether(item.description)}
-        </span>
-      </div>
-
-      {item.logos ? (
-        <LogoGrid logos={item.logos} />
-      ) : item.image ? (
-        <div className="image-container grid grid-cols-1 gap-4">
-          <Screenshot {...item.image} />
-        </div>
-      ) : null}
+      {item.imageFirst ? (
+        <>
+          {media}
+          {title}
+        </>
+      ) : (
+        <>
+          {title}
+          {media}
+        </>
+      )}
 
       {!isLast && (
         <>
