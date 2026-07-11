@@ -37,7 +37,7 @@ const items = [
     alt: "Tags Slack reply with an embedded video proof of a completed change",
     width: 1400,
     height: 933,
-    imageClassName: "object-cover object-center scale-[1.06]",
+    imageClassName: "object-contain object-center",
   },
 ];
 
@@ -68,7 +68,7 @@ export const Features = () => {
             {items.map((item, i) => (
               <div key={item.title} className="flex flex-1 max-md:flex-col">
                 <div className="flex min-w-0 flex-1 flex-col px-4 pt-4 pb-5 md:px-5 md:pt-5 md:pb-5 lg:px-6 lg:pt-6">
-                  <div className="relative aspect-[1.22/1] overflow-hidden rounded-xl">
+                  <div className="relative aspect-[1.22/1] overflow-hidden rounded-xl bg-[#ececef]">
                     <img
                       src={item.image}
                       alt={item.alt}
@@ -88,9 +88,9 @@ export const Features = () => {
                     />
                   </div>
 
-                  <div className="mt-auto flex min-h-14 items-end justify-between gap-3 pt-2">
-                    <div>
-                      <h3 className="max-w-52 font-display text-[17px] leading-[1.12] font-semibold tracking-[-0.025em]">
+                  <div className="mt-auto flex min-h-14 items-center justify-between gap-3 pt-3">
+                    <div className="min-w-0 flex-1">
+                      <h3 className="font-display text-[19px] leading-snug font-semibold tracking-[-0.025em] md:text-[20px] lg:text-[21px]">
                         {item.title}
                       </h3>
                       <p className="sr-only">

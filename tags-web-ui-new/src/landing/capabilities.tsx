@@ -84,8 +84,8 @@ const bottomItems: CapabilityItem[] = [
       alt: "Tags schedule showing recurring standups, digests, and checks",
       width: 1400,
       height: 933,
-      className: "aspect-[1.22/1] w-full max-w-[340px]",
-      objectClassName: "object-cover object-top scale-[1.04]",
+      className: "aspect-[3/2] w-full max-w-[340px]",
+      objectClassName: "object-contain object-center",
       fade: true,
     },
     className:
@@ -98,8 +98,8 @@ const bottomItems: CapabilityItem[] = [
     image: {
       src: approvalImage,
       alt: "Tags Slack approval card for a risky production deployment",
-      width: 1600,
-      height: 533,
+      width: 1024,
+      height: 341,
       className: "aspect-[3/1] w-full max-w-[360px]",
       objectClassName: "object-cover object-center",
     },
