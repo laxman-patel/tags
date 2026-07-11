@@ -88,7 +88,7 @@ const bottomItems: CapabilityItem[] = [
       objectClassName: "object-cover object-center",
     },
     className:
-      "[&>.title-container]:mb-5 md:[&>.title-container]:mb-9 [&>.image-container]:place-items-center",
+      "justify-normal [&>.title-container]:mb-3 [&>.image-container]:place-items-center",
   },
   {
     title: "Approval stays human.",
@@ -97,13 +97,13 @@ const bottomItems: CapabilityItem[] = [
     image: {
       src: approvalImage,
       alt: "Tags Slack approval card for a risky production deployment",
-      width: 1024,
-      height: 341,
+      width: 985,
+      height: 328,
       className: "aspect-[3/1] w-full max-w-[360px]",
-      objectClassName: "object-cover object-center",
+      objectClassName: "object-contain object-center",
     },
     className:
-      "justify-normal [&>.title-container]:mb-5 md:[&>.title-container]:mb-0 [&>.image-container]:flex-1 [&>.image-container]:place-items-center md:[&>.image-container]:-translate-y-2",
+      "justify-normal [&>.title-container]:mb-3 [&>.image-container]:place-items-center",
   },
   {
     title: "Every run is auditable.",
