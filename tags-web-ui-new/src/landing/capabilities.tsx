@@ -79,7 +79,6 @@ const bottomItems: CapabilityItem[] = [
   {
     title: "Scheduled work.",
     description: "Standups, digests, and checks on a schedule Tags runs.",
-    imageFirst: true,
     image: {
       src: scheduleImage,
       alt: "Tags schedule showing recurring standups, digests, and checks",
@@ -89,7 +88,7 @@ const bottomItems: CapabilityItem[] = [
       objectClassName: "object-cover object-center",
     },
     className:
-      "justify-normal gap-5 [&>.title-container]:mb-0 [&>.image-container]:place-items-center",
+      "[&>.title-container]:mb-5 md:[&>.title-container]:mb-9 [&>.image-container]:place-items-center",
   },
   {
     title: "Approval stays human.",
