@@ -223,28 +223,24 @@ function ClerkAccountFooter() {
 
 function SlackConnectEmpty() {
   return (
-    <div className="flex min-h-[320px] items-center justify-center p-4">
-      <LayerCard className="w-full max-w-lg">
-        <LayerCard.Primary>
-          <Empty
-            icon={<ChatCircleIcon size={40} />}
-            title="Connect Slack workspace"
-            description="Connect one Slack workspace to this Tags account before creating Spaces."
-          />
-          <div className="mt-5 flex justify-center">
-            <Button
-              variant="primary"
-              icon={ArrowSquareOutIcon}
-              onClick={() => {
-                window.location.href = "/api/slack/oauth/start";
-              }}
-            >
-              Connect Slack
-            </Button>
-          </div>
-        </LayerCard.Primary>
-      </LayerCard>
-    </div>
+    <LayerCard className="w-full max-w-md">
+      <Empty
+        icon={<ChatCircleIcon size={40} />}
+        title="Connect Slack workspace"
+        description="Connect one Slack workspace to this Tags account before creating Spaces."
+        contents={
+          <Button
+            variant="primary"
+            icon={ArrowSquareOutIcon}
+            onClick={() => {
+              window.location.href = "/api/slack/oauth/start";
+            }}
+          >
+            Connect Slack
+          </Button>
+        }
+      />
+    </LayerCard>
   );
 }
 
@@ -665,18 +661,17 @@ function WorkspaceView({
     window.location.href = "/api/slack/oauth/start";
   };
 
+  if (!slackWorkspace) {
+    return <SlackConnectEmpty />;
+  }
+
   return (
     <div className="mx-auto max-w-2xl">
       <PageHeader
         title="Workspace"
         description="The Slack workspace connected to Tags."
       />
-
-      {!slackWorkspace ? (
-        <SlackConnectEmpty />
-      ) : (
-        <WorkspaceConnectionCard slackWorkspace={slackWorkspace} onReconnect={reconnect} />
-      )}
+      <WorkspaceConnectionCard slackWorkspace={slackWorkspace} onReconnect={reconnect} />
     </div>
   );
 }
@@ -3105,6 +3100,44 @@ function DashboardApp({ clerkEnabled = false }: { clerkEnabled?: boolean }) {
   const currentRun =
     view.page === "run-detail" ? runs.find((r) => r.id === view.id) : undefined;
 
+  useEffect(() => {
+    const suffix = "Tags";
+    let title: string;
+    if (!slackWorkspace) {
+      title = `Connect Slack | ${suffix}`;
+    } else {
+      switch (view.page) {
+        case "spaces":
+          title = `Spaces | ${suffix}`;
+          break;
+        case "space-detail":
+          title = `${currentSpace?.name ?? "Space"} | ${suffix}`;
+          break;
+        case "approvals":
+          title = `Approvals | ${suffix}`;
+          break;
+        case "runs":
+          title = `Runs | ${suffix}`;
+          break;
+        case "run-detail":
+          title = currentRun
+            ? `${currentRun.spaceName} · Run | ${suffix}`
+            : `Run | ${suffix}`;
+          break;
+        case "workspace":
+          title = `Workspace | ${suffix}`;
+          break;
+        default: {
+          const _exhaustive: never = view;
+          void _exhaustive;
+          title = suffix;
+          break;
+        }
+      }
+    }
+    document.title = title;
+  }, [view, slackWorkspace, currentSpace, currentRun]);
+
   const activeNav = ((): "spaces" | "approvals" | "runs" | "workspace" => {
     if (!slackWorkspace) return "workspace";
     if (view.page === "workspace") return "workspace";
@@ -3187,8 +3220,13 @@ function DashboardApp({ clerkEnabled = false }: { clerkEnabled?: boolean }) {
           </Sidebar.Footer>
         </Sidebar>
 
-        <main className="min-w-0 flex-1 overflow-y-auto bg-kumo-canvas">
-          <div className="mx-auto max-w-6xl p-4 sm:p-6">
+        <main className="flex min-w-0 flex-1 flex-col overflow-y-auto bg-kumo-canvas">
+          <div
+            className={cn(
+              "mx-auto w-full max-w-6xl p-4 sm:p-6",
+              !loading && !slackWorkspace && "flex flex-1 flex-col items-center justify-center",
+            )}
+          >
             {error && (
               <LayerCard className="mb-4 border-kumo-danger/40">
                 <LayerCard.Primary>
