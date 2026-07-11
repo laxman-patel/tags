@@ -1,3 +1,7 @@
+import approvalImage from "../../../features-images/generated/approval.webp";
+import auditImage from "../../../features-images/generated/audit.webp";
+import memoryImage from "../../../features-images/generated/memory.webp";
+import scheduleImage from "../../../features-images/generated/scheduled-work.webp";
 import asanaLogo from "./logos/asana.svg";
 import confluenceLogo from "./logos/confluence.svg";
 import driveLogo from "./logos/drive.svg";
@@ -15,16 +19,21 @@ type LogoImage = {
   alt: string;
 };
 
-type PlaceholderImage = {
-  label: string;
+type ScreenshotImage = {
+  src: string;
+  alt: string;
+  width: number;
+  height: number;
   className: string;
+  objectClassName?: string;
+  fade?: boolean;
 };
 
 type CapabilityItem = {
   title: string;
   description: string;
   logos?: LogoImage[];
-  placeholder?: PlaceholderImage;
+  image?: ScreenshotImage;
   className: string;
 };
 
@@ -52,12 +61,16 @@ const topItems: CapabilityItem[] = [
     title: "Memory that compounds.",
     description:
       "Tags remembers decisions per Space and packs the right context into every run.",
-    placeholder: {
-      label: "memory browser",
-      className: "aspect-[495/186] w-full max-w-[495px]",
+    image: {
+      src: memoryImage,
+      alt: "Tags saving a checkout decision to the Engineering Space memory",
+      width: 1600,
+      height: 533,
+      className: "aspect-[3/1] w-full max-w-[540px]",
+      objectClassName: "object-cover object-center",
     },
     className:
-      "flex-1 [&>.title-container]:mb-5 md:[&>.title-container]:mb-8 xl:[&>.image-container]:translate-x-6 [&>.image-container]:translate-x-2",
+      "flex-1 [&>.title-container]:mb-5 md:[&>.title-container]:mb-9 [&>.image-container]:place-items-center",
   },
 ];
 
@@ -66,34 +79,48 @@ const bottomItems: CapabilityItem[] = [
     title: "Scheduled work.",
     description:
       "Run standups, digests, and recurring checks on a schedule the agent maintains.",
-    placeholder: {
-      label: "schedule list",
-      className: "aspect-[305/280] w-full max-w-[305px]",
+    image: {
+      src: scheduleImage,
+      alt: "Tags schedule showing recurring standups, digests, and checks",
+      width: 1400,
+      height: 933,
+      className: "aspect-[1.22/1] w-full max-w-[340px]",
+      objectClassName: "object-cover object-top scale-[1.04]",
+      fade: true,
     },
     className:
-      "[&>.title-container]:mb-5 md:[&>.title-container]:mb-8 xl:[&>.image-container]:translate-x-6 [&>.image-container]:translate-x-2",
+      "[&>.title-container]:mb-5 md:[&>.title-container]:mb-9 [&>.image-container]:place-items-center",
   },
   {
-    title: "Ships working code.",
+    title: "Approval stays human.",
     description:
-      "Tags edits your repo in an isolated workspace and returns the pull request, branch, and commit.",
-    placeholder: {
-      label: "pull request",
-      className: "aspect-[320/103] w-full max-w-[320px]",
+      "Risky actions pause in Slack until someone approves or declines.",
+    image: {
+      src: approvalImage,
+      alt: "Tags Slack approval card for a risky production deployment",
+      width: 1600,
+      height: 533,
+      className: "aspect-[3/1] w-full max-w-[360px]",
+      objectClassName: "object-cover object-center",
     },
     className:
-      "justify-normal [&>.title-container]:mb-5 md:[&>.title-container]:mb-0 [&>.image-container]:flex-1 md:[&>.image-container]:place-items-center md:[&>.image-container]:-translate-y-3",
+      "justify-normal [&>.title-container]:mb-5 md:[&>.title-container]:mb-0 [&>.image-container]:flex-1 [&>.image-container]:place-items-center md:[&>.image-container]:-translate-y-2",
   },
   {
-    title: "Proves the result.",
+    title: "Every run is auditable.",
     description:
-      "Ask for visual proof and Tags records the real app, then posts the video to Slack.",
-    placeholder: {
-      label: "recorded demo",
-      className: "aspect-[305/280] w-full max-w-[305px]",
+      "Every message, tool call, approval, artifact, and cost is recorded.",
+    image: {
+      src: auditImage,
+      alt: "Tags run timeline showing tool calls, approval, artifact, outcome, and cost",
+      width: 1374,
+      height: 1145,
+      className: "aspect-[1.2/1] w-full max-w-[320px]",
+      objectClassName: "object-cover object-top",
+      fade: true,
     },
     className:
-      "[&>.title-container]:mb-5 md:[&>.title-container]:mb-8 xl:[&>.image-container]:translate-x-6 [&>.image-container]:translate-x-2",
+      "[&>.title-container]:mb-5 md:[&>.title-container]:mb-9 [&>.image-container]:place-items-center",
   },
 ];
 
@@ -101,11 +128,9 @@ export const Capabilities = () => {
   return (
     <section id="capabilities" className="overflow-hidden pb-20 lg:pb-28">
       <div>
-        <h2 className="container text-center text-3xl tracking-tight text-balance sm:text-4xl md:text-4xl lg:text-5xl">
-          Everything an agent needs to do real work
-        </h2>
+        <h2 className="sr-only">Everything an agent needs to do real work</h2>
 
-        <div className="mt-8 md:mt-12 lg:mt-16">
+        <div>
           <DashedLine
             orientation="horizontal"
             className="container scale-x-105"
@@ -131,7 +156,7 @@ export const Capabilities = () => {
                 key={item.title}
                 item={item}
                 isLast={i === bottomItems.length - 1}
-                className="md:pb-0"
+                className="md:pb-1"
               />
             ))}
           </div>
@@ -170,9 +195,9 @@ const Item = ({ item, isLast, className }: ItemProps) => {
 
       {item.logos ? (
         <LogoGrid logos={item.logos} />
-      ) : item.placeholder ? (
+      ) : item.image ? (
         <div className="image-container grid grid-cols-1 gap-4">
-          <Placeholder {...item.placeholder} />
+          <Screenshot {...item.image} />
         </div>
       ) : null}
 
@@ -241,17 +266,41 @@ const LogoGrid = ({ logos }: { logos: LogoImage[] }) => {
   );
 };
 
-const Placeholder = ({ label, className }: PlaceholderImage) => {
+const Screenshot = ({
+  src,
+  alt,
+  width,
+  height,
+  className,
+  objectClassName,
+  fade,
+}: ScreenshotImage) => {
   return (
     <div
       className={cn(
-        "grid place-items-center rounded-lg border border-dashed border-border bg-muted/60",
+        "relative grid place-items-center overflow-hidden rounded-xl bg-white ring-1 ring-black/[0.04]",
         className,
       )}
     >
-      <span className="text-center font-mono text-xs uppercase tracking-wide text-muted-foreground">
-        {label}
-      </span>
+      <img
+        src={src}
+        alt={alt}
+        width={width}
+        height={height}
+        loading="lazy"
+        decoding="async"
+        draggable={false}
+        className={cn(
+          "block h-full w-full select-none",
+          objectClassName ?? "object-contain object-center",
+        )}
+      />
+      {fade && (
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-0 bg-linear-to-t from-muted/90 via-transparent to-transparent"
+        />
+      )}
     </div>
   );
 };

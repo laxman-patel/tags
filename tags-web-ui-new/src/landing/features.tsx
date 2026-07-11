@@ -1,3 +1,9 @@
+import { ArrowRight } from "lucide-react";
+
+import proofImage from "../../../features-images/generated/proof.webp";
+import pullRequestImage from "../../../features-images/generated/pull-request.webp";
+import spacesImage from "../../../features-images/generated/spaces.webp";
+import { cn } from "./cn";
 import { DashedLine } from "./dashed-line";
 import { keepLastWordsTogether } from "./typography";
 import { Card, CardContent } from "./ui";
@@ -7,25 +13,37 @@ const items = [
     title: "One Space per channel",
     description:
       "Each channel keeps its own instructions, connections, tools, and memory.",
-    label: "spaces dashboard",
+    image: spacesImage,
+    alt: "Tags Spaces showing Slack channels with their own tools, connections, and memory",
+    width: 1374,
+    height: 1145,
+    imageClassName: "object-cover object-top scale-[1.02]",
   },
   {
     title: "From thread to pull request",
     description:
       "Tags works in an isolated repo, makes the change, and opens a pull request.",
-    label: "coding workspace",
+    image: pullRequestImage,
+    alt: "Tags coding run completed with changed files, passing checks, and a pull request",
+    width: 1400,
+    height: 1120,
+    imageClassName: "object-cover object-center scale-[1.02]",
   },
   {
     title: "Proof posted to the thread",
     description:
       "Ask for a demo and Tags records the real app, then shares the video in Slack.",
-    label: "video proof",
+    image: proofImage,
+    alt: "Tags Slack reply with an embedded video proof of a completed change",
+    width: 1400,
+    height: 933,
+    imageClassName: "object-cover object-center scale-[1.06]",
   },
 ];
 
 export const Features = () => {
   return (
-    <section id="features" className="pb-20 lg:pb-28">
+    <section id="features" className="pb-14 md:pb-16 lg:pb-20">
       <div className="container">
         <div className="relative flex items-center justify-center">
           <DashedLine className="text-muted-foreground" />
@@ -45,27 +63,46 @@ export const Features = () => {
           </p>
         </div>
 
-        <Card className="mt-8 rounded-3xl md:mt-12 lg:mt-16">
+        <Card className="mt-8 overflow-hidden rounded-[22px] border-border/80 bg-background shadow-[0_1px_2px_rgba(16,24,40,0.03),0_24px_60px_-42px_rgba(16,24,40,0.35)] md:mt-12 lg:mt-16">
           <CardContent className="flex p-0 max-md:flex-col">
             {items.map((item, i) => (
               <div key={item.title} className="flex flex-1 max-md:flex-col">
-                <div className="flex-1 p-4 pe-0! md:p-6">
-                  <div className="relative aspect-[1.28/1] overflow-hidden">
-                    <div className="grid h-full w-full place-items-center rounded-lg border border-dashed border-border bg-muted/60">
-                      <span className="text-center font-mono text-[11px] uppercase tracking-wide text-muted-foreground">
-                        {item.label}
-                      </span>
-                    </div>
-                    <div className="absolute inset-0 z-10 bg-linear-to-t from-background via-transparent to-transparent" />
+                <div className="flex min-w-0 flex-1 flex-col px-4 pt-4 pb-5 md:px-5 md:pt-5 md:pb-5 lg:px-6 lg:pt-6">
+                  <div className="relative aspect-[1.22/1] overflow-hidden rounded-xl">
+                    <img
+                      src={item.image}
+                      alt={item.alt}
+                      width={item.width}
+                      height={item.height}
+                      loading="lazy"
+                      decoding="async"
+                      draggable={false}
+                      className={cn(
+                        "block h-full w-full select-none",
+                        item.imageClassName,
+                      )}
+                    />
+                    <div
+                      aria-hidden
+                      className="pointer-events-none absolute inset-0 bg-linear-to-t from-background via-background/20 to-transparent"
+                    />
                   </div>
 
-                  <div className="pt-5">
-                    <h3 className="font-display text-lg leading-tight font-semibold tracking-tight">
-                      {item.title}
-                    </h3>
-                    <p className="mt-1.5 text-sm leading-snug text-muted-foreground">
-                      {keepLastWordsTogether(item.description)}
-                    </p>
+                  <div className="mt-auto flex min-h-14 items-end justify-between gap-3 pt-2">
+                    <div>
+                      <h3 className="max-w-52 font-display text-[17px] leading-[1.12] font-semibold tracking-[-0.025em]">
+                        {item.title}
+                      </h3>
+                      <p className="sr-only">
+                        {keepLastWordsTogether(item.description)}
+                      </p>
+                    </div>
+                    <span
+                      aria-hidden
+                      className="grid size-9 shrink-0 place-items-center rounded-full border border-border bg-background text-foreground shadow-[var(--shadow-2xs)]"
+                    >
+                      <ArrowRight className="size-4" strokeWidth={1.8} />
+                    </span>
                   </div>
                 </div>
                 {i < items.length - 1 && (
