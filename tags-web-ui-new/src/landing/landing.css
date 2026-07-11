@@ -176,7 +176,8 @@ html:has(.landing) body {
 }
 
 .landing-navbar-icon {
-  height: 19px;
+  display: block;
+  height: 24px;
   width: auto;
 }
 
