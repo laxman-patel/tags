@@ -26,7 +26,6 @@ type ScreenshotImage = {
   height: number;
   className: string;
   objectClassName?: string;
-  fade?: boolean;
 };
 
 type CapabilityItem = {
@@ -112,7 +111,6 @@ const bottomItems: CapabilityItem[] = [
       height: 1145,
       className: "aspect-[1.2/1] w-full max-w-[320px]",
       objectClassName: "object-cover object-top",
-      fade: true,
     },
   },
 ];
@@ -143,13 +141,13 @@ export const Capabilities = () => {
             className="container max-w-7xl scale-x-110"
           />
 
-          <div className="relative container grid max-w-7xl md:grid-cols-3 md:items-start">
+          <div className="relative container grid max-w-7xl md:grid-cols-3">
             {bottomItems.map((item, i) => (
               <Item
                 key={item.title}
                 item={item}
                 isLast={i === bottomItems.length - 1}
-                className="justify-start gap-5 md:pb-0 [&>.title-container]:mb-0 [&>.title-container]:min-h-[4.75rem] md:[&>.title-container]:min-h-[5.25rem] [&>.image-container]:place-items-center"
+                className="justify-start gap-5 md:pb-0 md:h-full [&>.title-container]:mb-0 [&>.title-container]:min-h-[4.75rem] md:[&>.title-container]:min-h-[5.25rem] [&>.image-container]:place-items-center"
               />
             ))}
           </div>
@@ -280,7 +278,6 @@ const Screenshot = ({
   height,
   className,
   objectClassName,
-  fade,
 }: ScreenshotImage) => {
   return (
     <div
@@ -302,12 +299,6 @@ const Screenshot = ({
           objectClassName ?? "object-contain object-center",
         )}
       />
-      {fade && (
-        <div
-          aria-hidden
-          className="pointer-events-none absolute inset-0 bg-linear-to-t from-muted/90 via-transparent to-transparent"
-        />
-      )}
     </div>
   );
 };
