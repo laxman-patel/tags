@@ -1,14 +1,14 @@
 import { LinkButton } from "@cloudflare/kumo";
 
 import { GitHubIcon } from "./github-icon";
-import tagsNavIcon from "../imports/tags-nav-icon-final.svg";
+import tagsNavIcon from "../imports/tags-nav-icon-final.png";
 import { GetStartedButton } from "./get-started-button";
 
 type NavbarProps = {
   clerkEnabled?: boolean;
 };
 
-/** Intrinsic SVG size: 354×145 (~2.44:1). */
+/** Intrinsic logo size: 354×145 (~2.44:1). */
 const NAV_LOGO_HEIGHT = 24;
 const NAV_LOGO_WIDTH = Math.round(NAV_LOGO_HEIGHT * (354 / 145));
 
@@ -22,7 +22,7 @@ export const Navbar = ({ clerkEnabled = false }: NavbarProps) => {
         >
           <img
             src={tagsNavIcon}
-            alt="Tags"
+            alt="@tags"
             width={NAV_LOGO_WIDTH}
             height={NAV_LOGO_HEIGHT}
             className="landing-navbar-icon shrink-0"

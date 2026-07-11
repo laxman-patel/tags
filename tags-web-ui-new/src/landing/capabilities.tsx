@@ -35,7 +35,7 @@ type CapabilityItem = {
   logos?: LogoImage[];
   image?: ScreenshotImage;
   imageFirst?: boolean;
-  className: string;
+  className?: string;
 };
 
 const logos = [
@@ -87,8 +87,6 @@ const bottomItems: CapabilityItem[] = [
       className: "aspect-[8/5] w-full max-w-[340px]",
       objectClassName: "object-cover object-center",
     },
-    className:
-      "justify-normal [&>.title-container]:mb-3 [&>.image-container]:place-items-center",
   },
   {
     title: "Approval stays human.",
@@ -102,8 +100,6 @@ const bottomItems: CapabilityItem[] = [
       className: "aspect-[3/1] w-full max-w-[360px]",
       objectClassName: "object-contain object-center",
     },
-    className:
-      "justify-normal [&>.title-container]:mb-3 [&>.image-container]:place-items-center",
   },
   {
     title: "Every run is auditable.",
@@ -118,8 +114,6 @@ const bottomItems: CapabilityItem[] = [
       objectClassName: "object-cover object-top",
       fade: true,
     },
-    className:
-      "[&>.title-container]:mb-5 md:[&>.title-container]:mb-9 [&>.image-container]:place-items-center",
   },
 ];
 
@@ -149,13 +143,13 @@ export const Capabilities = () => {
             className="container max-w-7xl scale-x-110"
           />
 
-          <div className="relative container grid max-w-7xl md:grid-cols-3">
+          <div className="relative container grid max-w-7xl md:grid-cols-3 md:items-start">
             {bottomItems.map((item, i) => (
               <Item
                 key={item.title}
                 item={item}
                 isLast={i === bottomItems.length - 1}
-                className="md:pb-1"
+                className="justify-start gap-5 md:pb-0 [&>.title-container]:mb-0 [&>.title-container]:min-h-[4.75rem] md:[&>.title-container]:min-h-[5.25rem] [&>.image-container]:place-items-center"
               />
             ))}
           </div>
