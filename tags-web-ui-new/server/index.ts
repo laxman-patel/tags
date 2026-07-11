@@ -2348,6 +2348,9 @@ const mimeTypes: Record<string, string> = {
   ".webm": "video/webm",
 };
 
+/** Only videos need byte-range seeks. Range on HTML/images makes Meta crawlers get 206 Partial Content. */
+const rangeEnabledExtensions = new Set([".mp4", ".webm"]);
+
 function parseByteRange(
   rangeHeader: string,
   size: number,
@@ -2385,11 +2388,13 @@ async function serveStatic(req: IncomingMessage, res: ServerResponse, url: URL) 
   }
 
   const fileStat = await stat(filePath);
-  const contentType = mimeTypes[path.extname(filePath)] ?? "application/octet-stream";
+  const ext = path.extname(filePath);
+  const contentType = mimeTypes[ext] ?? "application/octet-stream";
   const size = fileStat.size;
   const rangeHeader = req.headers.range;
+  const allowRange = rangeEnabledExtensions.has(ext);
 
-  if (rangeHeader) {
+  if (allowRange && rangeHeader) {
     const range = parseByteRange(rangeHeader, size);
     if (range === "invalid") {
       res.writeHead(416, {
@@ -2414,7 +2419,7 @@ async function serveStatic(req: IncomingMessage, res: ServerResponse, url: URL) 
   res.writeHead(200, {
     "content-type": contentType,
     "content-length": size,
-    "accept-ranges": "bytes",
+    ...(allowRange ? { "accept-ranges": "bytes" } : {}),
   });
   createReadStream(filePath).pipe(res);
 }
