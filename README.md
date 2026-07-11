@@ -14,7 +14,8 @@
 </p>
 
 <p>
-  <a href="#quick-start"><strong>Quick start</strong></a> ·
+  <a href="https://tags.laxman.me"><strong>tags.laxman.me</strong></a> ·
+  <a href="#quick-start">Quick start</a> ·
   <a href="#how-it-works">How it works</a> ·
   <a href="https://github.com/laxman-patel/tags/issues">Issues</a>
 </p>
