@@ -1,24 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
-  <!DOCTYPE html>
-  <html lang="en">
-    <head>
-      
-      <meta charset="UTF-8" />
-      <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-      <title>Tags</title>
-      <meta name="description" content="Tags is an open-source AI teammate for Slack. Mention @tags in any channel. It reads the thread, does the work, and asks before doing anything risky." />
-      <link rel="icon" href="/favicon-32x32.png" type="image/png" sizes="32x32" />
-      <link rel="icon" href="/favicon-16x16.png" type="image/png" sizes="16x16" />
-      <link rel="apple-touch-icon" href="/apple-touch-icon.png" sizes="180x180" />
-      <link rel="icon" href="/favicon.png" type="image/png" />
-      <style>html, body { height: 100%; margin: 0; } #root { height: 100%; }</style>
-      
-    </head>
+    <title>Tags | The open-source AI teammate for Slack</title>
+    <meta
+      name="description"
+      content="Mention @tags in any channel. It reads the whole thread, does the work, and asks before doing anything it shouldn't. Open source and self-hostable."
+    />
+    <meta name="theme-color" content="#226AD6" />
 
-    <body>
-      
-      <div id="root"></div>
-      <script type="module" src="/src/main.tsx"></script>
-      
-    </body>
-  </html>
+    <!-- Open Graph -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Tags" />
+    <meta property="og:locale" content="en_US" />
+    <meta property="og:url" content="https://tags.laxman.me/" />
+    <meta property="og:title" content="Tags — The open-source AI teammate for Slack" />
+    <meta
+      property="og:description"
+      content="Put an AI teammate in every channel. Mention @tags — it reads the thread, does the work, and asks before anything risky. Open source and self-hostable."
+    />
+    <meta property="og:image" content="https://tags.laxman.me/tags-og.png" />
+    <meta property="og:image:secure_url" content="https://tags.laxman.me/tags-og.png" />
+    <meta property="og:image:type" content="image/png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta
+      property="og:image:alt"
+      content="Tags — Put an AI teammate in every channel. Open source and self-hostable, running in your Slack in minutes."
+    />
+
+    <!-- Twitter / X -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Tags — The open-source AI teammate for Slack" />
+    <meta
+      name="twitter:description"
+      content="Put an AI teammate in every channel. Mention @tags — it reads the thread, does the work, and asks before anything risky."
+    />
+    <meta name="twitter:image" content="https://tags.laxman.me/tags-og.png" />
+    <meta
+      name="twitter:image:alt"
+      content="Tags — Put an AI teammate in every channel. Open source and self-hostable, running in your Slack in minutes."
+    />
+
+    <link rel="canonical" href="https://tags.laxman.me/" />
+    <link rel="icon" href="/favicon-32x32.png" type="image/png" sizes="32x32" />
+    <link rel="icon" href="/favicon-16x16.png" type="image/png" sizes="16x16" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" sizes="180x180" />
+    <link rel="icon" href="/favicon.png" type="image/png" />
+    <style>
+      html,
+      body {
+        height: 100%;
+        margin: 0;
+      }
+      #root {
+        height: 100%;
+      }
+    </style>
+  </head>
+
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
